@@ -65,11 +65,9 @@ and a_symbol =
   | ASopt of loc and a_symbol
   | ASrules of loc and a_rules
   | ASself of loc
-  | AScut of loc
   | AStok of loc and string and option string
   | ASvala of loc and a_symbol and list string
-  | ASvala2 of loc and a_symbol and list string
-      and option (string * expr) ]
+  ]
 and lmin_len =
   [ LML_0 | LML_1 ] [@@deriving (show,eq) ;]
 ;
@@ -205,8 +203,6 @@ EXTEND
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
         ASnterm loc id lev
 
-      | "/" ->
-          AScut loc
       | "("; s_t = SELF; ")" -> s_t ] ]
   ;
   pattern:
@@ -364,7 +360,6 @@ and simple_symbol pc sy =
   | ASnterm _ id (Some lev) -> pprintf pc "%s LEVEL \"%s\"" id lev
   | ASself _ -> pprintf pc "SELF"
   | ASnext _ -> pprintf pc "NEXT"
-  | AScut _ -> pprintf pc "/"
   | ASrules _ rl ->
      horiz_vertic
        (fun () ->
@@ -381,7 +376,7 @@ and simple_symbol pc sy =
 
   | ASlist _ _ _ _ | ASopt _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" symbol sy
-  | sy -> failwith "pr_llk.simple_symbol: internal error" ]
+  ]
 
 and entry pc =fun { ae_loc=loc; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
     let force_vertic =
