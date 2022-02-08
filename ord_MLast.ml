@@ -1,7 +1,7 @@
 (* camlp5r *)
 (* ord_MLast.ml,v *)
 
-include Pa_ppx_base.Pp_MLast
+open Pa_ppx_base.Pp_MLast
 
 module Ploc = struct
 include Ploc

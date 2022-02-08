@@ -1,12 +1,12 @@
 (* camlp5r *)
 (* pp_MLast.ml,v *)
 
-include Pa_ppx_base.Pp_MLast
+open Pa_ppx_base.Pp_MLast
 
 module Ploc : sig
 include (module type of Ploc with type t = Ploc.t)
 
-val compare : t -> t -> bool
+val compare : t -> t -> int
 type 'a vala = [%import: 'a Ploc.vala] [@@deriving ord]
 end
 
