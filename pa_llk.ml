@@ -425,4 +425,8 @@ end ;
 module RT = struct
   value string s = 
   s |> Stream.of_string |> Grammar.Entry.parse Pa.top |> Pr.top Pprintf.empty_pc |> print_string ;
+
+  value file fn =
+    let s = fn |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok in
+    string s ;
 end ;
