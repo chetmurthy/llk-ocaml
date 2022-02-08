@@ -70,6 +70,8 @@ and lmin_len =
   [ LML_0 | LML_1 ]
 ;
 
+module Pa = struct
+
 open Token_regexps ;
 module Compiled(R : sig value rawcheck :  Stream.t (string * string) -> option int ;
                         value name : string ;
@@ -85,8 +87,8 @@ end
 
 
 open Pcaml;
+value top = Grammar.Entry.create gram "top";
 value extend_body = Grammar.Entry.create gram "extend_body";
-value gextend_body = Grammar.Entry.create gram "gextend_body";
 value symbol = Grammar.Entry.create gram "symbol";
 value rule = Grammar.Entry.create gram "rule";
 value rule_list = Grammar.Entry.create gram "rule_list";
@@ -97,17 +99,15 @@ value semi_sep = Grammar.Entry.of_parser gram "';'" (parser [: `("", ";") :] -> 
 EXTEND
   GLOBAL:
     expr
-    extend_body gextend_body symbol rule rule_list level level_list
+    top extend_body symbol rule rule_list level level_list
+  ;
+  top:
+    [ [ "EXTEND"; /; e = extend_body; "END" ; ";" -> e ] ]
   ;
   extend_body:
-    [ [ sl = OPT global;
+    [ [ sl = [ l = global -> l | -> [] ];
         el = LIST1 [ e = entry; semi_sep -> e ] ->
-          (sl, el) ] ]
-  ;
-  gextend_body:
-    [ [ g = UIDENT; sl = OPT global;
-        el = LIST1 [ e = entry; semi_sep -> e ] ->
-          (loc, g, sl, el) ] ]
+          (loc, sl, el) ] ]
   ;
   global:
     [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; semi_sep -> sl ] ]
@@ -217,6 +217,10 @@ EXTEND
     | [ p = pattern -> [p] ] ]
   ;
 END;
+
+end ;
+
+module Pr = struct
 
 value flag_equilibrate_cases = Pcaml.flag_equilibrate_cases;
 
@@ -346,7 +350,10 @@ and simple_symbol pc sy =
          pprintf pc "[ %p ]"
            (vlist2 (rule False) (bar_before (rule False))) rl.au_rules)
 
-  | AStok _ _ _ | ASlist _ _ _ _ | ASopt _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
+  | AStok _ cls None -> pprintf pc "%s" cls
+  | AStok _ cls (Some constv) -> pprintf pc "%s \"%s\"" cls constv
+
+  | ASlist _ _ _ _ | ASopt _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" symbol sy
   | sy -> failwith "pr_llk.simple_symbol: internal error" ]
 
@@ -394,3 +401,24 @@ and level force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
         (vlist2 (rule force_vertic) (bar_before (rule force_vertic))) rl ]
   
 ;
+
+value ident pc id = pprintf pc "%s" id ;
+
+value extend_body pc (globals, entries) =
+  match globals with
+  [ [] -> vlist entry pc entries
+  | _ ->
+      let globals = List.map (fun g -> (g, "")) globals in
+      pprintf pc "@[<b>GLOBAL: %p;@ %p@]" (plist ident 2) globals
+        (vlist entry) entries ]
+;
+
+value top pc (_, sl, el) =
+  pprintf pc "EXTEND@;%p@ END" extend_body (sl,el) ;
+
+end ;
+
+module RT = struct
+  value string s = 
+  s |> Stream.of_string |> Grammar.Entry.parse Pa.top |> Pr.top Pprintf.empty_pc |> print_string ;
+end ;

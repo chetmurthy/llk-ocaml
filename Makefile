@@ -1,6 +1,7 @@
 
 LAUNCH=/home/chet/Hack/Camlp5/src/ALL/camlp5/tools/LAUNCH
 OCAMLFIND=$(LAUNCH) ocamlfind
+OCAMLC=$(OCAMLFIND) ocamlc -g
 PACKAGES=fmt,camlp5,camlp5.extend,camlp5.macro,camlp5.quotations,camlp5.regexp,camlp5.pprintf
 
 all: brz.cmo pa_llk.cmo

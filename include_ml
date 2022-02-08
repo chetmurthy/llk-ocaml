@@ -1,15 +1,11 @@
 #use "topfind.camlp5";;
 #require "fmt";;
 
-#require "camlp5.pa_op";;
-Pcaml.inter_phrases := Some ";;\n";;
-#require "camlp5.pr_o";;
+#require "camlp5.pa_r";;
+#require "camlp5.pr_r";;
 
-#load "brz.cmo";;
-#load "cbrz.cmo";;
-open Cbrz ;;
-let pp_re x = Fmt.(pf stdout "<:re<%s>>" (BSyn.print x)) ;;
-#install_printer pp_re ;;
+#load "pa_llk.cmo";;
+open Pa_llk ;;
 
 (*
 ;;; Local Variables: ***
