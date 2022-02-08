@@ -6,13 +6,17 @@ open MLast ;
 open Pcaml ;
 open Pretty;
 open Prtools;
+open Pa_ppx_base.Pp_MLast ;
+
+value equal_expr = Reloc.eq_expr ;
+value equal_patt = Reloc.eq_patt ;
 
 value split_ext = ref False;
 
 Pcaml.add_option "-split_ext" (Arg.Set split_ext)
   "Split EXTEND by using functions.";
 
-type loc = Ploc.t;
+type loc = Ploc.t [@@deriving (show,eq) ;];
 
 type a_position = [
     POS_LEVEL of string
@@ -20,14 +24,14 @@ type a_position = [
   | POS_AFTER of string
   | POS_BEFORE of string
   | POS_FIRST | POS_LAST
-]
+] [@@deriving (show,eq) ;]
 ;
 
 type a_assoc = [
     LEFTA
   | RIGHTA
   | NONA
-]
+] [@@deriving (show,eq) ;]
 ;
 
 type a_entry =
@@ -67,7 +71,7 @@ and a_symbol =
   | ASvala2 of loc and a_symbol and list string
       and option (string * expr) ]
 and lmin_len =
-  [ LML_0 | LML_1 ]
+  [ LML_0 | LML_1 ] [@@deriving (show,eq) ;]
 ;
 
 module Pa = struct

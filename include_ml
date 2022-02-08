@@ -3,6 +3,8 @@
 
 #require "camlp5.pa_r";;
 #require "camlp5.pr_r";;
+#require "pa_ppx.base" ;;
+#require "pa_ppx.runtime" ;;
 
 #load "pa_llk.cmo";;
 open Pa_llk ;;
