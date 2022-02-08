@@ -1,0 +1,121 @@
+EXTEND
+  GLOBAL:
+    expr
+    top extend_body symbol rule rule_list level level_list
+  ;
+  top:
+    [ [ "EXTEND"; /; e = extend_body; "END" ; ";" -> e ] ]
+  ;
+  extend_body:
+    [ [ sl = [ l = global -> l | -> [] ];
+        el = LIST1 [ e = entry; semi_sep -> e ] ->
+          (loc, sl, el) ] ]
+  ;
+  global:
+    [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; semi_sep -> sl ] ]
+  ;
+  entry:
+    [ [ n = LIDENT; ":"; pos = OPT position; ll = level_list ->
+          {ae_loc = loc; ae_name = n; ae_pos = pos; ae_levels = ll} ] ]
+  ;
+  position:
+    [ [ UIDENT "FIRST" -> POS_FIRST
+      | UIDENT "LAST" -> POS_LAST
+      | UIDENT "BEFORE"; n = STRING -> POS_BEFORE n
+      | UIDENT "AFTER"; n = STRING -> POS_AFTER n
+      | UIDENT "LIKE"; n = STRING -> POS_LIKE n
+      | UIDENT "LEVEL"; n = STRING -> POS_LEVEL n ] ]
+  ;
+  level_list:
+    [ [ "["; ll = LIST0 level SEP "|"; "]" -> ll ] ]
+  ;
+  level:
+    [ [ lab = OPT STRING; ass = OPT assoc; rules = rule_list ->
+          {al_loc = loc; al_label = lab; al_assoc = ass; al_rules = rules} ] ]
+  ;
+  assoc:
+    [ [ UIDENT "LEFTA" -> LEFTA
+      | UIDENT "RIGHTA" -> RIGHTA
+      | UIDENT "NONA" -> NONA ] ]
+  ;
+  rule_list:
+    [ [ "["; "]" -> {au_loc = loc; au_rules = []}
+      | "["; rules = LIST1 rule SEP "|"; "]" ->
+          {au_loc = loc; au_rules = rules} ] ]
+  ;
+  rule:
+    [ [ psl = LIST0 psymbol SEP semi_sep; "->"; act = expr ->
+          {ar_loc = loc; ar_psymbols = psl; ar_action = Some act}
+      | psl = LIST0 psymbol SEP semi_sep ->
+          {ar_loc = loc; ar_psymbols = psl; ar_action = None} ] ]
+  ;
+  psymbol:
+    [ [ p = LIDENT; "="; s = symbol ->
+          {ap_loc = loc; ap_patt = Some <:patt< $lid:p$ >>; ap_symb = s}
+      | i = LIDENT; lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
+          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm loc i lev}
+      | p = pattern; "="; s = symbol ->
+          {ap_loc = loc; ap_patt = Some p; ap_symb = s}
+      | s = symbol ->
+          {ap_loc = loc; ap_patt = None; ap_symb = s} ] ]
+  ;
+  sep_opt_sep:
+    [ [ sep = UIDENT "SEP"; t = symbol; b = FLAG [ UIDENT "OPT_SEP" ] ->
+          (t, b) ] ]
+  ;
+  symbol:
+    [ "top" NONA
+      [ UIDENT "LIST0"; s = SELF; sep = OPT sep_opt_sep ->
+          ASlist loc LML_0 s sep
+      | UIDENT "LIST1"; s = SELF; sep = OPT sep_opt_sep ->
+          ASlist loc LML_1 s sep
+      | UIDENT "OPT"; s = SELF ->
+          ASopt loc s
+      | UIDENT "FLAG"; s = SELF ->
+          ASflag loc s ]
+    | "vala"
+      [ UIDENT "V"; UIDENT "SELF"; al = LIST0 STRING ->
+          let s = ASself loc in
+          ASvala loc s al
+      | UIDENT "V"; UIDENT "NEXT"; al = LIST0 STRING ->
+          let s = ASnext loc in
+          ASvala loc s al
+      | UIDENT "V"; x = UIDENT; al = LIST0 STRING ->
+          let s = AStok loc x None in
+          ASvala loc s al
+      | UIDENT "V"; s = NEXT; al = LIST0 STRING ->
+          ASvala loc s al ]
+    | "simple"
+      [ UIDENT "SELF" ->
+          ASself loc
+      | UIDENT "NEXT" ->
+          ASnext loc
+      | "["; rl = LIST0 rule SEP "|"; "]" ->
+          ASrules loc {au_loc = loc; au_rules = rl}
+      | x = UIDENT ->
+          AStok loc x None
+      | x = UIDENT; e = STRING ->
+          AStok loc x (Some e)
+      | e = STRING ->
+          ASkeyw loc e
+
+      | id = LIDENT ;
+        lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
+        ASnterm loc id lev
+
+      | "/" ->
+          AScut loc
+      | "("; s_t = SELF; ")" -> s_t ] ]
+  ;
+  pattern:
+    [ [ i = LIDENT -> <:patt< $lid:i$ >>
+      | "_" -> <:patt< _ >>
+      | "("; p = SELF; ")" -> <:patt< $p$ >>
+      | "("; p = SELF; ","; pl = patterns_comma; ")" ->
+          <:patt< ( $list:[p :: pl]$ ) >> ] ]
+  ;
+  patterns_comma:
+    [ [ pl = SELF; ","; p = pattern -> pl @ [p] ]
+    | [ p = pattern -> [p] ] ]
+  ;
+END;

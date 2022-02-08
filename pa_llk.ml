@@ -272,37 +272,57 @@ value pr_option pf pc = fun [
 ;
 
 value rec rule force_vertic pc { ar_psymbols=sl;  ar_action = a } =
-  let a = match a with [
-        None -> failwith "pr_llk.rule: cannot pp rule with empty action"
-      | Some a -> a
-      ] in
-
-  if sl = [] then
-    pprintf pc "@[<4>→%p %q@]" comment (MLast.loc_of_expr a)
-      (action expr) a "|"
-      else
-        match
+  match (sl, a) with [
+      ([], None) -> pprintf pc "[ ]"
+    | ([], Some a) ->
+       pprintf pc "@[<4>→%p %q@]" comment (MLast.loc_of_expr a)
+         (action expr) a "|"
+    | (sl, Some a) ->
+       (match
           horiz_vertic
             (fun () ->
-               let s =
-                 let pc = {(pc) with aft = ""} in
-                 pprintf pc "%p →" (hlistl (semi_after psymbol) psymbol) sl
-               in
-               Some s)
+              let s =
+                let pc = {(pc) with aft = ""} in
+                pprintf pc "%p →" (hlistl (semi_after psymbol) psymbol) sl
+              in
+              Some s)
             (fun () -> None)
         with
-        [ Some s1 ->
+          [ Some s1 ->
             let pc = {(pc) with bef = ""} in
             horiz_vertic
               (fun () ->
-                 if force_vertic then sprintf "\n"
-                 else pprintf pc "%s %q" s1 (action expr) a "|")
+                if force_vertic then sprintf "\n"
+                else pprintf pc "%s %q" s1 (action expr) a "|")
               (fun () ->
-                 pprintf pc "%s@;<1 4>%q" s1 (action expr) a "|")
-        | None ->
-            let sl = List.map (fun s -> (s, ";")) sl in
-            pprintf pc "@[<2>%p →@;%q@]" (plist psymbol 0) sl
-              (action expr) a "|" ]
+                pprintf pc "%s@;<1 4>%q" s1 (action expr) a "|")
+          | None ->
+             let sl = List.map (fun s -> (s, ";")) sl in
+             pprintf pc "@[<2>%p →@;%q@]" (plist psymbol 0) sl
+               (action expr) a "|" ])
+    | (sl, None) ->
+       (match
+          horiz_vertic
+            (fun () ->
+              let s =
+                let pc = {(pc) with aft = ""} in
+                pprintf pc "%p →" (hlistl (semi_after psymbol) psymbol) sl
+              in
+              Some s)
+            (fun () -> None)
+        with
+          [ Some s1 ->
+            let pc = {(pc) with bef = ""} in
+            horiz_vertic
+              (fun () ->
+                if force_vertic then sprintf "\n"
+                else pprintf pc "%s" s1)
+              (fun () ->
+                pprintf pc "%s" s1)
+          | None ->
+             let sl = List.map (fun s -> (s, ";")) sl in
+             pprintf pc "@[<2>%p@]" (plist psymbol 0) sl ])
+    ]
 
 and psymbol pc { ap_patt= p; ap_symb = s } =
   match p with
@@ -353,6 +373,8 @@ and simple_symbol pc sy =
        (fun () ->
          pprintf pc "[ %p ]"
            (vlist2 (rule False) (bar_before (rule False))) rl.au_rules)
+
+  | ASkeyw _ s -> pprintf pc "\"%s\"" s
 
   | AStok _ cls None -> pprintf pc "%s" cls
   | AStok _ cls (Some constv) -> pprintf pc "%s \"%s\"" cls constv
