@@ -1,4 +1,7 @@
 *.cm*
 *.o
-calc
-calc.opt
+*.a
+*.exe
+camlp5.*
+local-install
+META
