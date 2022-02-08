@@ -73,6 +73,14 @@ and lmin_len =
   [ LML_0 | LML_1 ] [@@deriving (show,eq,ord) ;]
 ;
 
+type _top = (loc * list string * list a_entry) [@@deriving (show,eq,ord) ;] ;
+
+type top = _top ;
+value norm_top (loc, gl, el) = (loc, List.sort String.compare gl, List.sort compare_a_entry el) ;
+value show_top = show__top ;
+value eq_top x y = equal__top (x |> norm_top) (y |> norm_top) ;
+value compare_top x y = compare__top (x |> norm_top) (y |> norm_top) ;
+
 module Pa = struct
 
 open Token_regexps ;
@@ -90,7 +98,7 @@ end
 
 
 open Pcaml;
-value top = Grammar.Entry.create gram "top";
+value top = ( Grammar.Entry.create gram "top" : Grammar.Entry.e top);
 value extend_body = Grammar.Entry.create gram "extend_body";
 value symbol = Grammar.Entry.create gram "symbol";
 value rule = Grammar.Entry.create gram "rule";
