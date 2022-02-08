@@ -1,0 +1,10 @@
+EXTEND
+  e:
+    [ [ x = e; "+"; y = e -> x + y
+      | x = e; "-"; y = e -> x - y ]
+    | [ x = e; "*"; y = e -> x * y
+      | x = e; "/"; y = e -> x / y ]
+    | [ x = INT -> int_of_string x
+      | "("; x = e; ")" -> x ] ]
+  ;
+END;
