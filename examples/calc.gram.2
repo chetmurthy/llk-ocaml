@@ -1,0 +1,44 @@
+EXTEND
+  e: AFTER "**"
+    [ [ x = INT -> int_of_string x
+      | "("; x = e; ")" -> x ] ]
+  ;
+
+  e: BEFORE "*"
+    [ [ x = e; "+"; y = e -> x + y
+      | x = e; "-"; y = e -> x - y ]
+    ]
+  ;
+
+  e: AFTER "*"
+    [ "**" [ x = e; "**"; y = e -> pow x  y ]
+    ]
+  ;
+
+  e:
+    [ "*" [ x = e; "*"; y = e -> x * y
+      | x = e; "/"; y = e -> x / y ] ]
+  ;
+
+  f: AFTER "**"
+    [ [ x = INT -> int_of_string x
+      | "("; x = f; ")" -> x ] ]
+  ;
+
+  f: BEFORE "*"
+    [ [ x = f; "+"; y = f -> x + y
+      | x = f; "-"; y = f -> x - y ]
+    ]
+  ;
+
+  f: AFTER "*"
+    [ "**" [ x = f; "**"; y = f -> pow x  y ]
+    ]
+  ;
+
+  f:
+    [ "*" [ x = f; "*"; y = f -> x * y
+      | x = f; "/"; y = f -> x / y ] ]
+  ;
+
+END;

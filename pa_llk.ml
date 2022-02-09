@@ -482,7 +482,8 @@ end ;
    Taking the position-marked entry, start inserting from that list of
    tsorted entries.  *)
 module Reposition = struct
-  open Pa_ppx_utils.Std ;
+  open Pa_ppx_utils ;
+  open Std ;
 
   value is_position_marked e = isSome e.ae_pos ;
 
@@ -503,9 +504,42 @@ module Reposition = struct
       edges for LEVEL, LIKE, AFTER, BEFORE, but NOT for FIRST, LAST
    *)
 
-  value construct_graph (el : list a_entry) =
-    let entry_name e = e.ae_name in
-    let entry2node e = (entry_name e, entry_position e) in
+  value entry_name e = e.ae_name ;
+  value entry2node e = (entry_name e, entry_position e) ;
+
+  value insert1 e0 e1 = do {
+    assert (entry_position e0 = None) ;
+    match entry_position e1 with [
+        None -> assert False
+      | Some (POS_LEVEL lev) ->
+         failwith "insert1: LEVEL unimplemented"
+      | Some (POS_LIKE _) -> failwith "insert1: LIKE unimplemented"
+      | Some (POS_AFTER lev) ->
+         let e0_levels =
+           e0.ae_levels
+           |> List.concat_map (fun l ->
+                  if Some lev = l.al_label then [l] @ e1.ae_levels
+                  else [l]
+                ) in
+         { (e0) with ae_levels = e0_levels }
+         
+      | Some (POS_BEFORE lev) ->
+         let e0_levels =
+           e0.ae_levels
+           |> List.concat_map (fun l ->
+                  if Some lev = l.al_label then e1.ae_levels @ [l]
+                  else [l]
+                ) in
+         { (e0) with ae_levels = e0_levels }
+
+      | Some POS_FIRST -> { (e0) with ae_levels = e1.ae_levels @ e0.ae_levels }
+      | Some POS_LAST ->  { (e0) with ae_levels = e0.ae_levels @ e1.ae_levels }
+      ]
+  }
+  ;
+    
+
+  value coalesce_entries ename el =
     let label2node =
       el
       |> List.concat_map (fun e ->
@@ -514,31 +548,54 @@ module Reposition = struct
              |> List.map (fun lab -> (lab, entry2node e))
            ) in do {
     if 1 <> List.length (el |> List.map entry_position |> List.find_all ((=) None)) then
-      failwith "construct_graph: exactly one entry MUST be position-free"
+      failwith Fmt.(str "construct_graph: exactly one entry named %s MUST be position-free" ename)
     else () ;
+    if not (distinct (el |> List.concat_map entry_labels)) then
+      failwith Fmt.(str "construct_graph: entry %s does not have distinct labels" ename)
+    else () ;
+
+    let adj = el |> List.filter_map (fun e ->
+      match entry_position e with [
+          Some(POS_LEVEL lev | POS_AFTER lev | POS_BEFORE lev) ->
+          (match List.assoc lev label2node with [
+               exception Not_found ->
+                         failwith Fmt.(str "construct_graph: entry %s, position LEVEL \"%s\" not found"
+                                         (entry_name e) lev)
+                       | n -> Some (entry2node e, [n])
+          ])
+        | Some(POS_LIKE levpat) -> failwith Fmt.(str "construct_graph: LIKE position not implemented")
+        | Some(POS_FIRST | POS_LAST) | None -> None
+                      ]) in
+    let sorted = Tsort.tsort (fun v l -> [v :: l]) adj [] in
+    let sorted_el =
+      sorted
+      |> List.map (fun node ->
+             el |> List.find (fun e -> node = entry2node e)
+           ) in
+    let (e0, el) = match sorted_el with [
+          [] -> assert False
+        | [e0::el] when entry_position e0 <> None -> assert False
+        | [e0::el] -> (e0, el)
+        ] in
+    List.fold_left insert1 e0 el
+  }
+  ;
+
+  value coalesce_entries el =
     let all_entry_names =
       el |> List.map entry_name |> List.sort_uniq String.compare in
     all_entry_names
-    |> List.iter (fun name ->
-           let el = el |> List.find_all (fun e -> name = entry_name e) in
-           if not (distinct (el |> List.concat_map entry_labels)) then
-             failwith Fmt.(str "construct_graph: entry %s does not have distinct labels" name)
-           else ()
-         ) ;
-    el |> List.filter_map (fun e ->
-              match entry_position e with [
-                  Some(POS_LEVEL lev | POS_AFTER lev | POS_BEFORE lev) ->
-                  (match List.assoc lev label2node with [
-                       exception Not_found ->
-                                 failwith Fmt.(str "construct_graph: entry %s, position LEVEL \"%s\" not found"
-                                                 (entry_name e) lev)
-                               | n -> Some (entry2node e, n)
-                  ])
-                | Some(POS_LIKE levpat) -> failwith Fmt.(str "construct_graph: LIKE position not implemented")
-                | Some(POS_FIRST | POS_LAST) | None -> None
-            ])
-  }
+    |> List.map (fun name ->
+      let el = el |> List.find_all (fun e -> name = entry_name e) in
+      match el with [
+          [({ae_pos = None} as e)] -> e
+        | [{ae_pos = Some _}] ->
+           failwith Fmt.(str "construct_graph: only one entry named %s, but with position" name)
+        | el -> coalesce_entries name el
+         ])
   ;
+
+  value coalesce (loc, gl, el) = (loc, gl, coalesce_entries el) ;
 
 (*
  exec (loc, gl, el) =
