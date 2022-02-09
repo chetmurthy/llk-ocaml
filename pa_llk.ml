@@ -652,8 +652,10 @@ end ;
     LEFTA levels need to be replaced with the LEFT_ASSOC complex symbol,
     recursive calls replaced.
 
-    RIGHTA, NONA levels need to have their recursive calls replaced, EXCEPT
+    RIGHTA levels need to have their recursive calls replaced, EXCEPT
     for right-recursion.
+
+    NONA levels need to have ALL recursive calls replaced
 
     default associativity is ALWAYS NONA, and a level that doesn't actually
     have any left/right recursion, can still be NONA.
@@ -666,6 +668,7 @@ end ;
  *)
 
 module Precedence = struct 
+  open Pa_ppx_utils ;
 open Ppxutil ;
 
 value lookup_rho s rho : a_symbol = AList.assoc ~{cmp=equal_a_symbol} s rho ;
@@ -699,6 +702,29 @@ and substitute1_rule rho r =
   {(r) with ar_psymbols = List.map (substitute1_psymbol rho) r.ar_psymbols }
 
 and substitute1_rules rho rl = List.map (substitute1_rule rho) rl ;
+
+value rewrite_righta loc ename ~{cur} ~{next} rho rl =
+  let right_rho = [
+      (ASself loc, ASnterm loc cur None)
+     ;(ASnterm loc ename None, ASnterm loc cur None)
+    ] in
+  let rl =
+    rl
+    |> List.map (fun r ->
+           let psl = r.ar_psymbols in
+           let (last, psl) = Std.sep_last psl in
+           let psl = List.map (substitute1_psymbol rho) psl in
+           let last = substitute1_psymbol right_rho last in
+           let psl = psl @ [last] in
+           {(r) with ar_psymbols = psl}
+         ) in
+  let last_rule = {ar_loc = loc;
+                   ar_psymbols = [{ap_loc = loc;
+                                   ap_patt = Some <:patt< x >> ;
+                                   ap_symb = ASnterm loc next None}];
+                   ar_action = Some <:expr< x >> } in
+  rl @ [last_rule]
+;
 
   (** rewrite a level into a entry that eschews associativity and
      label markings, instead doing it explicitly.
@@ -742,6 +768,38 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
               al_assoc = None ;
               al_rules = {(l.al_rules) with au_rules = rules}
             }
+
+          | Some RIGHTA ->
+             let rl = l.al_rules.au_rules in do {
+             if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
+               failwith Fmt.(str "rewrite1: entry %s RIGHTA level rules must all have at least 2 psymbols"
+                               ename)
+             else () ;
+             let (last_psymbol, _) = Std.sep_last (List.hd rl).ar_psymbols in
+             if not (rl |> List.for_all (fun r -> 
+                               equal_a_psymbol last_psymbol (fst (Std.sep_last r.ar_psymbols)))) then
+               failwith Fmt.(str "rewrite1: entry %s RIGHTA level does not have identical last psymbols"
+                               ename)
+             else () ;
+             match last_psymbol.ap_symb with [
+                 ASnterm _ name None when name = ename -> ()
+               | ASself _ -> ()
+               | _ -> failwith Fmt.(str "rewrite1: entry %s RIGHTA level has last psymbol non-recursive"
+                                      ename)
+               ] ;
+             let rl = rewrite_righta loc ename ~{cur=cur} ~{next=next} [
+                          (ASnext loc, ASnterm loc next None)
+                         ;(ASself loc, ASnterm loc next None)
+                         ;(ASnterm loc ename None, ASnterm loc next None)
+                        ] rl in
+             {
+               (l) with
+               al_label = None ;
+               al_assoc = None ;
+               al_rules = {(l.al_rules) with au_rules = rl}
+             }
+          }
+
           | _ ->
              l
         ] in
