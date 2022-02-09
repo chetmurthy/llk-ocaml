@@ -474,7 +474,7 @@ module RT = struct
   value file fn = with_file string fn ;
 end ;
 
-(** Reposition entries with [position] markings, to where they belong.
+(** Coalesce entries with [position] markings, to where they belong.
 
     Entries are either marked with [position]s or not.  Entries'
    levels are either marked with labels or not.  Precisely ONE entry
@@ -490,7 +490,7 @@ end ;
 
    Taking the position-marked entry, start inserting from that list of
    tsorted entries.  *)
-module Reposition = struct
+module Coalesce = struct
   open Pa_ppx_utils ;
   open Std ;
 
@@ -633,12 +633,6 @@ module Reposition = struct
          ])
   ;
 
-  value coalesce (loc, gl, el) = (loc, gl, coalesce_entries el) ;
+  value exec (loc, gl, el) = (loc, gl, coalesce_entries el) ;
 
-(*
- exec (loc, gl, el) =
-  let project_ename e = (e.ae_name, e) in
-  let el = List.map project_ename el in
-  let partitions = nway_partition String.equal el in
- *)  
 end ;
