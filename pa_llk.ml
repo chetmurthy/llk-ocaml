@@ -6,7 +6,8 @@ open MLast ;
 open Pcaml ;
 open Pretty;
 open Prtools;
-open Pa_ppx_base.Pp_MLast ;
+open Pa_ppx_base ;
+open Pp_MLast ;
 open Ord_MLast ;
 
 value equal_expr = Reloc.eq_expr ;
@@ -17,7 +18,9 @@ value split_ext = ref False;
 Pcaml.add_option "-split_ext" (Arg.Set split_ext)
   "Split EXTEND by using functions.";
 
-type loc = Ploc.t [@@deriving (show,eq,ord) ;];
+type loc = Ploc.t [@@deriving (show) ;];
+value equal_loc a b = True ;
+value compare_loc a b = 0 ;
 
 type a_position = [
     POS_LEVEL of string
@@ -392,7 +395,7 @@ and simple_symbol pc sy =
   | AStok _ cls None -> pprintf pc "%s" cls
   | AStok _ cls (Some constv) -> pprintf pc "%s \"%s\"" cls constv
 
-  | ASlist _ _ _ _ | ASopt _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
+  | ASlist _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" symbol sy
   ]
 
@@ -634,5 +637,193 @@ module Coalesce = struct
   ;
 
   value exec (loc, gl, el) = (loc, gl, coalesce_entries el) ;
+
+end ;
+
+(** convert entry [e]with multiple levels into multiple entries [e__%04d],
+
+    An entry with N multiple levels
+
+    e: [ {LEFTA,RIGHTA,NONA} [ ... ] [ ... ] .... ] ;
+
+    specifies precedence and associativity, and needs to be broken up into
+    N+2 entries.
+
+    LEFTA levels need to be replaced with the LEFT_ASSOC complex symbol,
+    recursive calls replaced.
+
+    RIGHTA, NONA levels need to have their recursive calls replaced, EXCEPT
+    for right-recursion.
+
+    default associativity is ALWAYS NONA, and a level that doesn't actually
+    have any left/right recursion, can still be NONA.
+
+    The return value is a pair:
+
+      a dictionary of rewrites of [e] and all its named levels, to new entry-names,
+      a list of new entries with those rewrites already applied.
+
+ *)
+
+module Precedence = struct 
+open Ppxutil ;
+
+value lookup_rho s rho : a_symbol = AList.assoc ~{cmp=equal_a_symbol} s rho ;
+
+
+value rec substitute1_symbol rho = fun [
+      ASflag loc s -> ASflag loc (substitute1_symbol rho s)
+  | ASkeyw _ _ | AStok _ _ _ as s -> s
+  | ASlist loc lml s1 sb_opt ->
+     ASlist loc lml
+       (substitute1_symbol rho s1)
+       (Option.map (fun (s,b) -> (substitute1_symbol rho s1,b)) sb_opt)
+
+  | (ASnterm _ _ _ | ASnext _ | ASself _) as s -> match lookup_rho s rho with [
+                          s -> s
+                        | exception Not_found -> s
+                        ]
+  | ASopt loc s -> ASopt loc (substitute1_symbol rho s)
+  | ASleft_assoc loc s1 s2 e ->
+     ASleft_assoc loc (substitute1_symbol rho s1) (substitute1_symbol rho s2) e
+  |  ASrules loc rs -> ASrules loc {(rs) with au_rules = substitute1_rules rho rs.au_rules}
+   
+  
+  | ASvala loc s sl -> ASvala loc (substitute1_symbol rho s) sl
+  ]
+
+and substitute1_psymbol rho ps =
+  {(ps) with ap_symb = substitute1_symbol rho ps.ap_symb}
+
+and substitute1_rule rho r =
+  {(r) with ar_psymbols = List.map (substitute1_psymbol rho) r.ar_psymbols }
+
+and substitute1_rules rho rl = List.map (substitute1_rule rho) rl ;
+
+  (** rewrite a level into a entry that eschews associativity and
+     label markings, instead doing it explicitly.
+
+      (default) NONA: SELF, NEXT, and calls to the entry itself, are
+     all rewritten to [next].
+
+      RIGHTA: check that the LAST psymbol in each rule of the level is
+     either SELF or the entry itself.  Then rewrite non-right-hand
+     SELF/NEXT/entry calls to [next] and the right-hand SELF/entry
+     calls to [cur]
+
+     LEFTA: check that the FIRST psymbol in each rule of the level is
+     either SELF or the entry itself.  Check that all FIRST psymbols
+     are equal.  Then:
+
+     (1) remove the first psymbol from each rule
+     (2) rewrite all SELF/NEXT/entry calls to [next]
+     (3) turn this into a [rules]
+     (4) and then produce the levels:
+
+     [cur] : [ [ x = LEFT_ASSOC [ [next] ] [rules] WITH (fun f x -> x f) -> x ] ] ;
+
+   *)
+
+value rewrite1 e ename ~{cur} ~{next} dict l = do {
+    assert ([] <> l.al_rules.au_rules) ;
+    let loc = l.al_loc in
+    let l = match l.al_assoc with [
+          None | Some NONA ->
+            let rules =
+              l.al_rules.au_rules
+              |> substitute1_rules [
+                     (ASnext loc, ASnterm loc next None)
+                    ;(ASself loc, ASnterm loc next None)
+                    ;(ASnterm loc ename None, ASnterm loc next None)
+                   ] in
+            {
+              (l) with
+              al_label = None ;
+              al_assoc = None ;
+              al_rules = {(l.al_rules) with au_rules = rules}
+            }
+          | _ ->
+             l
+        ] in
+    {(e) with ae_name = cur ; ae_levels = [l]}
+}
+;
+
+value new_name e n = Printf.sprintf "%s__%04d" e.ae_name n ;
+
+value passthru_entry e fromi toj =
+  let from_name = match fromi with [ None -> e.ae_name | Some i -> new_name e i ] in
+  let to_name = new_name e toj in
+  let loc = e.ae_loc in
+  {ae_loc = loc; ae_name = from_name; ae_pos = None;
+   ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+         {au_loc = loc;
+          au_rules =
+            [{ar_loc = loc;
+              ar_psymbols = [{ap_loc = loc;
+                              ap_patt = Some <:patt< x >> ;
+                              ap_symb = ASnterm loc to_name None}];
+              ar_action =
+                Some <:expr< x >>}]}}]}
+;
+
+(** to convert a multilevel entry (of N levels) to multiple entries
+    we create entries:
+
+    e: [ [ x = e__0 -> x ] ] ;
+    e__0: [ [ x = e__1 -> x ] ] ;
+    e__1 ...
+    ....
+    e__n ...
+    e__{n+1}: [ [ x = e__0 -> x ] ] ;
+
+    So this means we create 3 new entries to surround our
+    N entry-for-each-level.
+
+ *)
+
+
+value exec1 e = do {
+  assert (e.ae_pos = None) ;
+  let ename = e.ae_name in
+  let levels = e.ae_levels in
+  let n_levels = List.length levels in
+  let named_levels =
+    List.mapi (fun i l -> (i+1, new_name e (i+1), l)) levels in
+  let dict =
+    named_levels
+    |> List.filter_map (fun (i, newname, l) ->
+           match l.al_label with [
+               None -> None
+             | Some lab -> Some (ASnterm l.al_loc ename (Some lab), ASnterm l.al_loc newname None)
+         ]) in
+  let newents =
+    named_levels
+    |> List.map (fun (i, newname, l) ->
+           rewrite1 e ename ~{cur=newname} ~{next=new_name e (i+1)} dict l) in
+  let top2_entries = [
+      passthru_entry e None 0 ;
+      passthru_entry e (Some 0) 1
+    ] in
+  let bottom_entries = [
+      passthru_entry e (Some (n_levels+1)) 0
+    ] in
+
+  (dict, top2_entries @ newents @ bottom_entries)
+}
+;
+
+value exec0 e =
+  if List.length e.ae_levels <=1 then ([], [e])
+  else exec1 e ;
+
+value exec (loc, gl, el) =
+  let pl = List.map exec0 el in
+  let dict = pl |> List.concat_map fst in
+  let el = List.concat_map snd pl in
+  (loc, gl, el)
+;
 
 end ;

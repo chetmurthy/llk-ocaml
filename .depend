@@ -4,5 +4,7 @@ ord_MLast.cmo : \
 ord_MLast.cmx : \
     ord_MLast.cmi
 ord_MLast.cmi :
-pa_llk.cmo :
-pa_llk.cmx :
+pa_llk.cmo : \
+    ord_MLast.cmi
+pa_llk.cmx : \
+    ord_MLast.cmx

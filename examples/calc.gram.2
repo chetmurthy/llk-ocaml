@@ -1,6 +1,6 @@
 EXTEND
   e: AFTER "**"
-    [ RIGHTA [ x = INT -> int_of_string x
+    [ NONA [ x = INT -> int_of_string x
       | "("; x = e; ")" -> x ] ]
   ;
 
