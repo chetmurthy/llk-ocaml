@@ -14,7 +14,7 @@ NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 MKCAMLP5=$(LAUNCH) mkcamlp5
 SYNTAX := camlp5r
 
-PACKAGES := $(PACKAGES),fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std
+PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std
 TARGET := pa_llk.cma
 OML := ord_MLast.ml
 OMLI := ord_MLast.mli
@@ -38,10 +38,10 @@ test:: all
 doc: $(CMT) $(CMTI)
 
 camlp5.pa_llk: $(TARGET)
-	$(MKCAMLP5) -verbose -package fmt,camlp5.pa_r,camlp5.pr_r,pa_ppx.base $(TARGET) -o $@
+	$(MKCAMLP5) -verbose -package fmt,bos,camlp5.pa_r,camlp5.pr_r,pa_ppx.base $(TARGET) -o $@
 
 camlp5.pa_llk.opt: $(TARGET:.cma=.cmxa)
-	$(MKCAMLP5).opt -verbose -package fmt,camlp5.pa_r,camlp5.pr_r,pa_ppx.base $(TARGET:.cma=.cmxa) -o $@
+	$(MKCAMLP5).opt -verbose -package fmt,bos,camlp5.pa_r,camlp5.pr_r,pa_ppx.base $(TARGET:.cma=.cmxa) -o $@
 
 META: META.pl
 	./META.pl > META

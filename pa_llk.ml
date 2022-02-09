@@ -113,7 +113,7 @@ EXTEND
     top extend_body symbol rule rule_list level level_list
   ;
   top:
-    [ [ "EXTEND"; /; e = extend_body; "END" ; ";" -> e ] ]
+    [ [ "EXTEND"; /; e = extend_body; "END" ; ";" -> norm_top e ] ]
   ;
   extend_body:
     [ [ sl = [ l = global -> l | -> [] ];
@@ -255,12 +255,12 @@ value assoc pc = fun [
 ;
 
 value position pc = fun [
-    POS_FIRST -> pprintf pc "FIRST"
-  | POS_LAST -> pprintf pc "LAST"
-  | POS_BEFORE n -> pprintf pc "BEFORE \"%s\"" n
-  | POS_AFTER n -> pprintf pc "AFTER \"%s\"" n
-  | POS_LIKE n -> pprintf pc "LIKE \"%s\"" n
-  | POS_LEVEL n -> pprintf pc "LEVEL \"%s\"" n
+    POS_FIRST -> pprintf pc " FIRST"
+  | POS_LAST -> pprintf pc " LAST"
+  | POS_BEFORE n -> pprintf pc " BEFORE \"%s\"" n
+  | POS_AFTER n -> pprintf pc " AFTER \"%s\"" n
+  | POS_LIKE n -> pprintf pc " LIKE \"%s\"" n
+  | POS_LEVEL n -> pprintf pc " LEVEL \"%s\"" n
   ]
 ;
 
@@ -449,10 +449,101 @@ value top pc (_, sl, el) =
 end ;
 
 module RT = struct
-  value string s = 
-  s |> Stream.of_string |> Grammar.Entry.parse Pa.top |> Pr.top Pprintf.empty_pc |> print_string ;
 
-  value file fn =
-    let s = fn |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok in
-    string s ;
+  value pa s = 
+  s |> Stream.of_string |> Grammar.Entry.parse Pa.top ;
+
+  value pr x = 
+    x |> Pr.top Pprintf.empty_pc |> print_string ;
+
+  value string s = s |> pa |> pr ;
+
+  value with_file f name =
+    let s = name |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok in
+    f s ;
+
+  value file fn = with_file string fn ;
+end ;
+
+(** Reposition entries with [position] markings, to where they belong.
+
+    Entries are either marked with [position]s or not.  Entries'
+   levels are either marked with labels or not.  Precisely ONE entry
+   SHALL be non-position-marked; all others must be position-marked.
+
+   The levels in entries MAY be labeled but need not be.  All labels
+   for an entry will be distinct -- no repeats.
+
+   So take all the entries that are position-marked and extract
+   label-sets from them.  TSORT so that an entry with a
+   position-marking is AFTER the entry with that label in one of its
+   levels.
+
+   Taking the position-marked entry, start inserting from that list of
+   tsorted entries.  *)
+module Reposition = struct
+  open Pa_ppx_utils.Std ;
+
+  value is_position_marked e = isSome e.ae_pos ;
+
+  value entry_labels e =
+    e.ae_levels
+    |> List.filter_map (fun [ {al_label=Some l} -> Some l | _ -> None ]) ;
+
+  value entry_position e = e.ae_pos ;
+
+  (** tsort entries by position, label.
+
+      nodes: (entry, position option)
+      edges:
+
+        src: node with (e, Some pos)
+        dst: node with (e, pos_opt') where e has a level with label [pos]
+
+      edges for LEVEL, LIKE, AFTER, BEFORE, but NOT for FIRST, LAST
+   *)
+
+  value construct_graph (el : list a_entry) =
+    let entry_name e = e.ae_name in
+    let entry2node e = (entry_name e, entry_position e) in
+    let label2node =
+      el
+      |> List.concat_map (fun e ->
+             e
+             |> entry_labels
+             |> List.map (fun lab -> (lab, entry2node e))
+           ) in do {
+    if 1 <> List.length (el |> List.map entry_position |> List.find_all ((=) None)) then
+      failwith "construct_graph: exactly one entry MUST be position-free"
+    else () ;
+    let all_entry_names =
+      el |> List.map entry_name |> List.sort_uniq String.compare in
+    all_entry_names
+    |> List.iter (fun name ->
+           let el = el |> List.find_all (fun e -> name = entry_name e) in
+           if not (distinct (el |> List.concat_map entry_labels)) then
+             failwith Fmt.(str "construct_graph: entry %s does not have distinct labels" name)
+           else ()
+         ) ;
+    el |> List.filter_map (fun e ->
+              match entry_position e with [
+                  Some(POS_LEVEL lev | POS_AFTER lev | POS_BEFORE lev) ->
+                  (match List.assoc lev label2node with [
+                       exception Not_found ->
+                                 failwith Fmt.(str "construct_graph: entry %s, position LEVEL \"%s\" not found"
+                                                 (entry_name e) lev)
+                               | n -> Some (entry2node e, n)
+                  ])
+                | Some(POS_LIKE levpat) -> failwith Fmt.(str "construct_graph: LIKE position not implemented")
+                | Some(POS_FIRST | POS_LAST) | None -> None
+            ])
+  }
+  ;
+
+(*
+ exec (loc, gl, el) =
+  let project_ename e = (e.ae_name, e) in
+  let el = List.map project_ename el in
+  let partitions = nway_partition String.equal el in
+ *)  
 end ;
