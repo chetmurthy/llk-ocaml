@@ -1,10 +1,28 @@
 EXTEND
   e:
-    [ [ x = e; "+"; y = e -> x + y
+    [ LEFTA [ x = e; "+"; y = e -> x + y
       | x = e; "-"; y = e -> x - y ]
-    | [ x = e; "*"; y = e -> x * y
+    | LEFTA [ x = e; "*"; y = e -> x * y
       | x = e; "/"; y = e -> x / y ]
     | [ x = INT -> int_of_string x
       | "("; x = e; ")" -> x ] ]
   ;
+
+  f:
+    [ [ x = LEFT_ASSOC f1 
+          [ "+"; y = f1 -> (fun x -> x + y)
+          | "-"; y = f1 -> (fun x -> x - y) ]
+          WITH (fun x f -> f x) -> x ] ] ;
+
+  f1:
+    [ [ x = LEFT_ASSOC f2
+          [ "*"; y = f2 -> (fun x -> x * y)
+          | "/"; y = f2 -> (fun x -> x / y) ]
+          WITH (fun x f -> f x) -> x] ] ;
+
+  f2:
+    [ [ x = INT -> int_of_string x
+      | "("; x = f; ")" -> x ] ]
+  ;
+
 END;

@@ -1323,13 +1323,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "downto" -> False ] ]
   ;
   (* Objects and Classes *)
-  str_item:
+  str_item: LAST
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_declaration SEP "and") ->
           str_item_to_inline <:str_item< class $_list:cd$ >> ext
       | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
           str_item_to_inline <:str_item< class type $_list:ctd$ >> ext ] ]
   ;
-  sig_item:
+  sig_item: LAST
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_description SEP "and") ->
           sig_item_to_inline <:sig_item< class $_list:cd$ >> ext
       | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
@@ -1684,11 +1684,11 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   expr: LEVEL "simple"
     [ [ "`"; s = V ident "" -> <:expr< ` $_:s$ >> ] ]
   ;
-  fun_def:
+  fun_def: LAST
     [ [ p = labeled_patt; (eo, e) = SELF ->
           (None, <:expr< fun [ $p$ $opt:eo$ -> $e$ ] >>) ] ]
   ;
-  fun_binding:
+  fun_binding: LAST
     [ [ p = labeled_patt; e = SELF -> <:expr< fun $p$ -> $e$ >> ] ]
   ;
   patt: LEVEL "simple"
@@ -1728,7 +1728,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "?"; "("; i = LIDENT; ":"; t = ctyp; ")" ->
           <:patt< ?{$lid:i$ : $t$} >> ] ]
   ;
-  class_type:
+  class_type: LAST
     [ [ i = LIDENT; ":"; t = ctyp LEVEL "apply"; "->"; ct = SELF ->
           <:class_type< [ ~$i$: $t$ ] -> $ct$ >>
       | i = V QUESTIONIDENTCOLON; t = ctyp LEVEL "apply"; "->"; ct = SELF ->
@@ -1739,10 +1739,10 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:class_type< [ ?$_:i$: $t$ ] -> $ct$ >>
       ] ]
   ;
-  class_fun_binding:
+  class_fun_binding: LAST
     [ [ p = labeled_patt; cfb = SELF -> <:class_expr< fun $p$ -> $cfb$ >> ] ]
   ;
-  class_fun_def:
+  class_fun_def: LAST
     [ [ p = labeled_patt; "->"; ce = class_expr ->
           <:class_expr< fun $p$ -> $ce$ >>
       | p = labeled_patt; cfd = SELF ->

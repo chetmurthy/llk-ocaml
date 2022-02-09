@@ -182,7 +182,7 @@ EXTEND
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_expr< $e1$ [@ $_attribute:attr$ ] >>
       ]
-    | [ "struct"; st = structure; /; "end" →
+    | [ "struct"; st = structure; "end" →
           <:module_expr< struct $_list:st$ end >> ]
     | [ me1 = SELF; me2 = SELF → <:module_expr< $me1$ $me2$ >> ]
     | [ me1 = SELF; "."; me2 = SELF → <:module_expr< $me1$ . $me2$ >> ]
@@ -280,7 +280,7 @@ EXTEND
       ]
     | [ mt = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") →
           <:module_type< $mt$ with $_list:wcl$ >> ]
-    | [ "sig"; sg = signature; /; "end" →
+    | [ "sig"; sg = signature; "end" →
           <:module_type< sig $_list:sg$ end >>
       | "module"; "type"; "of"; me = module_expr →
           <:module_type< module type of $me$ >> ]
@@ -937,14 +937,14 @@ EXTEND
       ] ]
   ;
   (* Objects and Classes *)
-  str_item:
+  str_item: LAST
     [ [ "class"; cd = V (LIST1 class_declaration SEP "and") →
           <:str_item< class $_list:cd$ >>
       | "class"; "type";
         ctd = V (LIST1 class_type_declaration SEP "and") →
           <:str_item< class type $_list:ctd$ >> ] ]
   ;
-  sig_item:
+  sig_item: LAST
     [ [ "class"; cd = V (LIST1 class_description SEP "and") →
           <:sig_item< class $_list:cd$ >>
       | "class"; "type"; ctd = V (LIST1 class_type_declaration SEP "and") →
@@ -1219,7 +1219,7 @@ EXTEND
     [ [ p = patt → p
       | p = patt; ":"; t = ctyp → <:patt< ($p$ : $t$) >> ] ]
   ;
-  ipatt:
+  ipatt: LAST
     [ [ "~"; "{"; lppo = V (LIST1 ipatt_tcon_opt_eq_patt SEP ";"); "}" →
           <:patt< ~{$_list:lppo$} >>
       | "?"; "{"; p = ipatt_tcon; eo = V (OPT [ "="; e = expr → e ]); "}" →
@@ -1289,5 +1289,5 @@ EXTEND
     [ [ "`"; s = V ident "" → <:expr< ` $_:s$ >> ] ]
   ;
   (* -- cut 1 begin -- *)
-  expr: [[]];
+  expr: LAST [[]];
 END;

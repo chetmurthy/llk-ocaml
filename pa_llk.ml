@@ -64,6 +64,7 @@ and a_symbol =
   | ASnext of loc
   | ASnterm of loc and string and option string
   | ASopt of loc and a_symbol
+  | ASleft_assoc of loc and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
   | ASself of loc
   | AStok of loc and string and option string
@@ -175,11 +176,13 @@ EXTEND
   symbol:
     [ "top" NONA
       [ UIDENT "LIST0"; s = SELF; sep = OPT sep_opt_sep ->
-          ASlist loc LML_0 s sep
+         ASlist loc LML_0 s sep
       | UIDENT "LIST1"; s = SELF; sep = OPT sep_opt_sep ->
-          ASlist loc LML_1 s sep
+         ASlist loc LML_1 s sep
       | UIDENT "OPT"; s = SELF ->
-          ASopt loc s
+         ASopt loc s
+      | UIDENT "LEFT_ASSOC"; s1 = SELF ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
+         ASleft_assoc loc s1 s2 e
       | UIDENT "FLAG"; s = SELF ->
           ASflag loc s ]
     | "vala"
@@ -233,7 +236,7 @@ module Pr = struct
 
 value flag_equilibrate_cases = Pcaml.flag_equilibrate_cases;
 
-value expr = Eprinter.apply pr_expr;
+value expr = Eprinter.apply_level pr_expr "simple";
 value patt = Eprinter.apply pr_patt;
 
 value comment pc loc = pprintf pc "%s" (Prtools.comm_bef pc.ind loc);
@@ -354,6 +357,12 @@ and symbol pc = fun [
          (if b then " OPT_SEP" else "")
 
     | ASopt _ sym -> pprintf pc "OPT@;%p" simple_symbol sym
+
+    | ASleft_assoc _ sym1 sym2 e ->
+       pprintf pc "LEFT_ASSOC@;%p@;%p WITH %p"
+         simple_symbol sym1
+         simple_symbol sym2
+         expr e
 
     | ASflag _ sym ->
        pprintf pc "FLAG@;%p" simple_symbol sym
@@ -507,39 +516,65 @@ module Reposition = struct
   value entry_name e = e.ae_name ;
   value entry2node e = (entry_name e, entry_position e) ;
 
+  value merge_levels l1 l2 =
+    let r1 = l1.al_rules in
+    let r2 = l2.al_rules in
+    let r1 = {(r1) with au_rules = r1.au_rules @ r2.au_rules} in
+    {(l1) with al_rules = r1}
+  ;
   value insert1 e0 e1 = do {
     assert (entry_position e0 = None) ;
-    match entry_position e1 with [
-        None -> assert False
-      | Some (POS_LEVEL lev) ->
-         failwith "insert1: LEVEL unimplemented"
-      | Some (POS_LIKE _) -> failwith "insert1: LIKE unimplemented"
-      | Some (POS_AFTER lev) ->
-         let e0_levels =
-           e0.ae_levels
-           |> List.concat_map (fun l ->
-                  if Some lev = l.al_label then [l] @ e1.ae_levels
-                  else [l]
-                ) in
-         { (e0) with ae_levels = e0_levels }
-         
-      | Some (POS_BEFORE lev) ->
-         let e0_levels =
-           e0.ae_levels
-           |> List.concat_map (fun l ->
-                  if Some lev = l.al_label then e1.ae_levels @ [l]
-                  else [l]
-                ) in
-         { (e0) with ae_levels = e0_levels }
+    if e1.ae_levels = [] then e0 else do {
+      match entry_position e1 with [
+          None -> assert False
+        | Some (POS_LEVEL lev) ->
+           let e0_levels =
+             e0.ae_levels
+             |> List.concat_map (fun l ->
+                    if Some lev = l.al_label then
+                      [merge_levels l (List.hd e1.ae_levels)] @ (List.tl e1.ae_levels)
+                    else [l]
+                  ) in
+           { (e0) with ae_levels = e0_levels }
 
-      | Some POS_FIRST -> { (e0) with ae_levels = e1.ae_levels @ e0.ae_levels }
-      | Some POS_LAST ->  { (e0) with ae_levels = e0.ae_levels @ e1.ae_levels }
-      ]
+        | Some (POS_LIKE _) -> failwith "insert1: LIKE unimplemented"
+        | Some (POS_AFTER lev) ->
+           let e0_levels =
+             e0.ae_levels
+             |> List.concat_map (fun l ->
+                    if Some lev = l.al_label then [l] @ e1.ae_levels
+                    else [l]
+                  ) in
+           { (e0) with ae_levels = e0_levels }
+           
+        | Some (POS_BEFORE lev) ->
+           let e0_levels =
+             e0.ae_levels
+             |> List.concat_map (fun l ->
+                    if Some lev = l.al_label then e1.ae_levels @ [l]
+                    else [l]
+                  ) in
+           { (e0) with ae_levels = e0_levels }
+
+        | Some POS_FIRST -> { (e0) with ae_levels = e1.ae_levels @ e0.ae_levels }
+        | Some POS_LAST ->  { (e0) with ae_levels = e0.ae_levels @ e1.ae_levels }
+        ]
+    }
   }
   ;
     
+  type node = (string * option a_position) ;
+  value tsort_nodes (adj : list (node * list node)) =
+    let adj = adj |> List.sort_uniq Stdlib.compare in
+    Tsort.tsort (fun v l -> [v :: l]) adj [] ;
 
-  value coalesce_entries ename el =
+  value concat_entries = fun [
+    [] -> assert False
+  | [h::t] as el -> {(h) with ae_levels = List.concat_map (fun e -> e.ae_levels) el }
+  ]
+  ;
+
+  value coalesce_entries_for ename el =
     let label2node =
       el
       |> List.concat_map (fun e ->
@@ -564,14 +599,17 @@ module Reposition = struct
                        | n -> Some (entry2node e, [n])
           ])
         | Some(POS_LIKE levpat) -> failwith Fmt.(str "construct_graph: LIKE position not implemented")
-        | Some(POS_FIRST | POS_LAST) | None -> None
+        | Some(POS_FIRST) -> Some (entry2node e, [(entry_name e, None)])
+        | Some(POS_LAST) -> Some (entry2node e, [(entry_name e, None)])
+        | None -> None
                       ]) in
-    let sorted = Tsort.tsort (fun v l -> [v :: l]) adj [] in
-    let sorted_el =
+    let sorted = tsort_nodes adj in
+    let sorted_ell =
       sorted
       |> List.map (fun node ->
-             el |> List.find (fun e -> node = entry2node e)
+             el |> List.find_all (fun e -> node = entry2node e)
            ) in
+    let sorted_el = List.map concat_entries sorted_ell in
     let (e0, el) = match sorted_el with [
           [] -> assert False
         | [e0::el] when entry_position e0 <> None -> assert False
@@ -591,7 +629,7 @@ module Reposition = struct
           [({ae_pos = None} as e)] -> e
         | [{ae_pos = Some _}] ->
            failwith Fmt.(str "construct_graph: only one entry named %s, but with position" name)
-        | el -> coalesce_entries name el
+        | el -> coalesce_entries_for name el
          ])
   ;
 

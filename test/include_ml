@@ -25,6 +25,7 @@ Pcaml.inter_phrases := Some ";\n";;
 open Pa_ppx_utils.Std ;;
 
 #require "pa_ppx.base";;
+
 Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
@@ -32,6 +33,8 @@ let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #require "pa_llk" ;;
 open Pa_llk ;;
 
+let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
+#install_printer pp_a_entry ;;
 (*
 ;;; Local Variables: ***
 ;;; mode:tuareg ***
