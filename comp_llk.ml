@@ -517,37 +517,26 @@ value left_factorize loc rl =
     ]
 ;
 
-value rec left_factorize_level l =
-  let loc = l.al_loc in
-  let rl = left_factorize_rules l.al_rules.au_rules in
-  {(l) with
-    al_rules = {(l.al_rules) with au_rules = left_factorize loc rl } }
+value make_dt () =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_level = dt.migrate_a_level in
+  let migrate_a_level dt l = 
+    let l = fallback_migrate_a_level dt l in
+    let loc = l.al_loc in    
+    {(l) with al_rules = {(l.al_rules) with au_rules = left_factorize loc l.al_rules.au_rules } }
+  in
+  { (dt) with Llk_migrate.migrate_a_level = migrate_a_level }
+;
 
-and left_factorize_levels l = do {
+value left_factorize_level l =
+  let dt = make_dt () in
+  dt.migrate_a_level dt l
+;
+
+value left_factorize_levels l = do {
   assert (1 = List.length l) ;
   List.map left_factorize_level l
 }
-
-and left_factorize_rules (rl : list a_rule) = List.map left_factorize_rule rl
-and left_factorize_rule r = { (r) with ar_psymbols = List.map left_factorize_psymbol r.ar_psymbols }
-and left_factorize_psymbol ps = { (ps) with ap_symb = left_factorize_symbol ps.ap_symb }
-and left_factorize_symbol = fun [
-    (ASkeyw _ _ | ASnext _ | ASnterm _ _ _ | ASself _ | AStok _ _ _) as s -> s
-
-  | ASflag loc s -> ASflag loc (left_factorize_symbol s)
-
-  | ASlist loc lml s sb_opt ->
-     ASlist loc lml
-       (left_factorize_symbol s)
-       (Option.map (fun (s, b) -> (left_factorize_symbol s, b)) sb_opt)
-
-  | ASopt loc s -> ASopt loc (left_factorize_symbol s)
-
-  | ASleft_assoc loc s1 s2 e -> ASleft_assoc loc (left_factorize_symbol s1) (left_factorize_symbol s2) e
-
-  | ASrules loc rl -> ASrules loc {(rl) with au_rules = left_factorize_rules rl.au_rules }
-  | ASvala loc s sl -> ASvala loc (left_factorize_symbol s) sl
-]
 ;
 
 value exec0 e = {(e) with ae_levels = left_factorize_levels e.ae_levels } ;
