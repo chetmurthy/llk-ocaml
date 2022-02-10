@@ -208,35 +208,36 @@ open Ppxutil ;
 
 value lookup_rho s rho : a_symbol = AList.assoc ~{cmp=equal_a_symbol} s rho ;
 
+value make_dt rho =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        (ASnterm _ _ _ | ASnext _ | ASself _) as s ->
+        (match lookup_rho s rho with [
+             s -> s
+           | exception Not_found -> s
+           ])
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol }
+;
 
-value rec substitute1_symbol rho = fun [
-      ASflag loc s -> ASflag loc (substitute1_symbol rho s)
-  | ASkeyw _ _ | AStok _ _ _ as s -> s
-  | ASlist loc lml s1 sb_opt ->
-     ASlist loc lml
-       (substitute1_symbol rho s1)
-       (Option.map (fun (s,b) -> (substitute1_symbol rho s1,b)) sb_opt)
+value substitute1_psymbol rho ps =
+  let dt = make_dt rho in
+  dt.migrate_a_psymbol dt ps
+;
 
-  | (ASnterm _ _ _ | ASnext _ | ASself _) as s -> match lookup_rho s rho with [
-                          s -> s
-                        | exception Not_found -> s
-                        ]
-  | ASopt loc s -> ASopt loc (substitute1_symbol rho s)
-  | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (substitute1_symbol rho s1) (substitute1_symbol rho s2) e
-  |  ASrules loc rs -> ASrules loc {(rs) with au_rules = substitute1_rules rho rs.au_rules}
-   
-  
-  | ASvala loc s sl -> ASvala loc (substitute1_symbol rho s) sl
-  ]
+value substitute1_symbol rho ps =
+  let dt = make_dt rho in
+  dt.migrate_a_symbol dt ps
+;
 
-and substitute1_psymbol rho ps =
-  {(ps) with ap_symb = substitute1_symbol rho ps.ap_symb}
+value substitute1_rule rho ps =
+  let dt = make_dt rho in
+  dt.migrate_a_rule dt ps
+;
 
-and substitute1_rule rho r =
-  {(r) with ar_psymbols = List.map (substitute1_psymbol rho) r.ar_psymbols }
-
-and substitute1_rules rho rl = List.map (substitute1_rule rho) rl ;
+value substitute1_rules rho rl = List.map (substitute1_rule rho) rl ;
 
 value rewrite_righta loc ename ~{cur} ~{next} rho rl =
   let right_rho = [
