@@ -556,3 +556,115 @@ value exec0 e = {(e) with ae_levels = left_factorize_levels e.ae_levels } ;
 value exec (loc, gl, el) = (loc, gl, List.map exec0 el) ;
 
 end ;
+
+type token = [
+    KWD of string
+  | CLS of string
+  ]
+;
+
+module SetMap = struct
+  type set_t 'a = list 'a ;
+  type t 'a = list (string * set_t 'a) ;
+
+  value canon m =
+    m
+    |> List.map (fun (nt,l) -> (nt, List.sort Stdlib.compare l))
+    |> List.sort Stdlib.compare
+  ;
+  value mt = [] ;
+  value add m (nt, tok) =
+    match List.assoc nt m with [
+        l -> if List.mem tok l then m
+             else
+               let m = List.remove_assoc nt m in
+               canon [(nt,[tok::l]) :: m]
+
+      | exception Not_found -> canon [(nt, [tok])::m]
+      ]
+  ;
+  value lookup nt m =
+    match List.assoc nt m with [
+        l -> l
+      | exception Not_found -> []
+      ]
+  ;
+  value addl m l = List.fold_left add m l ;
+end ;
+
+module First = struct
+open Pa_ppx_utils ;
+module SM = SetMap ;
+
+value rec first_psymbols m = fun [
+  [] -> [None]
+| [h::t] ->
+   let fh = first_psymbol m h in
+   if List.mem None fh then
+     (Std.except None fh) @ (first_psymbols m t)
+   else fh
+]
+
+and first_psymbol m ps = first_symbol m ps.ap_symb
+
+and first_symbol m = fun [
+      ASflag _ s -> (first_symbol m s)@[None]
+    | ASkeyw _ kw -> [Some (KWD kw)]
+    | ASlist loc lml elem_s sepb_opt ->
+       let felem = first_symbol m elem_s in
+       if not (List.mem None felem) then felem
+       else
+         (Std.except None felem) @ (
+         match sepb_opt with [
+             None -> [None]
+           | Some (sep_s, _) ->
+              first_symbol m sep_s
+       ])
+
+    | ASnext _ -> assert False
+
+    | ASnterm _ nt _ -> SM.lookup nt m
+    | ASopt _ s -> [None] @ (first_symbol m s)
+
+  | ASleft_assoc _ s1 s2 _ ->
+     let fs1 = first_symbol m s1 in
+     if not (List.mem None fs1) then fs1
+     else (Std.except None fs1) @ (first_symbol m s2)
+
+  | ASrules _ rl -> first_rules m rl
+  | ASself _ -> assert False
+  | AStok _ cls _ -> [Some (CLS cls)]
+  | ASvala _ s sl ->
+     (first_symbol m s)@(sl |> List.concat_map (fun s -> [Some (KWD ("$"^s)); Some (KWD ("$_"^s))]))
+]
+
+and first_rule m r = first_psymbols m r.ar_psymbols
+
+and first_rules m l =
+  let rules = l.au_rules in
+  List.concat_map (first_rule m) rules
+
+;
+
+value first_level m l = first_rules m l.al_rules ;
+
+value comp1_entry m e =
+  let l = 
+    e.ae_levels
+    |> List.concat_map (first_level m)
+    |> List.sort_uniq Stdlib.compare in
+  SM.addl m (List.map (fun t -> (e.ae_name, t)) l)
+;
+
+value comp1 el m = List.fold_left comp1_entry m el ;
+
+value rec comprec el m =
+  let m' = comp1 el m in
+  if m = m' then m else comprec el m'
+;
+
+value compute_first el = comprec el SM.mt ;
+  
+value exec (loc, gl, el) =  compute_first el ;
+
+end ;
