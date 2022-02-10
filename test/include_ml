@@ -32,6 +32,8 @@ let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 
 #require "pa_llk" ;;
 open Pa_llk ;;
+open Pr_llk ;;
+open Comp_llk ;;
 
 
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;

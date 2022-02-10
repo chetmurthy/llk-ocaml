@@ -1,10 +1,30 @@
-ord_MLast.cmo pa_llk.cmo ord_MLast.cmi pa_llk.cmi ord_MLast.cmx pa_llk.cmx: 
+ord_MLast.cmo llk_types.cmo pa_llk.cmo pr_llk.cmo comp_llk.cmo ord_MLast.cmi llk_types.cmi pa_llk.cmi pr_llk.cmi comp_llk.cmi ord_MLast.cmx llk_types.cmx pa_llk.cmx pr_llk.cmx comp_llk.cmx: 
 ord_MLast.cmo : \
     ord_MLast.cmi
 ord_MLast.cmx : \
     ord_MLast.cmi
 ord_MLast.cmi :
-pa_llk.cmo : \
+comp_llk.cmo : \
+    ord_MLast.cmi \
+    llk_types.cmo
+comp_llk.cmx : \
+    ord_MLast.cmx \
+    llk_types.cmx
+llk_types.cmo : \
     ord_MLast.cmi
-pa_llk.cmx : \
+llk_types.cmx : \
     ord_MLast.cmx
+pa_llk.cmo : \
+    ord_MLast.cmi \
+    llk_types.cmo
+pa_llk.cmx : \
+    ord_MLast.cmx \
+    llk_types.cmx
+pr_llk.cmo : \
+    pa_llk.cmo \
+    ord_MLast.cmi \
+    llk_types.cmo
+pr_llk.cmx : \
+    pa_llk.cmx \
+    ord_MLast.cmx \
+    llk_types.cmx

@@ -18,9 +18,9 @@ PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std
 TARGET := pa_llk.cma
 OML := ord_MLast.ml
 OMLI := ord_MLast.mli
-RML := pa_llk.ml
+RML := llk_types.ml pa_llk.ml pr_llk.ml comp_llk.ml
 RMLI := 
-ML := ord_MLast.ml pa_llk.ml
+ML := ord_MLast.ml llk_types.ml pa_llk.ml pr_llk.ml comp_llk.ml
 CMO := $(ML:.ml=.cmo)
 CMI := $(ML:.ml=.cmi)
 CMX := $(ML:.ml=.cmx)
