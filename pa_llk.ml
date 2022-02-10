@@ -726,6 +726,34 @@ value rewrite_righta loc ename ~{cur} ~{next} rho rl =
   rl @ [last_rule]
 ;
 
+value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
+  let left_rho = [
+      (ASself loc, ASnterm loc next None)
+     ;(ASnterm loc ename None, ASnterm loc next None)
+    ] in
+  let (left_patt, left_symbol) = match (List.hd rl).ar_psymbols with [
+        [{ap_patt=x; ap_symb = y}::_] -> (x,y)
+      ] in
+  let left_patt = match left_patt with [ None -> <:patt< _ >> | Some p -> p ] in
+  let right_rl =
+    rl
+  |> List.map (fun r ->
+         {(r) with ar_psymbols = List.tl r.ar_psymbols ;
+                   ar_action = r.ar_action |> Option.map (fun act -> <:expr< fun [ $left_patt$ -> $act$ ] >>)
+         }) in
+  let right_rl = substitute1_rules rho right_rl in
+  let left_symbol = substitute1_symbol left_rho left_symbol in
+  let left_assoc_symbol =
+    ASleft_assoc loc left_symbol
+      (ASrules loc {au_loc=loc; au_rules = right_rl})
+      <:expr< fun x f -> f x >> in
+  [{ ar_loc=loc
+   ; ar_psymbols=[{ ap_loc=loc
+                  ; ap_patt = Some <:patt< __x__ >>
+                  ; ap_symb = left_assoc_symbol}]
+   ; ar_action = Some <:expr< __x__ >> }]
+;
+
   (** rewrite a level into a entry that eschews associativity and
      label markings, instead doing it explicitly.
 
@@ -800,8 +828,37 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
              }
           }
 
-          | _ ->
-             l
+          | Some LEFTA ->
+             let rl = l.al_rules.au_rules in do {
+             if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
+               failwith Fmt.(str "rewrite1: entry %s LEFTA level rules must all have at least 2 psymbols"
+                               ename)
+             else () ;
+             let first_psymbol = List.hd (List.hd rl).ar_psymbols in
+             if not (rl |> List.for_all (fun r -> 
+                               equal_a_psymbol first_psymbol (List.hd r.ar_psymbols))) then
+               failwith Fmt.(str "rewrite1: entry %s LEFTA level does not have identical first psymbols"
+                               ename)
+             else () ;
+             match first_psymbol.ap_symb with [
+                 ASnterm _ name None when name = ename -> ()
+               | ASself _ -> ()
+               | _ -> failwith Fmt.(str "rewrite1: entry %s LEFTA level has first psymbol non-recursive"
+                                      ename)
+               ] ;
+             let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} [
+                          (ASnext loc, ASnterm loc next None)
+                         ;(ASself loc, ASnterm loc next None)
+                         ;(ASnterm loc ename None, ASnterm loc next None)
+                        ] rl in
+             {
+               (l) with
+               al_label = None ;
+               al_assoc = None ;
+               al_rules = {(l.al_rules) with au_rules = rl}
+             }
+          }
+
         ] in
     {(e) with ae_name = cur ; ae_levels = [l]}
 }
