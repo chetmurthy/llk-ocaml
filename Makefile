@@ -16,11 +16,11 @@ SYNTAX := camlp5r
 
 PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std
 TARGET := pa_llk.cma
-OML := ord_MLast.ml
+OML := ord_MLast.ml llk_migrate.ml
 OMLI := ord_MLast.mli
 RML := llk_types.ml pa_llk.ml pr_llk.ml comp_llk.ml
 RMLI := 
-ML := ord_MLast.ml llk_types.ml pa_llk.ml pr_llk.ml comp_llk.ml
+ML := ord_MLast.ml llk_types.ml llk_migrate.ml pa_llk.ml pr_llk.ml comp_llk.ml
 CMO := $(ML:.ml=.cmo)
 CMI := $(ML:.ml=.cmi)
 CMX := $(ML:.ml=.cmx)
@@ -68,7 +68,6 @@ $(TARGET:.cma=.cmxa): $(CMO:.cmo=.cmx)
 IMPORT_OCAMLFLAGS = 	-ppopt -pa_import-package -ppopt $(PACKAGES) \
 	-ppopt -pa_import-I -ppopt . \
 
-
 ord_MLast.cmo: ord_MLast.ml
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
 
@@ -77,6 +76,16 @@ ord_MLast.cmi: ord_MLast.mli
 
 ord_MLast.cmx: ord_MLast.ml
 	$(OCAMLFIND) ocamlopt $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
+
+llk_migrate.cmo: llk_migrate.ml
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+
+llk_migrate.cmi: llk_migrate.mli
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+
+llk_migrate.cmx: llk_migrate.ml
+	$(OCAMLFIND) ocamlopt $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+
 
 EXTERNAL := $(shell $(OCAMLFIND) query -predicates byte -format '%m' $(PACKAGES) | grep local-install)
 $(CMO) $(CMI) $(CMX): $(EXTERNAL)

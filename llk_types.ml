@@ -15,9 +15,6 @@ value equal_patt = Reloc.eq_patt ;
 
 value split_ext = ref False;
 
-Pcaml.add_option "-split_ext" (Arg.Set split_ext)
-  "Split EXTEND by using functions.";
-
 type loc = Ploc.t [@@deriving (show) ;];
 value equal_loc a b = True ;
 value compare_loc a b = 0 ;
@@ -28,17 +25,13 @@ type a_position = [
   | POS_AFTER of string
   | POS_BEFORE of string
   | POS_FIRST | POS_LAST
-] [@@deriving (show,eq,ord) ;]
-;
-
-type a_assoc = [
+]
+and a_assoc = [
     LEFTA
   | RIGHTA
   | NONA
-] [@@deriving (show,eq,ord) ;]
-;
-
-type a_entry =
+]
+and a_entry =
   { ae_loc : loc;
     ae_name : string;
     ae_pos : option a_position;
@@ -74,10 +67,8 @@ and a_symbol =
   | ASvala of loc and a_symbol and list string
   ]
 and lmin_len =
-  [ LML_0 | LML_1 ] [@@deriving (show,eq,ord) ;]
-;
-
-type _top = (loc * list string * list a_entry) [@@deriving (show,eq,ord) ;] ;
+  [ LML_0 | LML_1 ]
+and _top = (loc * list string * list a_entry) [@@deriving (show,eq,ord) ;] ;
 
 type top = _top ;
 value norm_top (loc, gl, el) = (loc, List.sort String.compare gl, List.sort compare_a_entry el) ;
