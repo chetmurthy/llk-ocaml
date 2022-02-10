@@ -942,3 +942,80 @@ value exec (loc, gl, el) =
 ;
 
 end ;
+
+module LeftFactorize = struct
+
+value extract_left_factors1 rl =
+  if List.length rl > 1 &&
+       rl |> List.for_all (fun r -> List.length r.ar_psymbols > 0) &&
+         (let left_psymbol = List.hd (List.hd rl).ar_psymbols in
+          rl |> List.for_all (fun r -> equal_a_psymbol left_psymbol (List.hd r.ar_psymbols))) then
+    let left_psymbol = List.hd (List.hd rl).ar_psymbols in
+    ([left_psymbol],
+     rl |> List.map (fun r -> {(r) with ar_psymbols = List.tl r.ar_psymbols }))
+
+  else ([], rl)
+;
+
+value rec extract_left_factors rl =
+  match extract_left_factors1 rl with [
+      ([], rl) -> ([], rl)
+    | (l, rl) ->
+       let (l', rl) = extract_left_factors rl in
+       (l @ l', rl)
+    ]
+;
+
+value left_factorize loc rl =
+  match extract_left_factors rl with [
+      ([], rl) -> rl
+    | (factors,rl) ->
+       let right_psymb = {
+           ap_loc = loc
+         ; ap_patt = Some <:patt< __x__ >>
+         ; ap_symb = ASrules loc { au_loc = loc ; au_rules = rl }
+         } in
+       [{ ar_loc = loc
+        ; ar_psymbols = factors @ [ right_psymb ]
+        ; ar_action = Some <:expr< __x__ >> }]
+    ]
+;
+
+value rec left_factorize_level l =
+  let loc = l.al_loc in
+  let rl = left_factorize_rules l.al_rules.au_rules in
+  {(l) with
+    al_rules = {(l.al_rules) with au_rules = left_factorize loc rl } }
+
+and left_factorize_levels l = do {
+  assert (1 = List.length l) ;
+  List.map left_factorize_level l
+}
+
+and left_factorize_rules (rl : list a_rule) = List.map left_factorize_rule rl
+and left_factorize_rule r = { (r) with ar_psymbols = List.map left_factorize_psymbol r.ar_psymbols }
+and left_factorize_psymbol ps = { (ps) with ap_symb = left_factorize_symbol ps.ap_symb }
+and left_factorize_symbol = fun [
+    (ASkeyw _ _ | ASnext _ | ASnterm _ _ _ | ASself _ | AStok _ _ _) as s -> s
+
+  | ASflag loc s -> ASflag loc (left_factorize_symbol s)
+
+  | ASlist loc lml s sb_opt ->
+     ASlist loc lml
+       (left_factorize_symbol s)
+       (Option.map (fun (s, b) -> (left_factorize_symbol s, b)) sb_opt)
+
+  | ASopt loc s -> ASopt loc (left_factorize_symbol s)
+
+  | ASleft_assoc loc s1 s2 e -> ASleft_assoc loc (left_factorize_symbol s1) (left_factorize_symbol s2) e
+
+  | ASrules loc rl -> ASrules loc {(rl) with au_rules = left_factorize_rules rl.au_rules }
+  | ASvala loc s sl -> ASvala loc (left_factorize_symbol s) sl
+]
+;
+
+value exec0 e = {(e) with ae_levels = left_factorize_levels e.ae_levels } ;
+
+value exec (loc, gl, el) = (loc, gl, List.map exec0 el) ;
+
+end ;
