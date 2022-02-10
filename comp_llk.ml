@@ -202,8 +202,8 @@ end ;
 
  *)
 
-module Precedence = struct 
-  open Pa_ppx_utils ;
+module Subst = struct
+open Pa_ppx_utils ;
 open Ppxutil ;
 
 value lookup_rho s rho : a_symbol = AList.assoc ~{cmp=equal_a_symbol} s rho ;
@@ -222,22 +222,33 @@ value make_dt rho =
   { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol }
 ;
 
-value substitute1_psymbol rho ps =
+value entry rho ps =
+  let dt = make_dt rho in
+  dt.migrate_a_entry dt ps
+;
+
+value psymbol rho ps =
   let dt = make_dt rho in
   dt.migrate_a_psymbol dt ps
 ;
 
-value substitute1_symbol rho ps =
+value symbol rho ps =
   let dt = make_dt rho in
   dt.migrate_a_symbol dt ps
 ;
 
-value substitute1_rule rho ps =
+value rule rho ps =
   let dt = make_dt rho in
   dt.migrate_a_rule dt ps
 ;
 
-value substitute1_rules rho rl = List.map (substitute1_rule rho) rl ;
+value rules rho rl = List.map (rule rho) rl ;
+
+end ;
+
+module Precedence = struct 
+open Pa_ppx_utils ;
+open Ppxutil ;
 
 value rewrite_righta loc ename ~{cur} ~{next} rho rl =
   let right_rho = [
@@ -249,8 +260,8 @@ value rewrite_righta loc ename ~{cur} ~{next} rho rl =
     |> List.map (fun r ->
            let psl = r.ar_psymbols in
            let (last, psl) = Std.sep_last psl in
-           let psl = List.map (substitute1_psymbol rho) psl in
-           let last = substitute1_psymbol right_rho last in
+           let psl = List.map (Subst.psymbol rho) psl in
+           let last = Subst.psymbol right_rho last in
            let psl = psl @ [last] in
            {(r) with ar_psymbols = psl}
          ) in
@@ -277,8 +288,8 @@ value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
          {(r) with ar_psymbols = List.tl r.ar_psymbols ;
                    ar_action = r.ar_action |> Option.map (fun act -> <:expr< fun [ $left_patt$ -> $act$ ] >>)
          }) in
-  let right_rl = substitute1_rules rho right_rl in
-  let left_symbol = substitute1_symbol left_rho left_symbol in
+  let right_rl = Subst.rules rho right_rl in
+  let left_symbol = Subst.symbol left_rho left_symbol in
   let left_assoc_symbol =
     ASleft_assoc loc left_symbol
       (ASrules loc {au_loc=loc; au_rules = right_rl})
@@ -321,7 +332,7 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
           None | Some NONA ->
             let rules =
               l.al_rules.au_rules
-              |> substitute1_rules [
+              |> Subst.rules [
                      (ASnext loc, ASnterm loc next None)
                     ;(ASself loc, ASnterm loc next None)
                     ;(ASnterm loc ename None, ASnterm loc next None)
@@ -474,6 +485,7 @@ value exec (loc, gl, el) =
   let pl = List.map exec0 el in
   let dict = pl |> List.concat_map fst in
   let el = List.concat_map snd pl in
+  let el = List.map (Subst.entry dict) el in
   (loc, gl, el)
 ;
 

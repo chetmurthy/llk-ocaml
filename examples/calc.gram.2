@@ -1,4 +1,6 @@
 EXTEND
+  e_star: [ [ x = e LEVEL "*" -> x ] ] ;
+
   e: AFTER "**"
     [ NONA [ x = INT -> int_of_string x
       | "("; x = e; ")" -> x ] ]
