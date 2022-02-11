@@ -574,128 +574,157 @@ type token = [
   ]
 ;
 
+module type TOKENSET = sig
+  type t 'a = 'b ;
+  value mt : t 'a ;
+  value mk : list 'a -> t 'a ;
+  value add : t 'a -> 'a -> t 'a ;
+  value addl : t 'a -> list 'a -> t 'a ;
+  value mem : 'a -> t 'a -> bool ;
+  value export : t 'a -> list 'a ;
+  value union : t 'a -> t 'a -> t 'a ;
+  value unionl : list (t 'a) -> t 'a ;
+  value except : 'a -> t 'a -> t 'a ;
+end ;
+
+module TokenSet : TOKENSET = struct
+  open Pa_ppx_utils ;
+  type t 'a = list 'a ;
+  value mt = [] ;
+  value canon l = List.sort_uniq Stdlib.compare l ;
+  value add l x = [x::l] |> canon ;
+  value addl l l2 = l@l2 |> canon ;
+  value mk l = l |> canon ;
+  value mem x l = List.mem x l ;
+  value export l = l ;
+  value union = addl ;
+  value unionl l = l |> List.concat |> canon ;
+  value except x l = Std.except x l ;
+end ;
+module TS = TokenSet ;
+
 module type SETMAP = sig
   type t 'a = 'c;
+  type set_t 'a = 'd ;
   value canon : t 'a -> t 'a ;
   value mt : t 'a ;
   value add : t 'a -> (string * 'a) -> t 'a ;
-  value lookup : string -> t 'a -> list 'a ;
+  value lookup : string -> t 'a -> set_t 'a ;
   value addl : t 'a -> list (string * 'a) -> t 'a ;
   value export : t 'a -> list (string * list 'a) ;
 end ;
 
-module SetMap : SETMAP = struct
-  type set_t 'a = list 'a ;
+module SetMap : (SETMAP with type set_t 'a = TS.t 'a) = struct
+  type set_t 'a = TS.t 'a ;
   type t 'a = list (string * set_t 'a) ;
 
-  value canon m =
-    m
-    |> List.map (fun (nt,l) -> (nt, List.sort Stdlib.compare l))
-    |> List.sort Stdlib.compare
-  ;
+  value canon m = m |> List.sort Stdlib.compare ;
   value mt = [] ;
   value add m (nt, tok) =
     match List.assoc nt m with [
-        l -> if List.mem tok l then m
+        l -> if TS.mem tok l then m
              else
                let m = List.remove_assoc nt m in
-               canon [(nt,[tok::l]) :: m]
+               canon [(nt,TS.add l tok) :: m]
 
-      | exception Not_found -> canon [(nt, [tok])::m]
+      | exception Not_found -> canon [(nt, TS.mk [tok])::m]
       ]
   ;
   value lookup nt m =
     match List.assoc nt m with [
         l -> l
-      | exception Not_found -> []
+      | exception Not_found -> TS.mt
       ]
   ;
   value addl m l = List.fold_left add m l ;
-  value export m = m ;
+  value export m = m |> List.map (fun (nt, s) -> (nt, TS.export s)) ;
 end ;
-
+module SM = SetMap ;
 
 module type MUTSETMAP = sig
   type t 'a = 'c;
+  type set_t 'a = 'd ;
   value mk : unit -> t 'a ;
   value add : t 'a -> (string * 'a) -> unit ;
-  value lookup : string -> t 'a -> list 'a ;
+  value lookup : string -> t 'a -> set_t 'a ;
   value addl : t 'a -> list (string * 'a) -> unit ;
   value export : t 'a -> list (string * list 'a) ;
 end ;
 
 module MutSetMap : MUTSETMAP = struct
-  type t 'a = ref (SetMap.t 'a) ;
-  value mk () = ref (SetMap.mt) ;
+  type t 'a = ref (SM.t 'a) ;
+  type set_t 'a = SM.set_t 'a ;
+  value mk () = ref (SM.mt) ;
   value add mm p =
-    mm.val := SetMap.add mm.val p ;
-  value lookup k mm = SetMap.lookup k mm.val ;
+    mm.val := SM.add mm.val p ;
+  value lookup k mm = SM.lookup k mm.val ;
   value addl mm pl =
-    mm.val := SetMap.addl mm.val pl ;
-  value export mm = SetMap.export mm.val ;
+    mm.val := SM.addl mm.val pl ;
+  value export mm = SM.export mm.val ;
 end ;
+module MSM = MutSetMap ;
 
 module First = struct
 open Pa_ppx_utils ;
-module SM = SetMap ;
 
 value rec first_psymbols m = fun [
-  [] -> [None]
+  [] -> TS.mk [None]
 | [h::t] ->
    let fh = first_psymbol m h in
-   if List.mem None fh then
-     (Std.except None fh) @ (first_psymbols m t)
+   if TS.mem None fh then
+     TS.(union (except None fh) (first_psymbols m t))
    else fh
 ]
 
 and first_psymbol m ps = first_symbol m ps.ap_symb
 
 and first_symbol m = fun [
-      ASflag _ s -> (first_symbol m s)@[None]
-    | ASkeyw _ kw -> [Some (KWD kw)]
+      ASflag _ s -> TS.(union (first_symbol m s) (mk[None]))
+    | ASkeyw _ kw -> TS.mk [Some (KWD kw)]
     | ASlist loc lml elem_s sepb_opt ->
        let felem = first_symbol m elem_s in
-       if not (List.mem None felem) then felem
+       if not (TS.mem None felem) then felem
        else
-         (Std.except None felem) @ (
+         TS.(union (except None felem) (
          match sepb_opt with [
-             None -> [None]
+             None -> mk [None]
            | Some (sep_s, _) ->
               first_symbol m sep_s
-       ])
+       ]))
 
     | ASnext _ -> assert False
 
     | ASnterm _ nt _ -> SM.lookup nt m
-    | ASopt _ s -> [None] @ (first_symbol m s)
+    | ASopt _ s -> TS.(union (mk [None]) (first_symbol m s))
 
   | ASleft_assoc _ s1 s2 _ ->
      let fs1 = first_symbol m s1 in
-     if not (List.mem None fs1) then fs1
-     else (Std.except None fs1) @ (first_symbol m s2)
+     if not (TS.mem None fs1) then fs1
+     else TS.(union (except None fs1) (first_symbol m s2))
 
   | ASrules _ rl -> first_rules m rl
   | ASself _ -> assert False
-  | AStok _ cls _ -> [Some (CLS cls)]
+  | AStok _ cls _ -> TS.mk[Some (CLS cls)]
   | ASvala _ s sl ->
-     (first_symbol m s)@(sl |> List.concat_map (fun s -> [Some (KWD ("$"^s)); Some (KWD ("$_"^s))]))
+     TS.(union (first_symbol m s) (sl |> List.concat_map (fun s -> [Some (KWD s); Some (KWD ("_"^s))]) |> mk))
 ]
 
 and first_rule m r = first_psymbols m r.ar_psymbols
 
 and first_rules m l =
   let rules = l.au_rules in
-  List.concat_map (first_rule m) rules
+  TS.unionl (List.map (first_rule m) rules)
 ;
 
 value first_level m l = first_rules m l.al_rules ;
 
 value comp1_entry m e =
-  let l = 
-    e.ae_levels
-    |> List.concat_map (first_level m)
-    |> List.sort_uniq Stdlib.compare in
-  SM.addl m (List.map (fun t -> (e.ae_name, t)) l)
+  e.ae_levels
+  |> List.map (first_level m)
+  |> TS.unionl
+  |> TS.export
+  |> List.map (fun t -> (e.ae_name, t))
+  |> SM.addl m 
 ;
 
 value comp1 el m = List.fold_left comp1_entry m el ;
@@ -714,17 +743,179 @@ end ;
 (*
 module Follow = struct
 
+value nullable l = List.mem None l ;
 
-value comp1 el m = List.fold_left comp1_entry m el ;
+(** [fifo_concat ~{must} ~{if_nullable} fi fo]
 
-value rec comprec el m =
-  let m' = comp1 el m in
-  if m = m' then m else comprec el m'
+    when must is true: concat fi.fo, removing eps if present.
+
+    when must is false:
+
+    when if_nullable is true, concats fi.fo IF fi is nullable.
+
+    when if_nullable is false, checks that fi is NOT nullable, and concats.
+
+ *)
+value fifo_concat loc ?{must=False} ?{if_nullable=False} fi fo = do {
+    let l = match (must, if_nullable, nullable fi) with [
+          (True, True, _) ->
+          raise_failwithf loc "fifo_concat: incompatible arguments with must=True, if_nullable=True"
+        | (_, True, True) -> (List.map Std.outSome (Std.except None fi)) @ fo
+        | (_, True, False) -> List.map Std.outSome fi
+        | (_, False, True) ->
+           raise_failwithf loc "fifo_concat: [fi] is nullable, but if_nullable=False"
+        | (_, False, False) -> (List.map Std.outSome fi) @ fo
+    ]
+    in List.sort_uniq Stdlib.compare l
+;
+
+(** Compute "FI-FO" First(s).[Follow(s) when first contains epsilon].
+
+    We pass:
+
+    fimap: map for computing FIRST
+    mm: the current mutable map of FOLLOW
+    ff: "full follow" of whatever might follow the current symbol
+
+    Procedure:
+
+    We invoke fifo on all sub-symbols.  When invoked on a nonterminal, we
+    add "full follow" to the FOLLOW set of the nonterminal.
+
+ *)
+
+value rec fifo_psymbols (fimap, mm) ff = fun [
+      [] -> ff
+    | [h::t] ->
+       let ft = fifo_psymbols (fimap, mm) ff t in
+       fifo_psymbol (fimap, mm) ft h
+       
+]
+
+and fifo_psymbol (fimap, mm) ff ps =
+  fifo_symbol (fimap, mm) ff ps.ap_symb
+
+and fifo_symbol (fimap, mm) ff = fun [
+      ASflag loc s ->
+      (* the fifo of [FLAG s] is always the concat of the FIRST of s
+         (minus eps) and the full-follow of [FLAG s], since [FLAG s]
+         is nullable.
+       *)
+      let _ = fifo_symbol (fimap, mm) ff s in
+      let fi_s = first_symbol fimap s in
+      fifo_concat ~{must=True} loc fi_s ff
+
+    | ASkeyw _ kw -> [(KWD kw)]
+
+    | ASlist loc lml s sepopt_opt ->
+       (* A. if a LIST has element that is NOT nullable, OR is LIST0,
+          then the fifo is just the firsts of that element.
+
+          B. if the element is nullable, then combine fifo_element,
+          fifo_sep (if any) and full-follow
+
+          Procedure: by cases:
+           
+          0. call [ff] argument "full-follow"
+        *)
+
+       match (lml, sepopt_opt) with [
+           (*
+             1. LIST1, no SEP:
+
+                a. fifo is [FIRST s].{if_nullable}.full-follow
+                b. compute [FIFO s] with ff=[FIRST s].full-follow
+            *)
+
+           (LML_1, None) ->
+           let fi_s = first_symbol fimap s in
+           let _ = fifo_symbol (fimap, mm) (fifo_concat ~{must=True} fi_s ff) in
+           fifo_concat loc ~{if_nullable=True} fi_s ff
+
+         (*
+           2. LIST1, mandatory SEP s2:
+
+             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].{if_nullable}.full-follow)
+             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
+             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2]
+          *)
+
+         | (LML_1, Some (s2, False)) ->
+           let fi_s = first_symbol fimap s in
+           let fi_s2 = first_symbol fimap s2 in
+
+           let _ =
+             let ff = (fifo_concat loc ~{if_nullable=True} fi_s2 (fifo_concat fi_s [])) @ ff in
+             fifo_symbol (fimap, mm) ff s in
+
+           let _ =
+             let ff = fifo_concat loc ~{if_nullable=True} s (fifo_concat fi_s2 []) in
+             fifo_symbol (fimap, mm) ff s2 in
+
+           fifo_concat loc ~{if_nullable=True}
+             fi_s
+             (fifo_concat loc ~{if_nullable=True} fi_s2 ff)
+             (*
+
+          2. LIST1, optional last SEP s2:
+
+             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].{if_nullable}.full-follow)
+             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
+             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2] union full-follow
+
+          3. LIST0, no SEP:
+
+             a. fifo is [FIRST s].full-follow
+             b. compute [FIFO s] with ff=[FIRST s].full-follow
+
+          4. LIST0, mandatory SEP s2:
+
+             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].[]) union full-follow
+             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
+             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2]
+
+          4. LIST0, optional last SEP s2:
+
+             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].[]) union full-follow
+             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
+             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2] union full-follow
+
+        *)
+
+         ]
+
+
+of loc and lmin_len and a_symbol and
+      option (a_symbol * bool)
+  | ASnext of loc
+  | ASnterm of loc and string and option string
+  | ASopt of loc and a_symbol
+  | ASleft_assoc of loc and a_symbol and a_symbol and expr
+  | ASrules of loc and a_rules
+  | ASself of loc
+  | AStok of loc and string and option string
+  | ASvala of loc and a_symbol and list string
+  ]
+]
+;
+value comp1_entry mm e =
+  
+
+value comp1 mm el =
+  List.iter (comp1_entry mm) el ;
+
+value rec comprec el mm = do {
+  let m0 = MSM.export mm in
+  comp1 mm el ;
+  if m0 = MSM.export mm then m0 else comprec mm el ;
+}
 ;
 
 value compute_follow ~{top} el =
-  let m = SM.(add mt (top, Some (CLS "EOI"))) in
-  comprec el m
+  let mm = MSM.mk () in do {
+    MSM.(add mm (top, CLS "EOI")) ;
+    comprec el mm
+  }
 ;
 
 value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
