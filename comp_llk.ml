@@ -707,7 +707,8 @@ value rec comprec el m =
 
 value compute_first el = comprec el SM.mt ;
   
-value exec (loc, gl, el) =  compute_first el ;
+value exec (loc, gl, el) =
+  SM.export (compute_first el) ;
 
 end ;
 (*
