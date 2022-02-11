@@ -16,7 +16,7 @@ module Pr = struct
 
 value flag_equilibrate_cases = Pcaml.flag_equilibrate_cases;
 
-value expr = Eprinter.apply_level pr_expr "simple";
+value expr = Eprinter.apply_level pr_expr "assign";
 value patt = Eprinter.apply pr_patt;
 
 value comment pc loc = pprintf pc "%s" (Prtools.comm_bef pc.ind loc);

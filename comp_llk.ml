@@ -278,13 +278,12 @@ value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
       (ASself loc, ASnterm loc next None)
      ;(ASnterm loc ename None, ASnterm loc next None)
     ] in
-  let (left_patt, left_symbol) = match (List.hd rl).ar_psymbols with [
-        [{ap_patt=x; ap_symb = y}::_] -> (x,y)
-      ] in
-  let left_patt = match left_patt with [ None -> <:patt< _ >> | Some p -> p ] in
+  let left_symbol = (List.hd (List.hd rl).ar_psymbols).ap_symb in
   let right_rl =
     rl
   |> List.map (fun r ->
+         let left_patt = (List.hd r.ar_psymbols).ap_patt in
+         let left_patt = match left_patt with [ None -> <:patt< _ >> | Some p -> p ] in
          {(r) with ar_psymbols = List.tl r.ar_psymbols ;
                    ar_action = r.ar_action |> Option.map (fun act -> <:expr< fun [ $left_patt$ -> $act$ ] >>)
          }) in
@@ -326,7 +325,9 @@ value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
    *)
 
 value rewrite1 e ename ~{cur} ~{next} dict l = do {
-    assert ([] <> l.al_rules.au_rules) ;
+    if ([] = l.al_rules.au_rules) then
+      raise_failwithf l.al_rules.au_loc "rewrite1: entry %s has an empty level" ename
+    else () ;
     let loc = l.al_loc in
     let l = match l.al_assoc with [
           None | Some NONA ->
@@ -334,8 +335,8 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
               l.al_rules.au_rules
               |> Subst.rules [
                      (ASnext loc, ASnterm loc next None)
-                    ;(ASself loc, ASnterm loc next None)
-                    ;(ASnterm loc ename None, ASnterm loc next None)
+                    ;(ASself loc, ASnterm loc cur None)
+                    ;(ASnterm loc ename None, ASnterm loc cur None)
                    ] in
             {
               (l) with
@@ -347,16 +348,18 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
           | Some RIGHTA ->
              let rl = l.al_rules.au_rules in do {
              if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
-               failwith Fmt.(str "rewrite1: entry %s RIGHTA level rules must all have at least 2 psymbols"
-                               ename)
+               raise_failwithf l.al_rules.au_loc "rewrite1: entry %s RIGHTA level rules must all have at least 2 psymbols"
+                 ename
              else () ;
-             let (last_psymbol, _) = Std.sep_last (List.hd rl).ar_psymbols in
+             let last_symbol = 
+               let (last_psymbol, _) = Std.sep_last (List.hd rl).ar_psymbols in
+               last_psymbol.ap_symb in
              if not (rl |> List.for_all (fun r -> 
-                               equal_a_psymbol last_psymbol (fst (Std.sep_last r.ar_psymbols)))) then
-               failwith Fmt.(str "rewrite1: entry %s RIGHTA level does not have identical last psymbols"
-                               ename)
+                               equal_a_symbol last_symbol (fst (Std.sep_last r.ar_psymbols)).ap_symb)) then
+               raise_failwithf l.al_rules.au_loc "rewrite1: entry %s RIGHTA level does not have identical last symbols"
+                 ename
              else () ;
-             match last_psymbol.ap_symb with [
+             match last_symbol with [
                  ASnterm _ name None when name = ename -> ()
                | ASself _ -> ()
                | _ -> failwith Fmt.(str "rewrite1: entry %s RIGHTA level has last psymbol non-recursive"
@@ -378,20 +381,23 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
           | Some LEFTA ->
              let rl = l.al_rules.au_rules in do {
              if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
-               failwith Fmt.(str "rewrite1: entry %s LEFTA level rules must all have at least 2 psymbols"
-                               ename)
+               raise_failwithf l.al_rules.au_loc "rewrite1: entry %s LEFTA level rules must all have at least 2 psymbols"
+                 ename
              else () ;
-             let first_psymbol = List.hd (List.hd rl).ar_psymbols in
-             if not (rl |> List.for_all (fun r -> 
-                               equal_a_psymbol first_psymbol (List.hd r.ar_psymbols))) then
-               failwith Fmt.(str "rewrite1: entry %s LEFTA level does not have identical first psymbols"
-                               ename)
-             else () ;
-             match first_psymbol.ap_symb with [
+             let first_symbol =
+               let first_psymbol = List.hd (List.hd rl).ar_psymbols in
+               first_psymbol.ap_symb in
+             rl |> List.iter (fun r ->
+                       if not (equal_a_symbol first_symbol (List.hd r.ar_psymbols).ap_symb) then
+                         raise_failwithf r.ar_loc "rewrite1: entry %s LEFTA level does not have identical first symbols"
+                           ename
+                       else ()
+                     ) ;
+             match first_symbol with [
                  ASnterm _ name None when name = ename -> ()
                | ASself _ -> ()
-               | _ -> failwith Fmt.(str "rewrite1: entry %s LEFTA level has first psymbol non-recursive"
-                                      ename)
+               | _ -> raise_failwithf l.al_rules.au_loc "rewrite1: entry %s LEFTA level has first psymbol non-recursive"
+                        ename
                ] ;
              let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} [
                           (ASnext loc, ASnterm loc next None)
@@ -477,8 +483,13 @@ value exec1 e = do {
 }
 ;
 
+value substitute_self e =
+  let loc = e.ae_loc in
+  Subst.entry [(ASself loc, ASnterm loc e.ae_name None)] e
+;
+
 value exec0 e =
-  if List.length e.ae_levels <=1 then ([], [e])
+  if List.length e.ae_levels <=1 then ([], [substitute_self e])
   else exec1 e ;
 
 value exec (loc, gl, el) =

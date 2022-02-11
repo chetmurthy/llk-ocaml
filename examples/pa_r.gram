@@ -5,9 +5,7 @@ EXTEND
     type_decl type_extension extension_constructor
     constructor_declaration label_declaration match_case ipatt
     with_constr poly_variant attribute_body alg_attribute alg_attributes
-    check_type_decl check_type_extension check_dot_uid
     operator_rparen
-    check_type_binder
     ext_attributes
     ;
 
@@ -44,7 +42,7 @@ EXTEND
     ;
   infix_operator2: [ [
       x = INFIXOP2 -> x
-    | check_additive_rparen ; x = additive_operator2 -> x
+    | x = additive_operator2 -> x
     ] ]
     ;
   infix_operator3: [ [
@@ -205,7 +203,7 @@ EXTEND
   ;
 
   type_binder_opt: [ [
-    check_type_binder ; ls = V (LIST1 typevar) ; "." -> ls
+    ls = V (LIST1 typevar) ; "." -> ls
   | -> <:vala< [] >>
   ] ]
   ;
@@ -231,14 +229,14 @@ EXTEND
           <:str_item< module type $_:i$ = $mt$ $_itemattrs:attrs$ >>
       | "open"; ovf = V (FLAG "!") "!"; me = module_expr; attrs = item_attributes ->
           <:str_item< open $_!:ovf$ $me$ $_itemattrs:attrs$ >>
-      | "type"; check_type_decl ; nrfl = V (FLAG "nonrec"); tdl = V (LIST1 type_decl SEP "and") → do {
+      | "type"; nrfl = V (FLAG "nonrec"); tdl = V (LIST1 type_decl SEP "and") → do {
           vala_it (fun tdl ->
             if List.exists (fun td -> not (Pcaml.unvala td.MLast.tdIsDecl)) tdl then
               failwith "type-declaration cannot mix decl and subst"
             else ()) tdl ;
             <:str_item< type $_flag:nrfl$ $_list:tdl$ >>
           }
-      | "type" ; check_type_extension ; te = type_extension →
+      | "type" ; te = type_extension →
           <:str_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >>
       | "value"; ext = ext_opt; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and") ->
           str_item_to_inline loc <:str_item< value $_flag:r$ $_list:l$ >> ext
@@ -314,7 +312,7 @@ EXTEND
         l = V (LIST1 mod_decl_binding SEP "and") →
           <:sig_item< module $_flag:rf$ $_list:l$ >>
 
-      | "module"; check_uident_coloneq ; i = V UIDENT "uid" ; ":="; li = extended_longident ; attrs = item_attributes →
+      | "module" ; i = V UIDENT "uid" ; ":="; li = extended_longident ; attrs = item_attributes →
         <:sig_item< module $_uid:i$ := $longid:li$ $_itemattrs:attrs$ >>
 
       | "module"; "type"; i = V ident ""; "="; mt = module_type ; attrs = item_attributes →
@@ -325,7 +323,7 @@ EXTEND
           <:sig_item< module alias $_uid:i$ = $_longid:li$ $_itemattrs:attrs$ >>
       | "open"; i = extended_longident ; attrs = item_attributes → 
           <:sig_item< open $longid:i$ $_itemattrs:attrs$ >>
-      | "type"; check_type_decl ; nrfl = V (FLAG "nonrec"); tdl = V (LIST1 type_decl SEP "and") → do {
+      | "type" ; nrfl = V (FLAG "nonrec"); tdl = V (LIST1 type_decl SEP "and") → do {
             vala_it (fun tdl ->
               if List.for_all (fun td -> Pcaml.unvala td.MLast.tdIsDecl) tdl then ()
               else if List.for_all (fun td -> not (Pcaml.unvala td.MLast.tdIsDecl)) tdl then
@@ -334,7 +332,7 @@ EXTEND
               else failwith "type-declaration cannot mix decl and subst") tdl ;
             <:sig_item< type $_flag:nrfl$ $_list:tdl$ >>
           }
-      | "type" ; check_type_extension ; te = type_extension →
+      | "type" ; te = type_extension →
           <:sig_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >>
       | "value"; i = V LIDENT "lid" ""; ":"; ls = type_binder_opt ; t = ctyp ; attrs = item_attributes →
         let t = match Pcaml.unvala ls with [ [] -> t | _ -> <:ctyp< ! $_list:ls$ . $t$ >> ] in
@@ -392,25 +390,25 @@ EXTEND
   ext_opt: [ [ ext = OPT [ "%" ; id = attribute_id -> id ] -> ext ] ] ;
   ext_attributes: [ [ e = ext_opt ; l = alg_attributes_no_anti -> (e, l) ] ] ;
   expr:
-    [ "top" RIGHTA
-      [ check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ;
+    [ "top" NONA
+      [ "let" ; "exception" ; id = V UIDENT "uid" ;
         "of" ; tyl = V (LIST1 ctyp_below_alg_attribute) ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ of $_list:tyl$ $_algattrs:alg_attrs$ in $x$ >>
-      | check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
+      | "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
         "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >>
 
-      | check_let_not_exception ; "let"; ext = ext_opt ; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and"); "in";
+      | "let"; ext = ext_opt ; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and"); "in";
         x = SELF →
           expr_to_inline <:expr< let $_flag:r$ $_list:l$ in $x$ >> ext []
 
       | letop = LETOP ; b = letop_binding ; l = LIST0 andop_binding; "in";
-        x = expr LEVEL "top" ->
+        x = SELF ->
           build_letop_binder loc letop b l x
 
-      | check_let_not_exception ; "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in"; e = SELF →
+      | "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in"; e = SELF →
           expr_to_inline <:expr< let module $_uidopt:m$ = $mb$ in $e$ >> ext attrs
-      | check_let_not_exception ; "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; e = SELF →
+      | "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; e = SELF →
           expr_to_inline <:expr< let open $_!:ovf$ $m$ in $e$ >> ext attrs
       | "fun"; (ext,attrs) = ext_attributes; l = closed_case_list →
           expr_to_inline <:expr< fun [ $_list:l$ ] >> ext attrs
@@ -502,8 +500,8 @@ EXTEND
          ]
       ]
     | "apply" LEFTA
-      [ e1 = SELF; e2 = SELF → <:expr< $e1$ $e2$ >>
-      | "assert"; (ext,attrs) = ext_attributes; e = SELF →
+      [ e1 = SELF; e2 = SELF → <:expr< $e1$ $e2$ >> ]
+    | [ "assert"; (ext,attrs) = ext_attributes; e = SELF →
           expr_to_inline <:expr< assert $e$ >> ext attrs
       | "lazy"; (ext,attrs) = ext_attributes; e = SELF → 
           expr_to_inline <:expr< lazy $e$ >> ext attrs ]
@@ -590,9 +588,9 @@ EXTEND
       | li = longident ; "." ; "(" ; e = expr ; ")" -> <:expr< $longid:li$ . ( $e$ ) >>
       | li = longident ; "." ; id = V LIDENT "lid" ->
         <:expr< $longid:li$ . $_lid:id$ >>
-      | li = longident ; "." ; check_lbracket ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; check_lbrace ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; check_lbracketbar ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; "." ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; "." ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; "." ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
       ]
     ]
   ;
@@ -622,13 +620,13 @@ EXTEND
       | e = expr → [e] ] ]
   ;
   let_binding:
-    [ [ p = ipatt; check_colon ; e = fun_binding ; attrs = item_attributes →
+    [ [ p = ipatt ; e = fun_binding ; attrs = item_attributes →
           let (p,e) = match e with [
             <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
           | _ -> (p,e)
           ] in
           (p, e, attrs)
-      | p = ipatt; check_not_colon ; e = fun_binding ; attrs = item_attributes →
+      | p = ipatt ; e = fun_binding ; attrs = item_attributes →
           (p, e, attrs)
       ] ]
   ;
@@ -671,7 +669,7 @@ EXTEND
         <:patt< $longid:li$ >>
       | _ -> <:patt< $longid:li$ . $p$ >>
       ]
-    | li = longident ; check_lparen_type ; "("; "type";
+    | li = longident ; "("; "type";
       loc_ids = V (LIST1 [ s = LIDENT -> (loc,s) ]) ; ")" → 
       <:patt< $longid:li$ (type $_list:loc_ids$ ) >>
     | li = longident → <:patt< $longid:li$ >>
@@ -691,8 +689,9 @@ EXTEND
     | NONA
       [ p1 = SELF; ".."; p2 = SELF → <:patt< $p1$ .. $p2$ >> ]
     | LEFTA
-      [ p1 = SELF; p2 = SELF → <:patt< $p1$ $p2$ >>
-      | "lazy"; (ext,attrs) = ext_attributes; p = SELF → 
+      [ p1 = SELF; p2 = SELF → <:patt< $p1$ $p2$ >> ]
+    |
+      [ "lazy"; (ext,attrs) = ext_attributes; p = SELF → 
           patt_to_inline loc <:patt< lazy $p$ >> ext attrs ]
     | "simple"
       [ p = patt_ident -> p
@@ -829,14 +828,14 @@ EXTEND
   ;
   longident:
     [ LEFTA
-      [ me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
+      [ me1 = SELF ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
       | i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
   extended_longident:
     [ LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
-      | me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
+      | me1 = SELF ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
       | i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
@@ -860,7 +859,7 @@ EXTEND
     | "below_alg_attribute" [ t = NEXT -> t ]
     | "as" LEFTA
       [ t1 = SELF; "as"; t2 = SELF → <:ctyp< $t1$ as $t2$ >> ]
-    | LEFTA
+    | RIGHTA
       [ "!"; pl = V (LIST1 typevar); "."; t = SELF →
           <:ctyp< ! $_list:pl$ . $t$ >>
       | "type"; pl = V (LIST1 LIDENT); "."; t = SELF →
@@ -869,10 +868,9 @@ EXTEND
       [ t1 = SELF; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >> ]
     | "apply" LEFTA
       [ t1 = SELF; t2 = SELF → <:ctyp< $t1$ $t2$ >> ]
-    | LEFTA
-      [ t = ctyp_ident → t ]
     | "simple"
-      [ "'"; i = V ident "" → <:ctyp< '$_:i$ >>
+      [ t = ctyp_ident → t
+      | "'"; i = V ident "" → <:ctyp< '$_:i$ >>
       | i = GIDENT → <:ctyp< '$greek_ascii_equiv i$ >>
       | ".." -> <:ctyp< .. >>
       | "_" → <:ctyp< _ >>
@@ -1118,8 +1116,8 @@ EXTEND
           {MLast.ciLoc = loc; MLast.ciVir = vf; MLast.ciPrm = ctp;
            MLast.ciNam = n; MLast.ciExp = cs; MLast.ciAttributes = attrs} ] ]
   ;
-  expr: LEVEL "apply"
-    [ LEFTA
+  expr: AFTER "apply"
+    [ NONA
       [ "new"; (ext,attrs) = ext_attributes; cli = V longident_lident "lilongid" → 
           expr_to_inline <:expr< new $_lilongid:cli$ >> ext attrs
       | "object"; (ext,attrs) = ext_attributes; cspo = V (OPT class_self_patt); cf = class_structure;
@@ -1149,9 +1147,9 @@ EXTEND
           <:ctyp< < $_list:ml$ $_flag:v$ > >> ] ]
   ;
   field:
-    [ [ check_lident_colon ; lab = LIDENT; ":"; t = ctyp_below_alg_attribute; alg_attrs = alg_attributes →
+    [ [  lab = LIDENT; ":"; t = ctyp_below_alg_attribute; alg_attrs = alg_attributes →
         (Some (mkident lab), t, alg_attrs)
-      | check_not_lident_colon ; t = ctyp_below_alg_attribute; alg_attrs = alg_attributes ->
+      | t = ctyp_below_alg_attribute; alg_attrs = alg_attributes ->
         (None, t, alg_attrs)
       ] ]
   ;
@@ -1288,6 +1286,4 @@ EXTEND
   expr: LEVEL "simple"
     [ [ "`"; s = V ident "" → <:expr< ` $_:s$ >> ] ]
   ;
-  (* -- cut 1 begin -- *)
-  expr: LAST [[]];
 END;

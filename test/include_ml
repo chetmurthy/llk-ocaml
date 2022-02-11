@@ -21,11 +21,14 @@ Pcaml.inter_phrases := Some ";\n";;
 Pcaml.inter_phrases := Some ";\n";;
 
 #require "camlp5.quotations" ;;
+
 #require "pa_ppx.utils";;
 open Pa_ppx_utils.Std ;;
 
-#require "pa_ppx.base";;
+#require "pa_ppx.testutils" ;;
+open Pa_ppx_testutils.Papr_util ;;
 
+#require "pa_ppx.base";;
 Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
@@ -35,7 +38,7 @@ open Pa_llk ;;
 open Pr_llk ;;
 open Comp_llk ;;
 
-
+(*
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
 
@@ -50,7 +53,7 @@ let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" (Pr.psymbol Pprintf.empty_p
 
 let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" (Pr.rule true Pprintf.empty_pc e)) ;;
 #install_printer pp_a_rule ;;
-
+ *)
 
 (*
 ;;; Local Variables: ***

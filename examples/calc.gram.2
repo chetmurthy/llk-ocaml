@@ -7,8 +7,8 @@ EXTEND
   ;
 
   e: BEFORE "*"
-    [ LEFTA [ x = e; "+"; y = e -> x + y
-      | x = e; "-"; y = e -> x - y ]
+    [ LEFTA [ x1 = e; "+"; y = e -> x1 + y
+      | x2 = e; "-"; y = e -> x2 - y ]
     ]
   ;
 
