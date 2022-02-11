@@ -334,9 +334,9 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
             let rules =
               l.al_rules.au_rules
               |> Subst.rules [
-                     (ASnext loc, ASnterm loc next None)
-                    ;(ASself loc, ASnterm loc cur None)
-                    ;(ASnterm loc ename None, ASnterm loc cur None)
+                     (ASself loc, ASnterm loc next None)
+                    ;(ASnext loc, ASnterm loc next None)
+                    ;(ASnterm loc ename None, ASnterm loc next None)
                    ] in
             {
               (l) with
