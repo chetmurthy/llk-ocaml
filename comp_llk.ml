@@ -574,7 +574,17 @@ type token = [
   ]
 ;
 
-module SetMap = struct
+module type SETMAP = sig
+  type t 'a = 'c;
+  value canon : t 'a -> t 'a ;
+  value mt : t 'a ;
+  value add : t 'a -> (string * 'a) -> t 'a ;
+  value lookup : string -> t 'a -> list 'a ;
+  value addl : t 'a -> list (string * 'a) -> t 'a ;
+  value export : t 'a -> list (string * list 'a) ;
+end ;
+
+module SetMap : SETMAP = struct
   type set_t 'a = list 'a ;
   type t 'a = list (string * set_t 'a) ;
 
@@ -601,6 +611,28 @@ module SetMap = struct
       ]
   ;
   value addl m l = List.fold_left add m l ;
+  value export m = m ;
+end ;
+
+
+module type MUTSETMAP = sig
+  type t 'a = 'c;
+  value mk : unit -> t 'a ;
+  value add : t 'a -> (string * 'a) -> unit ;
+  value lookup : string -> t 'a -> list 'a ;
+  value addl : t 'a -> list (string * 'a) -> unit ;
+  value export : t 'a -> list (string * list 'a) ;
+end ;
+
+module MutSetMap : MUTSETMAP = struct
+  type t 'a = ref (SetMap.t 'a) ;
+  value mk () = ref (SetMap.mt) ;
+  value add mm p =
+    mm.val := SetMap.add mm.val p ;
+  value lookup k mm = SetMap.lookup k mm.val ;
+  value addl mm pl =
+    mm.val := SetMap.addl mm.val pl ;
+  value export mm = SetMap.export mm.val ;
 end ;
 
 module First = struct
@@ -654,7 +686,6 @@ and first_rule m r = first_psymbols m r.ar_psymbols
 and first_rules m l =
   let rules = l.au_rules in
   List.concat_map (first_rule m) rules
-
 ;
 
 value first_level m l = first_rules m l.al_rules ;
@@ -679,3 +710,23 @@ value compute_first el = comprec el SM.mt ;
 value exec (loc, gl, el) =  compute_first el ;
 
 end ;
+(*
+module Follow = struct
+
+
+value comp1 el m = List.fold_left comp1_entry m el ;
+
+value rec comprec el m =
+  let m' = comp1 el m in
+  if m = m' then m else comprec el m'
+;
+
+value compute_follow ~{top} el =
+  let m = SM.(add mt (top, Some (CLS "EOI"))) in
+  comprec el m
+;
+
+value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
+
+end ;
+ *)
