@@ -585,6 +585,7 @@ module type TOKENSET = sig
   value union : t 'a -> t 'a -> t 'a ;
   value unionl : list (t 'a) -> t 'a ;
   value except : 'a -> t 'a -> t 'a ;
+  value map : ('a -> 'b) -> t 'a -> t 'b ;
 end ;
 
 module TokenSet : TOKENSET = struct
@@ -600,6 +601,7 @@ module TokenSet : TOKENSET = struct
   value union = addl ;
   value unionl l = l |> List.concat |> canon ;
   value except x l = Std.except x l ;
+  value map f l = List.map f l |> canon ;
 end ;
 module TS = TokenSet ;
 
@@ -610,7 +612,7 @@ module type SETMAP = sig
   value mt : t 'a ;
   value add : t 'a -> (string * 'a) -> t 'a ;
   value lookup : string -> t 'a -> set_t 'a ;
-  value addl : t 'a -> list (string * 'a) -> t 'a ;
+  value addset : t 'a -> (string * set_t 'a) -> t 'a ;
   value export : t 'a -> list (string * list 'a) ;
 end ;
 
@@ -620,14 +622,13 @@ module SetMap : (SETMAP with type set_t 'a = TS.t 'a) = struct
 
   value canon m = m |> List.sort Stdlib.compare ;
   value mt = [] ;
-  value add m (nt, tok) =
+  value addset m (nt, ts') =
     match List.assoc nt m with [
-        l -> if TS.mem tok l then m
-             else
-               let m = List.remove_assoc nt m in
-               canon [(nt,TS.add l tok) :: m]
+        ts ->
+        let m = List.remove_assoc nt m in
+        canon [(nt,TS.union ts ts') :: m]
 
-      | exception Not_found -> canon [(nt, TS.mk [tok])::m]
+      | exception Not_found -> canon [(nt, ts')::m]
       ]
   ;
   value lookup nt m =
@@ -636,7 +637,7 @@ module SetMap : (SETMAP with type set_t 'a = TS.t 'a) = struct
       | exception Not_found -> TS.mt
       ]
   ;
-  value addl m l = List.fold_left add m l ;
+  value add m (nt, tok) = addset m (nt, TS.mk [tok]) ;
   value export m = m |> List.map (fun (nt, s) -> (nt, TS.export s)) ;
 end ;
 module SM = SetMap ;
@@ -647,7 +648,7 @@ module type MUTSETMAP = sig
   value mk : unit -> t 'a ;
   value add : t 'a -> (string * 'a) -> unit ;
   value lookup : string -> t 'a -> set_t 'a ;
-  value addl : t 'a -> list (string * 'a) -> unit ;
+  value addset : t 'a -> (string * set_t 'a) -> unit ;
   value export : t 'a -> list (string * list 'a) ;
 end ;
 
@@ -658,8 +659,8 @@ module MutSetMap : MUTSETMAP = struct
   value add mm p =
     mm.val := SM.add mm.val p ;
   value lookup k mm = SM.lookup k mm.val ;
-  value addl mm pl =
-    mm.val := SM.addl mm.val pl ;
+  value addset mm pl =
+    mm.val := SM.addset mm.val pl ;
   value export mm = SM.export mm.val ;
 end ;
 module MSM = MutSetMap ;
@@ -722,9 +723,7 @@ value comp1_entry m e =
   e.ae_levels
   |> List.map (first_level m)
   |> TS.unionl
-  |> TS.export
-  |> List.map (fun t -> (e.ae_name, t))
-  |> SM.addl m 
+  |> (fun ts -> SM.addset m (e.ae_name, ts))
 ;
 
 value comp1 el m = List.fold_left comp1_entry m el ;
@@ -742,8 +741,10 @@ value exec (loc, gl, el) =
 end ;
 (*
 module Follow = struct
+open Pa_ppx_utils ;
+open Ppxutil ;
 
-value nullable l = List.mem None l ;
+value nullable l = TS.mem None l ;
 
 (** [fifo_concat ~{must} ~{if_nullable} fi fo]
 
@@ -756,18 +757,19 @@ value nullable l = List.mem None l ;
     when if_nullable is false, checks that fi is NOT nullable, and concats.
 
  *)
-value fifo_concat loc ?{must=False} ?{if_nullable=False} fi fo = do {
-    let l = match (must, if_nullable, nullable fi) with [
-          (True, True, _) ->
-          raise_failwithf loc "fifo_concat: incompatible arguments with must=True, if_nullable=True"
-        | (_, True, True) -> (List.map Std.outSome (Std.except None fi)) @ fo
-        | (_, True, False) -> List.map Std.outSome fi
-        | (_, False, True) ->
-           raise_failwithf loc "fifo_concat: [fi] is nullable, but if_nullable=False"
-        | (_, False, False) -> (List.map Std.outSome fi) @ fo
+value fifo_concat loc ?{must=False} ?{if_nullable=False} fi fo =
+  match (must, if_nullable, nullable fi) with [
+      (True, True, _) ->
+      raise_failwithf loc "fifo_concat: incompatible arguments with must=True, if_nullable=True"
+    | (_, True, True) -> TS.(union (map Std.outSome (TS.except None fi)) fo)
+    | (_, True, False) -> TS.map Std.outSome fi
+    | (_, False, True) ->
+       raise_failwithf loc "fifo_concat: [fi] is nullable, but if_nullable=False"
+    | (_, False, False) -> TS.(union (TS.map Std.outSome fi) fo)
     ]
-    in List.sort_uniq Stdlib.compare l
 ;
+
+value fi2fo loc fi = fifo_concat loc ~{must=True} fi TS.mt ;
 
 (** Compute "FI-FO" First(s).[Follow(s) when first contains epsilon].
 
@@ -835,9 +837,9 @@ and fifo_symbol (fimap, mm) ff = fun [
          (*
            2. LIST1, mandatory SEP s2:
 
-             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].{if_nullable}.full-follow)
+             a. fifo is [FIRST s].{if_nullable}.(([FIRST s2].[]) union full-follow)
              b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
-             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2]
+             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.([FIRST s2].full-follow)
           *)
 
          | (LML_1, Some (s2, False)) ->
@@ -845,50 +847,101 @@ and fifo_symbol (fimap, mm) ff = fun [
            let fi_s2 = first_symbol fimap s2 in
 
            let _ =
-             let ff = (fifo_concat loc ~{if_nullable=True} fi_s2 (fifo_concat fi_s [])) @ ff in
+             let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
              fifo_symbol (fimap, mm) ff s in
 
            let _ =
-             let ff = fifo_concat loc ~{if_nullable=True} s (fifo_concat fi_s2 []) in
+             let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat fi_s2 ff)) in
              fifo_symbol (fimap, mm) ff s2 in
 
-           fifo_concat loc ~{if_nullable=True}
-             fi_s
-             (fifo_concat loc ~{if_nullable=True} fi_s2 ff)
-             (*
+           fifo_concat loc ~{if_nullable=True} fi_s (TS.union (fi2fo loc fi_s2) ff)
 
-          2. LIST1, optional last SEP s2:
+         (*
 
-             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].{if_nullable}.full-follow)
+          2'. LIST1, optional last SEP s2:
+
+             a. fifo is [FIRST s].{if_nullable}.([FIRST s2] union full-follow)
              b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
              c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2] union full-follow
+          *)
 
+         | (LML_1, Some (s2, True)) ->
+           let fi_s = first_symbol fimap s in
+           let fi_s2 = first_symbol fimap s2 in
+
+           let _ =
+             let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
+             fifo_symbol (fimap, mm) ff s in
+
+           let _ =
+             let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff) in
+             fifo_symbol (fimap, mm) ff s2 in
+
+           fifo_concat loc ~{if_nullable=True} fi_s (TS.union (fi2fo loc fi_s2) ff)
+
+         (*
           3. LIST0, no SEP:
 
              a. fifo is [FIRST s].full-follow
              b. compute [FIFO s] with ff=[FIRST s].full-follow
+          *)
 
+           (LML_0, None) ->
+           let fi_s = first_symbol fimap s in
+           let _ = fifo_symbol (fimap, mm) (fifo_concat ~{must=True} fi_s ff) in
+           fifo_concat loc ~{must=True} fi_s ff
+
+         (*
           4. LIST0, mandatory SEP s2:
 
              a. fifo is [FIRST s].{if_nullable}.([FIRST s2].[]) union full-follow
              b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
              c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2]
+          *)
 
+         | (LML_0, Some (s2, False)) ->
+           let fi_s = first_symbol fimap s in
+           let fi_s2 = first_symbol fimap s2 in
+
+           let _ =
+             let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
+             fifo_symbol (fimap, mm) ff s in
+
+           let _ =
+             let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat fi_s2 ff)) in
+             fifo_symbol (fimap, mm) ff s2 in
+
+           TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff)
+
+         (*
           4. LIST0, optional last SEP s2:
 
              a. fifo is [FIRST s].{if_nullable}.([FIRST s2].[]) union full-follow
              b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
              c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2] union full-follow
+          *)
 
-        *)
+         | (LML_0, Some (s2, True)) ->
+           let fi_s = first_symbol fimap s in
+           let fi_s2 = first_symbol fimap s2 in
+
+           let _ =
+             let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
+             fifo_symbol (fimap, mm) ff s in
+
+           let _ =
+             let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff) in
+             fifo_symbol (fimap, mm) ff s2 in
+
+           TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff)
 
          ]
 
-
-of loc and lmin_len and a_symbol and
-      option (a_symbol * bool)
-  | ASnext of loc
-  | ASnterm of loc and string and option string
+  | ASnext loc -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
+  | ASnterm loc nt _ -> do {
+        MSM.addset mm (nt, ff) ;
+      }
+of loc and string and option string
   | ASopt of loc and a_symbol
   | ASleft_assoc of loc and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
@@ -921,4 +974,4 @@ value compute_follow ~{top} el =
 value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
 
 end ;
- *)
+*)
