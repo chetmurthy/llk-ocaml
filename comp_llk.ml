@@ -796,6 +796,22 @@ value rec fifo_psymbols (fimap, mm) ff = fun [
 and fifo_psymbol (fimap, mm) ff ps =
   fifo_symbol (fimap, mm) ff ps.ap_symb
 
+(** [fifo_symbol (fimap, mm) ff]
+
+    fimap: the result of First.exec, the map from nonterminal to
+   FIRST-set mm: mutable map of FOLLOW sets ff: full-follow for the
+   current symbol in the current production
+
+    "full follow" means the current best approximation of the
+   follow-set for this symbol in this production.
+
+    For FLAG/OPT/LIST composite symbols, we check that they are not nullable,
+    but the code should be OK with them being nullable.  I don't know any
+    good reason why they should be nullable ( *esp* for LIST) but I'll leave
+    the code as-is until I get a really good reason to change it.
+
+ *)
+
 and fifo_symbol (fimap, mm) ff = fun [
       ASflag loc s | ASopt loc s ->
       (* the fifo of [FLAG s] is always the concat of the FIRST of s
@@ -803,8 +819,12 @@ and fifo_symbol (fimap, mm) ff = fun [
          is nullable.
        *)
       let _ = fifo_symbol (fimap, mm) ff s in
-      let fi_s = First.symbol fimap s in
-      fifo_concat ~{must=True} loc fi_s ff
+      let fi_s = First.symbol fimap s in do {
+        if nullable fi_s then
+          raise_failwith loc "FLAG/OPT must not be nullable"
+        else
+          fifo_concat ~{must=True} loc fi_s ff
+      }
 
     | ASkeyw _ kw -> TS.mk[(KWD kw)]
 
@@ -820,6 +840,10 @@ and fifo_symbol (fimap, mm) ff = fun [
           0. call [ff] argument "full-follow"
         *)
 
+       let fi_s = First.symbol fimap s in
+       if nullable fi_s then
+         raise_failwithf loc "LIST element must not be nullable"
+       else
        match (lml, sepopt_opt) with [
            (*
              1. LIST1, no SEP:
@@ -829,7 +853,6 @@ and fifo_symbol (fimap, mm) ff = fun [
             *)
 
            (LML_1, None) ->
-           let fi_s = First.symbol fimap s in
 
            let _ = 
              let ff = fifo_concat loc ~{must=True} fi_s ff in
@@ -846,8 +869,10 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_1, Some (s2, False)) ->
-           let fi_s = First.symbol fimap s in
            let fi_s2 = First.symbol fimap s2 in
+           if nullable fi_s2 then
+             raise_failwithf loc "LIST separator must not be nullable"
+           else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
@@ -869,8 +894,10 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_1, Some (s2, True)) ->
-           let fi_s = First.symbol fimap s in
            let fi_s2 = First.symbol fimap s2 in
+           if nullable fi_s2 then
+             raise_failwithf loc "LIST separator must not be nullable"
+           else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
@@ -890,8 +917,6 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, None) ->
-           let fi_s = First.symbol fimap s in
-
            let _ = 
              let ff = fifo_concat loc ~{must=True} fi_s ff in
              fifo_symbol (fimap, mm) ff s in
@@ -907,8 +932,10 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, Some (s2, False)) ->
-           let fi_s = First.symbol fimap s in
            let fi_s2 = First.symbol fimap s2 in
+           if nullable fi_s2 then
+             raise_failwithf loc "LIST separator must not be nullable"
+           else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
@@ -929,8 +956,10 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, Some (s2, True)) ->
-           let fi_s = First.symbol fimap s in
            let fi_s2 = First.symbol fimap s2 in
+           if nullable fi_s2 then
+             raise_failwithf loc "LIST separator must not be nullable"
+           else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
