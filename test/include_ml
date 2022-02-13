@@ -38,10 +38,10 @@ open Pa_llk ;;
 open Pr_llk ;;
 open Comp_llk ;;
 
-(*
+
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
-
+(*
 let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" (Pr.level false Pprintf.empty_pc e)) ;;
 #install_printer pp_a_level ;;
 

@@ -11,7 +11,6 @@ open Pp_MLast ;
 open Ord_MLast ;
 open Llk_types ;
 
-
 (** Coalesce entries with [position] markings, to where they belong.
 
     Entries are either marked with [position]s or not.  Entries'
@@ -652,7 +651,7 @@ module type MUTSETMAP = sig
   value export : t 'a -> list (string * list 'a) ;
 end ;
 
-module MutSetMap : MUTSETMAP = struct
+module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
   type t 'a = ref (SM.t 'a) ;
   type set_t 'a = SM.set_t 'a ;
   value mk () = ref (SM.mt) ;
@@ -668,60 +667,60 @@ module MSM = MutSetMap ;
 module First = struct
 open Pa_ppx_utils ;
 
-value rec first_psymbols m = fun [
+value rec psymbols m = fun [
   [] -> TS.mk [None]
 | [h::t] ->
-   let fh = first_psymbol m h in
+   let fh = psymbol m h in
    if TS.mem None fh then
-     TS.(union (except None fh) (first_psymbols m t))
+     TS.(union (except None fh) (psymbols m t))
    else fh
 ]
 
-and first_psymbol m ps = first_symbol m ps.ap_symb
+and psymbol m ps = symbol m ps.ap_symb
 
-and first_symbol m = fun [
-      ASflag _ s -> TS.(union (first_symbol m s) (mk[None]))
+and symbol m = fun [
+      ASflag _ s -> TS.(union (symbol m s) (mk[None]))
     | ASkeyw _ kw -> TS.mk [Some (KWD kw)]
     | ASlist loc lml elem_s sepb_opt ->
-       let felem = first_symbol m elem_s in
+       let felem = symbol m elem_s in
        if not (TS.mem None felem) then felem
        else
          TS.(union (except None felem) (
          match sepb_opt with [
              None -> mk [None]
            | Some (sep_s, _) ->
-              first_symbol m sep_s
+              symbol m sep_s
        ]))
 
     | ASnext _ -> assert False
 
     | ASnterm _ nt _ -> SM.lookup nt m
-    | ASopt _ s -> TS.(union (mk [None]) (first_symbol m s))
+    | ASopt _ s -> TS.(union (mk [None]) (symbol m s))
 
   | ASleft_assoc _ s1 s2 _ ->
-     let fs1 = first_symbol m s1 in
+     let fs1 = symbol m s1 in
      if not (TS.mem None fs1) then fs1
-     else TS.(union (except None fs1) (first_symbol m s2))
+     else TS.(union (except None fs1) (symbol m s2))
 
-  | ASrules _ rl -> first_rules m rl
+  | ASrules _ rl -> rules m rl
   | ASself _ -> assert False
   | AStok _ cls _ -> TS.mk[Some (CLS cls)]
   | ASvala _ s sl ->
-     TS.(union (first_symbol m s) (sl |> List.concat_map (fun s -> [Some (KWD s); Some (KWD ("_"^s))]) |> mk))
+     TS.(union (symbol m s) (sl |> List.concat_map (fun s -> [Some (KWD s); Some (KWD ("_"^s))]) |> mk))
 ]
 
-and first_rule m r = first_psymbols m r.ar_psymbols
+and rule m r = psymbols m r.ar_psymbols
 
-and first_rules m l =
+and rules m l =
   let rules = l.au_rules in
-  TS.unionl (List.map (first_rule m) rules)
+  TS.unionl (List.map (rule m) rules)
 ;
 
-value first_level m l = first_rules m l.al_rules ;
+value level m l = rules m l.al_rules ;
 
 value comp1_entry m e =
   e.ae_levels
-  |> List.map (first_level m)
+  |> List.map (level m)
   |> TS.unionl
   |> (fun ts -> SM.addset m (e.ae_name, ts))
 ;
@@ -735,11 +734,11 @@ value rec comprec el m =
 
 value compute_first el = comprec el SM.mt ;
   
-value exec (loc, gl, el) =
-  SM.export (compute_first el) ;
+value exec0 el = compute_first el ;
+value exec (loc, gl, el) = SM.export (exec0 el) ;
 
 end ;
-(*
+
 module Follow = struct
 open Pa_ppx_utils ;
 open Ppxutil ;
@@ -798,16 +797,16 @@ and fifo_psymbol (fimap, mm) ff ps =
   fifo_symbol (fimap, mm) ff ps.ap_symb
 
 and fifo_symbol (fimap, mm) ff = fun [
-      ASflag loc s ->
+      ASflag loc s | ASopt loc s ->
       (* the fifo of [FLAG s] is always the concat of the FIRST of s
          (minus eps) and the full-follow of [FLAG s], since [FLAG s]
          is nullable.
        *)
       let _ = fifo_symbol (fimap, mm) ff s in
-      let fi_s = first_symbol fimap s in
+      let fi_s = First.symbol fimap s in
       fifo_concat ~{must=True} loc fi_s ff
 
-    | ASkeyw _ kw -> [(KWD kw)]
+    | ASkeyw _ kw -> TS.mk[(KWD kw)]
 
     | ASlist loc lml s sepopt_opt ->
        (* A. if a LIST has element that is NOT nullable, OR is LIST0,
@@ -830,8 +829,12 @@ and fifo_symbol (fimap, mm) ff = fun [
             *)
 
            (LML_1, None) ->
-           let fi_s = first_symbol fimap s in
-           let _ = fifo_symbol (fimap, mm) (fifo_concat ~{must=True} fi_s ff) in
+           let fi_s = First.symbol fimap s in
+
+           let _ = 
+             let ff = fifo_concat loc ~{must=True} fi_s ff in
+             fifo_symbol (fimap, mm) ff s in
+
            fifo_concat loc ~{if_nullable=True} fi_s ff
 
          (*
@@ -843,15 +846,15 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_1, Some (s2, False)) ->
-           let fi_s = first_symbol fimap s in
-           let fi_s2 = first_symbol fimap s2 in
+           let fi_s = First.symbol fimap s in
+           let fi_s2 = First.symbol fimap s2 in
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
              fifo_symbol (fimap, mm) ff s in
 
            let _ =
-             let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat fi_s2 ff)) in
+             let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat loc fi_s2 ff)) in
              fifo_symbol (fimap, mm) ff s2 in
 
            fifo_concat loc ~{if_nullable=True} fi_s (TS.union (fi2fo loc fi_s2) ff)
@@ -866,8 +869,8 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_1, Some (s2, True)) ->
-           let fi_s = first_symbol fimap s in
-           let fi_s2 = first_symbol fimap s2 in
+           let fi_s = First.symbol fimap s in
+           let fi_s2 = First.symbol fimap s2 in
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
@@ -886,9 +889,13 @@ and fifo_symbol (fimap, mm) ff = fun [
              b. compute [FIFO s] with ff=[FIRST s].full-follow
           *)
 
-           (LML_0, None) ->
-           let fi_s = first_symbol fimap s in
-           let _ = fifo_symbol (fimap, mm) (fifo_concat ~{must=True} fi_s ff) in
+         | (LML_0, None) ->
+           let fi_s = First.symbol fimap s in
+
+           let _ = 
+             let ff = fifo_concat loc ~{must=True} fi_s ff in
+             fifo_symbol (fimap, mm) ff s in
+
            fifo_concat loc ~{must=True} fi_s ff
 
          (*
@@ -900,15 +907,15 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, Some (s2, False)) ->
-           let fi_s = first_symbol fimap s in
-           let fi_s2 = first_symbol fimap s2 in
+           let fi_s = First.symbol fimap s in
+           let fi_s2 = First.symbol fimap s2 in
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
              fifo_symbol (fimap, mm) ff s in
 
            let _ =
-             let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat fi_s2 ff)) in
+             let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat loc fi_s2 ff)) in
              fifo_symbol (fimap, mm) ff s2 in
 
            TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff)
@@ -922,8 +929,8 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, Some (s2, True)) ->
-           let fi_s = first_symbol fimap s in
-           let fi_s2 = first_symbol fimap s2 in
+           let fi_s = First.symbol fimap s in
+           let fi_s2 = First.symbol fimap s2 in
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
@@ -937,41 +944,111 @@ and fifo_symbol (fimap, mm) ff = fun [
 
          ]
 
-  | ASnext loc -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
-  | ASnterm loc nt _ -> do {
+  | ASnext loc | ASself loc -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
+  | ASnterm loc nt _ as s -> do {
         MSM.addset mm (nt, ff) ;
+        let fi_s = First.symbol fimap s in
+        fifo_concat loc ~{if_nullable=True} fi_s ff
       }
-of loc and string and option string
-  | ASopt of loc and a_symbol
-  | ASleft_assoc of loc and a_symbol and a_symbol and expr
-  | ASrules of loc and a_rules
-  | ASself of loc
-  | AStok of loc and string and option string
-  | ASvala of loc and a_symbol and list string
-  ]
+
+  | ASleft_assoc loc s1 s2 _ ->
+  (* 1. fifo is [FIRST s1].{is_nullable}.[FIRST s2].{is_nullable}.full-follow
+     2. compute [FIFO s1] with ff=[FIRST s2].{is_nullable}.full-follow
+     3. compute [FIFO s2] with ff=[FIRST s2].{is_nullable}.full-follow
+   *)                               
+     let fi_s1 = First.symbol fimap s1 in
+     let fi_s2 = First.symbol fimap s2 in
+
+     let _ =
+       let ff = fifo_concat loc ~{if_nullable=True} fi_s2 ff in
+       fifo_symbol (fimap, mm) ff s1 in
+
+     let _ =
+       let ff = fifo_concat loc ~{if_nullable=True} fi_s2 ff in
+       fifo_symbol (fimap, mm) ff s2 in
+
+     fifo_concat loc ~{if_nullable=True} fi_s1
+       (fifo_concat loc ~{if_nullable=True} fi_s2 ff)
+
+  | ASrules loc rs ->
+     fifo_rules (fimap, mm) ff rs
+
+  | AStok loc cls _ -> TS.mk [CLS cls]
+
+  | ASvala loc s sl as s0 ->
+     let _ = fifo_symbol (fimap, mm) ff s in
+
+     let fi_vala = First.symbol fimap s0 in
+     fifo_concat loc ~{if_nullable=True} fi_vala ff
+
 ]
+
+and fifo_rule (fimap, mm) ff r =
+  fifo_psymbols (fimap, mm) ff r.ar_psymbols
+
+and fifo_rules (fimap, mm) ff rs =
+  let loc = rs.au_loc in
+  let rl = rs.au_rules in
+  let fi_rs = rl |> List.map (First.rule fimap) |> TS.unionl in do {
+    rl |> List.iter (fun r ->
+              ignore (fifo_rule (fimap, mm) ff r)) ;
+    fifo_concat loc ~{if_nullable=True} fi_rs ff
+  }
+
+and fifo_level (fimap, mm) ff lev =
+  fifo_rules  (fimap, mm) ff lev.al_rules
 ;
-value comp1_entry mm e =
+
+value comp1_entry (fimap, mm) e =
+  let ll = e.ae_levels in do {
+  assert (1 = List.length ll) ;
+  let e_ff = MSM.lookup e.ae_name mm in
+  ignore (fifo_level (fimap, mm) e_ff (List.hd ll))
+}
+;
   
 
-value comp1 mm el =
-  List.iter (comp1_entry mm) el ;
+value comp1 (fimap, mm) el =
+  List.iter (comp1_entry (fimap, mm)) el ;
 
-value rec comprec el mm = do {
+value rec comprec el (fimap, mm) = do {
   let m0 = MSM.export mm in
-  comp1 mm el ;
-  if m0 = MSM.export mm then m0 else comprec mm el ;
+  comp1 (fimap, mm) el ;
+  if m0 = MSM.export mm then m0 else comprec el (fimap, mm) ;
 }
 ;
 
 value compute_follow ~{top} el =
+  let fimap = First.exec0 el in
   let mm = MSM.mk () in do {
     MSM.(add mm (top, CLS "EOI")) ;
-    comprec el mm
+    comprec el (fimap, mm)
   }
 ;
 
 value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
 
 end ;
-*)
+
+module Top = struct
+open Pa_llk ;
+
+value first s =
+  s
+  |> RT.(with_file pa)
+  |> Coalesce.exec
+  |> Precedence.exec
+  |> LeftFactorize.exec
+  |> First.exec
+;
+
+value follow ~{top} s =
+  s
+|> RT.(with_file pa)
+|> Coalesce.exec
+|> Precedence.exec
+|> LeftFactorize.exec
+|> Follow.exec ~{top=top}
+;
+
+end ;
