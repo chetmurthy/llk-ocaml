@@ -15,6 +15,79 @@ open Ppxutil ;
 open Llk_types ;
 open Pr_llk ;
 
+
+(** Verify lexical hygiene of grammars.
+
+    1. The lexical environment of a symbol is always the
+   pattern-bindings of the symbols to its left, or in outer rules, to
+   the left, and then including the formals of the entry containing
+   that symbol.
+
+    2. That lexical environment MUST contain only distinct identifiers
+   in patterns.
+ *)
+module Lexical = struct
+
+value vars_of_patt p =
+  let rec vrec = fun [
+        <:patt< $lid:x$ >> -> [x]
+      | <:patt< ( $list:l$ ) >> -> List.concat_map vrec l
+      | _ -> []
+      ] in
+  vrec p
+;
+
+module Env = struct
+  type t = list string ;
+  value mk l = l ;
+  value addl l1 l2 = l1@l2 ;
+  value mem x l = List.mem x l ;
+end ;
+
+value rec check_symbol env = fun [
+      ASflag _ s -> check_symbol env s
+  | ASkeyw _ _ -> ()
+  | ASlist _ _ s None -> check_symbol env s
+  | ASlist _ _ s (Some (s2, _)) -> do { check_symbol env s ; check_symbol env s2 }
+
+  | ASnext _ _ -> ()
+  | ASnterm _ _ _ _ -> ()
+  | ASopt _ s -> check_symbol env s
+  | ASleft_assoc _ s1 s2 _ ->  do { check_symbol env s1 ; check_symbol env s2 }
+  | ASrules _ rs -> check_rules env rs
+  | ASself _ _ -> ()
+  | AStok _ _ _ -> ()
+  | ASvala _ s _ -> check_symbol env s
+]
+
+and check_rule env r =
+  List.fold_left (fun env ps ->
+      let patvars = match ps.ap_patt with [ None -> [] | Some p -> vars_of_patt p ] in do {
+          patvars |> List.iter (fun v ->
+            if Env.mem v env then
+              raise_failwithf ps.ap_loc "Lexical.check_rule: lexical hygiene violation on var %s" v
+            else ()
+          ) ;
+          let env = Env.addl patvars env in
+          check_symbol env ps.ap_symb ;
+          env
+      }
+    ) env r.ar_psymbols
+
+and check_rules env rl = List.iter (fun r -> ignore (check_rule env r)) rl.au_rules
+;
+
+value check_level env l = check_rules env l.al_rules ;
+
+value check_levels env ll = List.iter (check_level env) ll ;
+
+value check_entry e =
+  check_levels (e.ae_formals |> List.concat_map vars_of_patt |> Env.mk) e.ae_levels ;
+
+value exec ((_, _, el) as x) = do { List.iter check_entry el ; x } ;
+
+end ;
+
 (** Coalesce entries with [position] markings, to where they belong.
 
     Entries are either marked with [position]s or not.  Entries'
@@ -510,7 +583,6 @@ value exec1 e = do {
 ;
 
 value substitute_self e =
-  let loc = e.ae_loc in
   Subst.entry Subst.[(SELF, e.ae_name)] e
 ;
 
@@ -1123,40 +1195,60 @@ open Pa_llk ;
 value coalesce s =
   s
   |> RT.(with_file pa)
+  |> Lexical.exec
+;
+
+value coalesce s =
+  s
+  |> RT.(with_file pa)
+  |> Lexical.exec
   |> Coalesce.exec
 ;
 
 value precedence s =
   s
   |> RT.(with_file pa)
+  |> Lexical.exec
   |> Coalesce.exec
+  |> Lexical.exec
   |> Precedence.exec
 ;
 
 value left_factorize s =
   s
   |> RT.(with_file pa)
+  |> Lexical.exec
   |> Coalesce.exec
+  |> Lexical.exec
   |> Precedence.exec
+  |> Lexical.exec
   |> LeftFactorize.exec
 ;
 
 value first s =
   s
   |> RT.(with_file pa)
+  |> Lexical.exec
   |> Coalesce.exec
+  |> Lexical.exec
   |> Precedence.exec
+  |> Lexical.exec
   |> LeftFactorize.exec
+  |> Lexical.exec
   |> First.exec
 ;
 
 value follow ~{top} s =
   s
-|> RT.(with_file pa)
-|> Coalesce.exec
-|> Precedence.exec
-|> LeftFactorize.exec
-|> Follow.exec ~{top=top}
+  |> RT.(with_file pa)
+  |> Lexical.exec
+  |> Coalesce.exec
+  |> Lexical.exec
+  |> Precedence.exec
+  |> Lexical.exec
+  |> LeftFactorize.exec
+  |> Lexical.exec
+  |> Follow.exec ~{top=top}
 ;
 
 end ;
