@@ -47,6 +47,16 @@ value position pc = fun [
   ]
 ;
 
+value entry_formals pc l =
+  let l = List.map (fun id -> (id, ",")) l in
+  pprintf pc "[%p]" (plist patt 0) l
+;
+
+value entry_actuals pc l =
+  let l = List.map (fun id -> (id, ",")) l in
+  pprintf pc "[%p]" (plist expr 0) l
+;
+
 value rec string_list pc =
   fun
   [ [s :: sl] -> pprintf pc " \"%s\"%p" s string_list sl
@@ -154,10 +164,18 @@ and symbol pc = fun [
 
 and simple_symbol pc sy =
   match sy with
-  [ ASnterm _ id None -> pprintf pc "%s" id
-  | ASnterm _ id (Some lev) -> pprintf pc "%s LEVEL \"%s\"" id lev
-  | ASself _ -> pprintf pc "SELF"
-  | ASnext _ -> pprintf pc "NEXT"
+  [ ASnterm _ id args None ->
+    let args_opt = match args with [ [] -> None | l -> Some l ] in
+    pprintf pc "%s%p" id (pr_option entry_actuals) args_opt
+  | ASnterm _ id args (Some lev) ->
+    let args_opt = match args with [ [] -> None | l -> Some l ] in
+     pprintf pc "%s%p LEVEL \"%s\"" id (pr_option entry_actuals) args_opt lev
+  | ASself _ args ->
+    let args_opt = match args with [ [] -> None | l -> Some l ] in
+     pprintf pc "SELF%p" (pr_option entry_actuals) args_opt
+  | ASnext _ args ->
+    let args_opt = match args with [ [] -> None | l -> Some l ] in
+     pprintf pc "NEXT%p" (pr_option entry_actuals) args_opt
   | ASrules _ rl ->
      horiz_vertic
        (fun () ->
@@ -176,7 +194,7 @@ and simple_symbol pc sy =
       pprintf pc "@[<1>(%p)@]" symbol sy
   ]
 
-and entry pc =fun { ae_loc=loc; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
+and entry pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
     let force_vertic =
       if flag_equilibrate_cases.val then
         let has_vertic =
@@ -196,8 +214,9 @@ and entry pc =fun { ae_loc=loc; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
         has_vertic
       else False
     in
+    let formals_opt = match formals with [ [] -> None | l -> Some l ] in
     comm_bef pc.ind loc ^
-      pprintf pc "@[<b>%s:%p@;[ %p ]@ ;@]" name (pr_option position) pos 
+      pprintf pc "@[<b>%s%p:%p@;[ %p ]@ ;@]" name (pr_option entry_formals) formals_opt (pr_option position) pos 
         (vlist2 (level force_vertic) (bar_before (level force_vertic))) ll      
 
 and level force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =

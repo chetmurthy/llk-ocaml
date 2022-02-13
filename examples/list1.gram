@@ -1,0 +1,9 @@
+EXTEND
+  elist[l]:
+    [ [
+        n = INT ; ";" ; l=elist[[n::l]] -> l
+      | -> l ] ]
+  ;
+
+  e: [ [ l = elist[[]] -> List.rev l ] ] ;
+END;

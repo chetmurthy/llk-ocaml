@@ -92,8 +92,8 @@ $(CMO) $(CMI) $(CMX): $(EXTERNAL)
 
 depend::
 	echo "$(CMO) $(CMI) $(CMX): $(EXTERNAL)" > .depend.NEW
-	$(OCAMLFIND) ocamldep $(DEBUG) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o $(OML) $(OMLI) >> .depend.NEW
-	$(OCAMLFIND) ocamldep $(DEBUG) -package $(PACKAGES) -syntax camlp5r $(RML) $(RMLI) >> .depend.NEW
+	$(OCAMLFIND) ocamldep $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o $(OML) $(OMLI) >> .depend.NEW
+	$(OCAMLFIND) ocamldep -package $(PACKAGES) -syntax camlp5r $(RML) $(RMLI) >> .depend.NEW
 	mv .depend.NEW .depend
 
 -include .depend

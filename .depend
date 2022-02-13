@@ -1,9 +1,7 @@
 ord_MLast.cmo llk_types.cmo llk_migrate.cmo pa_llk.cmo pr_llk.cmo comp_llk.cmo ord_MLast.cmi llk_types.cmi llk_migrate.cmi pa_llk.cmi pr_llk.cmi comp_llk.cmi ord_MLast.cmx llk_types.cmx llk_migrate.cmx pa_llk.cmx pr_llk.cmx comp_llk.cmx: 
 llk_migrate.cmo : \
-    ord_MLast.cmi \
     llk_types.cmo
 llk_migrate.cmx : \
-    ord_MLast.cmx \
     llk_types.cmx
 ord_MLast.cmo : \
     ord_MLast.cmi
@@ -11,11 +9,17 @@ ord_MLast.cmx : \
     ord_MLast.cmi
 ord_MLast.cmi :
 comp_llk.cmo : \
+    pr_llk.cmo \
+    pa_llk.cmo \
     ord_MLast.cmi \
-    llk_types.cmo
+    llk_types.cmo \
+    llk_migrate.cmo
 comp_llk.cmx : \
+    pr_llk.cmx \
+    pa_llk.cmx \
     ord_MLast.cmx \
-    llk_types.cmx
+    llk_types.cmx \
+    llk_migrate.cmx
 llk_types.cmo : \
     ord_MLast.cmi
 llk_types.cmx : \

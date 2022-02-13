@@ -9,7 +9,11 @@ open Prtools;
 open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
+open Pa_ppx_utils ;
+open Ppxutil ;
+
 open Llk_types ;
+open Pr_llk ;
 
 (** Coalesce entries with [position] markings, to where they belong.
 
@@ -28,7 +32,6 @@ open Llk_types ;
    Taking the position-marked entry, start inserting from that list of
    tsorted entries.  *)
 module Coalesce = struct
-  open Pa_ppx_utils ;
   open Std ;
 
   value is_position_marked e = isSome e.ae_pos ;
@@ -202,20 +205,33 @@ end ;
  *)
 
 module Subst = struct
-open Pa_ppx_utils ;
-open Ppxutil ;
 
-value lookup_rho s rho : a_symbol = AList.assoc ~{cmp=equal_a_symbol} s rho ;
+type key_t = [ NT of string | NEXT | SELF ] ;
+
+value lookup_rho s rho : string = List.assoc s rho ;
 
 value make_dt rho =
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
-        (ASnterm _ _ _ | ASnext _ | ASself _) as s ->
-        (match lookup_rho s rho with [
-             s -> s
+        ASnterm loc id args sopt as s ->
+        (match lookup_rho (NT id) rho with [
+             id' -> ASnterm loc id' args sopt
            | exception Not_found -> s
-           ])
+        ])
+      
+      | ASself loc args as s ->
+         (match lookup_rho SELF rho with [
+            id' -> ASnterm loc id' args None
+          | exception Not_found -> s
+          ])
+      
+      | ASnext loc args as s ->
+         (match lookup_rho NEXT rho with [
+            id' -> ASnterm loc id' args None
+          | exception Not_found -> s
+          ])
+
       | s -> fallback_migrate_a_symbol dt s
       ] in
   { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol }
@@ -245,14 +261,22 @@ value rules rho rl = List.map (rule rho) rl ;
 
 end ;
 
-module Precedence = struct 
-open Pa_ppx_utils ;
-open Ppxutil ;
+value rec formals2actuals l =
+  l |> List.map (fun [
+                     <:patt:< $lid:id$ >> -> <:expr< $lid:id$ >>
+                   | <:patt:< ( $list:l$ ) >> -> <:expr< ( $list:formals2actuals l$ ) >>
+                   | <:patt:< () >> -> <:expr< () >>
+                   | p ->
+                      raise_failwithf (loc_of_patt p) "formals2actuals: malformed formal"
+                   ])
+;
 
-value rewrite_righta loc ename ~{cur} ~{next} rho rl =
-  let right_rho = [
-      (ASself loc, ASnterm loc cur None)
-     ;(ASnterm loc ename None, ASnterm loc cur None)
+module Precedence = struct 
+
+value rewrite_righta loc (ename,eformals) ~{cur} ~{next} rho rl =
+  let right_rho = Subst.[
+        (SELF, cur)
+       ;(NT ename, cur)
     ] in
   let rl =
     rl
@@ -267,15 +291,15 @@ value rewrite_righta loc ename ~{cur} ~{next} rho rl =
   let last_rule = {ar_loc = loc;
                    ar_psymbols = [{ap_loc = loc;
                                    ap_patt = Some <:patt< x >> ;
-                                   ap_symb = ASnterm loc next None}];
+                                   ap_symb = ASnterm loc next (formals2actuals eformals) None}];
                    ar_action = Some <:expr< x >> } in
   rl @ [last_rule]
 ;
 
 value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
-  let left_rho = [
-      (ASself loc, ASnterm loc next None)
-     ;(ASnterm loc ename None, ASnterm loc next None)
+  let left_rho = Subst.[
+      (SELF, next)
+     ;(NT ename, next)
     ] in
   let left_symbol = (List.hd (List.hd rl).ar_psymbols).ap_symb in
   let right_rl =
@@ -323,7 +347,7 @@ value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
 
    *)
 
-value rewrite1 e ename ~{cur} ~{next} dict l = do {
+value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
     if ([] = l.al_rules.au_rules) then
       raise_failwithf l.al_rules.au_loc "rewrite1: entry %s has an empty level" ename
     else () ;
@@ -332,10 +356,10 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
           None | Some NONA ->
             let rules =
               l.al_rules.au_rules
-              |> Subst.rules [
-                     (ASself loc, ASnterm loc next None)
-                    ;(ASnext loc, ASnterm loc next None)
-                    ;(ASnterm loc ename None, ASnterm loc next None)
+              |> Subst.rules Subst.[
+                     (SELF, next)
+                    ;(NEXT, next)
+                    ;(NT ename, next)
                    ] in
             {
               (l) with
@@ -359,15 +383,15 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
                  ename
              else () ;
              match last_symbol with [
-                 ASnterm _ name None when name = ename -> ()
-               | ASself _ -> ()
+                 ASnterm _ name _ None when name = ename -> ()
+               | ASself _ _ -> ()
                | _ -> failwith Fmt.(str "rewrite1: entry %s RIGHTA level has last psymbol non-recursive"
                                       ename)
                ] ;
-             let rl = rewrite_righta loc ename ~{cur=cur} ~{next=next} [
-                          (ASnext loc, ASnterm loc next None)
-                         ;(ASself loc, ASnterm loc next None)
-                         ;(ASnterm loc ename None, ASnterm loc next None)
+             let rl = rewrite_righta loc (ename,eargs) ~{cur=cur} ~{next=next} Subst.[
+                          (NEXT, next)
+                         ;(SELF, next)
+                         ;(NT ename, next)
                         ] rl in
              {
                (l) with
@@ -393,15 +417,15 @@ value rewrite1 e ename ~{cur} ~{next} dict l = do {
                        else ()
                      ) ;
              match first_symbol with [
-                 ASnterm _ name None when name = ename -> ()
-               | ASself _ -> ()
+                 ASnterm _ name _ None when name = ename -> ()
+               | ASself _ _ -> ()
                | _ -> raise_failwithf l.al_rules.au_loc "rewrite1: entry %s LEFTA level has first psymbol non-recursive"
                         ename
                ] ;
-             let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} [
-                          (ASnext loc, ASnterm loc next None)
-                         ;(ASself loc, ASnterm loc next None)
-                         ;(ASnterm loc ename None, ASnterm loc next None)
+             let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} Subst.[
+                          (NEXT, next)
+                         ;(SELF, next)
+                         ;(NT ename, next)
                         ] rl in
              {
                (l) with
@@ -422,7 +446,9 @@ value passthru_entry e fromi toj =
   let from_name = match fromi with [ None -> e.ae_name | Some i -> new_name e i ] in
   let to_name = new_name e toj in
   let loc = e.ae_loc in
-  {ae_loc = loc; ae_name = from_name; ae_pos = None;
+  let formals = e.ae_formals in
+  let actuals = formals2actuals e.ae_formals in
+  {ae_loc = loc; ae_name = from_name; ae_formals = formals ; ae_pos = None;
    ae_levels =
      [{al_loc = loc; al_label = None; al_assoc = None;
        al_rules =
@@ -431,7 +457,7 @@ value passthru_entry e fromi toj =
             [{ar_loc = loc;
               ar_psymbols = [{ap_loc = loc;
                               ap_patt = Some <:patt< x >> ;
-                              ap_symb = ASnterm loc to_name None}];
+                              ap_symb = ASnterm loc to_name actuals None}];
               ar_action =
                 Some <:expr< x >>}]}}]}
 ;
@@ -455,6 +481,7 @@ value passthru_entry e fromi toj =
 value exec1 e = do {
   assert (e.ae_pos = None) ;
   let ename = e.ae_name in
+  let formals = e.ae_formals in
   let levels = e.ae_levels in
   let n_levels = List.length levels in
   let named_levels =
@@ -464,12 +491,12 @@ value exec1 e = do {
     |> List.filter_map (fun (i, newname, l) ->
            match l.al_label with [
                None -> None
-             | Some lab -> Some (ASnterm l.al_loc ename (Some lab), ASnterm l.al_loc newname None)
+             | Some lab -> Some (Subst.NT ename, newname)
          ]) in
   let newents =
     named_levels
     |> List.map (fun (i, newname, l) ->
-           rewrite1 e ename ~{cur=newname} ~{next=new_name e (i+1)} dict l) in
+           rewrite1 e (ename,formals) ~{cur=newname} ~{next=new_name e (i+1)} dict l) in
   let top2_entries = [
       passthru_entry e None 0 ;
       passthru_entry e (Some 0) 1
@@ -484,7 +511,7 @@ value exec1 e = do {
 
 value substitute_self e =
   let loc = e.ae_loc in
-  Subst.entry [(ASself loc, ASnterm loc e.ae_name None)] e
+  Subst.entry Subst.[(SELF, e.ae_name)] e
 ;
 
 value exec0 e =
@@ -588,7 +615,6 @@ module type TOKENSET = sig
 end ;
 
 module TokenSet : TOKENSET = struct
-  open Pa_ppx_utils ;
   type t 'a = list 'a ;
   value mt = [] ;
   value canon l = List.sort_uniq Stdlib.compare l ;
@@ -665,7 +691,6 @@ end ;
 module MSM = MutSetMap ;
 
 module First = struct
-open Pa_ppx_utils ;
 
 value rec psymbols m = fun [
   [] -> TS.mk [None]
@@ -692,9 +717,9 @@ and symbol m = fun [
               symbol m sep_s
        ]))
 
-    | ASnext _ -> assert False
+    | ASnext _ _ -> assert False
 
-    | ASnterm _ nt _ -> SM.lookup nt m
+    | ASnterm _ nt _ _ -> SM.lookup nt m
     | ASopt _ s -> TS.(union (mk [None]) (symbol m s))
 
   | ASleft_assoc _ s1 s2 _ ->
@@ -703,7 +728,7 @@ and symbol m = fun [
      else TS.(union (except None fs1) (symbol m s2))
 
   | ASrules _ rl -> rules m rl
-  | ASself _ -> assert False
+  | ASself _ _ -> assert False
   | AStok _ cls _ -> TS.mk[Some (CLS cls)]
   | ASvala _ s sl ->
      TS.(union (symbol m s) (sl |> List.concat_map (fun s -> [Some (KWD s); Some (KWD ("_"^s))]) |> mk))
@@ -740,8 +765,6 @@ value exec (loc, gl, el) = SM.export (exec0 el) ;
 end ;
 
 module Follow = struct
-open Pa_ppx_utils ;
-open Ppxutil ;
 
 value nullable l = TS.mem None l ;
 
@@ -973,8 +996,8 @@ and fifo_symbol (fimap, mm) ff = fun [
 
          ]
 
-  | ASnext loc | ASself loc -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
-  | ASnterm loc nt _ as s -> do {
+  | ASnext loc _ | ASself loc _ -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
+  | ASnterm loc nt _ _ as s -> do {
         MSM.addset mm (nt, ff) ;
         let fi_s = First.symbol fimap s in
         fifo_concat loc ~{if_nullable=True} fi_s ff
@@ -1058,9 +1081,65 @@ value compute_follow ~{top} el =
 value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
 
 end ;
+(*
+module LambdaLift = struct
+  (** in each entry, replace all multi-way rules with a new entry;
+      repeat until there are no multi-way rules left in any entry.
+   *)
 
+module Ctr = struct
+  type t = ref int ;
+  value mk () = ref 0 ;
+  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+end ;
+
+value lift_entry mut e =
+  let ll =  in
+  { (e) with ae_levels = lift_levels mut (e.ae_name, e.ae_args) e.ae_levels }
+
+and lift_levels mut esig ll = do {
+    assert (1 = List.length ll) ;
+    List.map (lift_level mut esig) ll
+}    
+
+and lift_level mut esig l = { (l) with al_rules = lift_rules mut esig l.al_rules }
+
+and lift_rules mut esig rl = { (rl) with au_rules = List.map (lift_rule mut esig) rl.au_rules }
+
+and lift_rule mut esig r =
+  { (r) with ar_psymbols = List.fold_left (fun (stkpat, revps) ps ->
+    if None <> ps.ap_patt then
+      let ps = lift_psymbol mut esig stkpat 
+      (stkpat, stkps
+
+;
+  
+
+end ;
+ *)
 module Top = struct
 open Pa_llk ;
+
+value coalesce s =
+  s
+  |> RT.(with_file pa)
+  |> Coalesce.exec
+;
+
+value precedence s =
+  s
+  |> RT.(with_file pa)
+  |> Coalesce.exec
+  |> Precedence.exec
+;
+
+value left_factorize s =
+  s
+  |> RT.(with_file pa)
+  |> Coalesce.exec
+  |> Precedence.exec
+  |> LeftFactorize.exec
+;
 
 value first s =
   s

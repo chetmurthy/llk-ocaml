@@ -35,6 +35,7 @@ and a_entry =
   { ae_loc : loc;
     ae_name : string;
     ae_pos : option a_position;
+    ae_formals : list patt ;
     ae_levels : list a_level }
 and a_level =
   { al_loc : loc;
@@ -57,12 +58,12 @@ and a_symbol =
   | ASkeyw of loc and string
   | ASlist of loc and lmin_len and a_symbol and
       option (a_symbol * bool)
-  | ASnext of loc
-  | ASnterm of loc and string and option string
+  | ASnext of loc and list expr
+  | ASnterm of loc and string and list expr and option string
   | ASopt of loc and a_symbol
   | ASleft_assoc of loc and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
-  | ASself of loc
+  | ASself of loc and list expr
   | AStok of loc and string and option string
   | ASvala of loc and a_symbol and list string
   ]
