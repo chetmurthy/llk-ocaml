@@ -348,14 +348,15 @@ value rules rho rl = List.map (rule rho) rl ;
 
 end ;
 
-value rec formals2actuals l =
-  l |> List.map (fun [
-                     <:patt:< $lid:id$ >> -> <:expr< $lid:id$ >>
-                   | <:patt:< ( $list:l$ ) >> -> <:expr< ( $list:formals2actuals l$ ) >>
-                   | <:patt:< () >> -> <:expr< () >>
-                   | p ->
-                      raise_failwithf (loc_of_patt p) "formals2actuals: malformed formal"
-                   ])
+value rec formals2actuals l = List.map f2a l
+and f2a = fun [
+      <:patt:< $lid:id$ >> -> <:expr< $lid:id$ >>
+    | <:patt:< ( $list:l$ ) >> -> <:expr< ( $list:formals2actuals l$ ) >>
+    | <:patt:< ( $p$ : $t$ ) >> -> <:expr< ( $f2a p$ : $t$ ) >>
+    | <:patt:< () >> -> <:expr< () >>
+    | p ->
+       raise_failwithf (loc_of_patt p) "formals2actuals: malformed formal"
+    ]
 ;
 
 module S2Precedence = struct 
@@ -673,7 +674,7 @@ value rec extract_left_factors rl =
     ]
 ;
 
-value left_factorize loc rl =
+value left_factorize0 loc rl =
   match extract_left_factors rl with [
       ([], rl) -> rl
     | (factors,rl) ->
@@ -686,6 +687,18 @@ value left_factorize loc rl =
         ; ar_psymbols = factors @ [ right_psymb ]
         ; ar_action = Some <:expr< __x__ >> }]
     ]
+;
+
+value left_factorize loc rl =
+  let mt_rules = List.filter (fun r -> [] = r.ar_psymbols) rl in
+  let nonmt_rules = List.filter (fun r -> [] <> r.ar_psymbols) rl in
+  let head_psymbols = List.map (fun r -> List.hd r.ar_psymbols) nonmt_rules in
+  let head_psymbols = List.sort_uniq compare_a_psymbol head_psymbols in
+  let partitions =
+    head_psymbols
+    |> List.map (fun ps ->
+           nonmt_rules |> List.filter (fun r -> equal_a_psymbol ps (List.hd r.ar_psymbols))) in
+  List.concat ((List.map (left_factorize0 loc) partitions) @ [mt_rules])
 ;
 
 value make_dt () =
