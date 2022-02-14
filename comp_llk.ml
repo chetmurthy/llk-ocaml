@@ -1382,6 +1382,47 @@ value exec (a,b,c) = (a,b, exec0 c) ;
 
 end ;
 
+(** Codegen:
+
+  0. compute the set of all tokens/classes.
+  1. Each entry A has at most a disjunction of rules.
+  2. for each production "A -> w":
+
+  3. compute [FIRST w].{if_nullable}.[FOLLOW A] for each production
+
+  4. each branch of the parsing function gets its patterns from the intersection of #0 and #3.
+ *)
+
+module Codegen = struct
+open Token_regexps ;
+open PatternBaseToken ;
+
+value all_tokens el =
+  let open Llk_migrate in
+  let acc = ref [] in
+  let dt = make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt s = do { match s with [
+          ASkeyw _ s0 -> Std.push acc (SPCL s0)
+        | AStok _ s0 None -> Std.push acc (CLS s0)
+        | AStok loc s (Some _) -> raise_failwith loc "unupported"
+        | ASvala _ s0 sl -> do {
+            ignore (dt.migrate_a_symbol dt s0) ;
+            List.iter (fun s2 -> Std.push acc (SPCL s2)) sl ;
+            List.iter (fun s2 -> Std.push acc (SPCL ("_"^s2))) sl
+          }
+        | s -> ignore(fallback_migrate_a_symbol dt s)
+        ];
+        s
+      }
+  in
+  let dt = { (dt) with migrate_a_symbol = migrate_a_symbol } in do {
+    List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) el ;
+    List.sort_uniq Stdlib.compare acc.val
+  }
+;
+end ;
+
 module Top = struct
 open Pa_llk ;
 
