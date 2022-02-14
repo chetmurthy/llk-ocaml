@@ -1455,17 +1455,28 @@ value rec compile1_symbol loc (fimap,fomap) ename s =
       let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
         assert (TS.mt <> tokens) ;
         let s_body = compile1_symbol loc (fimap, fomap) ename s in
-        <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >>
+        (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
+        Exparser.(cparser loc
+                    (None,
+                     [([(SpNtr loc <:patt< _ >> s_body, SpoNoth)],
+                       None, <:expr< True >>);
+                      ([], None, <:expr< False >>)]))
       }
 
     | ASkeyw  loc kws ->
-       <:expr< parser [ [: `("", $str:kws$) :] -> () ] >>
+       (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
+       Exparser.(cparser loc (None,
+        [([((SpTrm loc <:patt< ("", $str:kws$) >> <:vala<  None >>), SpoNoth)],
+          None, <:expr< () >>)]))
 
     | ASnterm loc nt actuals None ->
        Expr.applist <:expr< $lid:nt$ >> (actuals@[<:expr< __strm__ >>])
 
     | AStok loc cls None ->
-       <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >>
+       (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
+       Exparser.(cparser loc (None,
+        [([((SpTrm loc <:patt< ($str:cls$, __x__) >> <:vala<  None >>), SpoNoth)],
+          None, <:expr< __x__ >>)]))
 
 (*
     | ASleft_assoc loc lhs restrhs e ->
