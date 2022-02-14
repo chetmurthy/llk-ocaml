@@ -9,7 +9,7 @@ SYNTAX := camlp5o
 
 PACKAGES := $(PACKAGES),pa_ppx_seq
 
-all: ppx_seq.exe
+all:
 
 all-tests:: all
 	./ppx_seq.exe

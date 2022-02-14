@@ -1,30 +1,65 @@
 #!/usr/bin/env perl
 
 use strict ;
-BEGIN { push (@INC, "..") }
+use IPC::System::Simple qw(systemx runx capturex $EXITVAL);
+use String::ShellQuote ;
+use File::Basename;
+
 use Version ;
 
-our $destdir = shift @ARGV ;
+our %pkgmap = (
+  'pa_llk_compiler' => 'pa_llk.compiler',
+  'pa_llk_runtime' => 'pa_llk.runtime',
+  
+    );
 
-print <<"EOF";
-# Specifications for the "pa_llk" preprocessor:
-requires = "camlp5,bos,fmt,pa_ppx.base"
+{
+  my $compmeta = indent(2, fixdeps(capturex("./pa_llk/META.pl"))) ;
+  my $rtmeta = indent(2, fixdeps(capturex("./runtime/META.pl"))) ;
+
+  print <<"EOF";
 version = "$Version::version"
-description = "pa_ppx pa_llk support"
+description = "pa_llk: camlp5-based LLK parser generator"
 
-# For linking
-package "link" (
-requires = "camlp5,bos,fmt,pa_ppx.base.link"
-archive(byte) = "pa_llk.cma"
-archive(native) = "pa_llk.cmxa"
+package "compile" (
+$compmeta
 )
 
-# For the toploop:
-archive(byte,toploop) = "pa_llk.cma"
-
-  # For the preprocessor itself:
-  requires(syntax,preprocessor) = "camlp5,bos,fmt,pa_ppx.base"
-  archive(syntax,preprocessor,-native) = "pa_llk.cma"
-  archive(syntax,preprocessor,native) = "pa_llk.cmxa"
+package "runtime" (
+$rtmeta
+)
 
 EOF
+}
+
+sub fixdeps {
+  my $txt = join('', @_) ;
+  $txt =~ s,^(.*require.*)$, fix0($1) ,mge;
+  return $txt ; 
+}
+
+sub fix0 {
+  my $txt = shift ;
+  $txt =~ s,"([^"]+)", '"'. fix($1) .'"' ,e;
+  return $txt ;
+}
+
+sub fix {
+  my $txt = shift ;
+  my @l = split(/,/,$txt);
+  my @ol = () ;
+  foreach my $p (@l) {
+    $p =~ s,^([^.]+), $pkgmap{$1} || $1 ,e ;
+    push(@ol, $p);
+  }
+  $txt = join(',', @ol) ;
+  return $txt ;
+}
+
+sub indent {
+  my $n = shift ;
+  my $txt = shift ;
+  my $pfx = ' ' x $n ;
+  $txt =~ s,^,$pfx,gm;
+  return $txt ;
+}
