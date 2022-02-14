@@ -104,7 +104,7 @@ end ;
 
    Taking the position-marked entry, start inserting from that list of
    tsorted entries.  *)
-module Coalesce = struct
+module S1Coalesce = struct
   open Std ;
 
   value is_position_marked e = isSome e.ae_pos ;
@@ -358,7 +358,7 @@ value rec formals2actuals l =
                    ])
 ;
 
-module Precedence = struct 
+module S2Precedence = struct 
 
 value rewrite_righta loc (ename,eformals) ~{cur} ~{next} rho rl =
   let right_rho = Subst.[
@@ -614,20 +614,33 @@ value exec (loc, gl, el) =
 
 end ;
 
-module CheckNoLabelAssoc = struct
+module CheckNoLabelAssocLevel = struct
+
+value check_no_level el =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASnterm loc nt _ (Some _) ->
+        raise_failwithf loc "CheckNoLabelAssocLevel: level marking found on nonterminal %s" nt
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
+  List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) el
+;
 
 value exec ((_, _, el) as x) = do {
+  check_no_level el ;
   el |> List.iter (fun e ->
     e.ae_levels |> List.iter (fun l -> do {
       match l.al_label with [
           None -> ()
         | Some lab ->
-           raise_failwithf e.ae_loc "CheckNoLabelAssoc: entry %s still has a label %s" e.ae_name lab
+           raise_failwithf e.ae_loc "CheckNoLabelAssocLevel: entry %s still has a label %s" e.ae_name lab
         ] ;
       match l.al_assoc with [
           None -> ()
         | Some a ->
-           raise_failwithf e.ae_loc "CheckNoLabelAssoc: entry %s still has an assoc %a" e.ae_name pp_a_assoc a
+           raise_failwithf e.ae_loc "CheckNoLabelAssocLevel: entry %s still has an assoc %a" e.ae_name pp_a_assoc a
         ]
     })
   ) ;
@@ -637,7 +650,7 @@ value exec ((_, _, el) as x) = do {
 
 end ;
 
-module LeftFactorize = struct
+module S3LeftFactorize = struct
 
 value extract_left_factors1 rl =
   if List.length rl > 1 &&
@@ -1191,7 +1204,7 @@ value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
 
 end ;
 
-module LambdaLift = struct
+module S4LambdaLift = struct
   (** in each entry, replace all multi-way rules with a new entry;
       repeat until there are no multi-way rules left in any entry.
    *)
@@ -1293,6 +1306,69 @@ value exec (loc, gl, el) =  (loc, gl, exec0 el) ;
 
 end ;
 
+(** An empty entry is one of the form:
+
+  e[args]: [ [ x = f[args] -> x ] ] ;
+
+  Such an entry can be eliminated, and all instances of entry "e"
+  can be replaced with "f".
+ *)
+module EmptyEntryElim = struct
+
+value empty_rule (ename, formals) = fun [
+      {ar_psymbols=[{ap_patt= Some <:patt< $lid:patt_x$ >>; ap_symb=ASnterm _ rhsname actuals None}];
+       ar_action = Some <:expr< $lid:expr_x$ >> } ->
+      if List.length formals = List.length actuals &&
+           List.for_all2 equal_expr (formals2actuals formals) actuals then
+        Some (ename, rhsname)
+      else None
+    | _ -> None
+    ]
+;
+
+value empty_level (ename, formal) l =
+  if 1 = List.length l.al_rules.au_rules then
+    empty_rule (ename, formal) (List.hd l.al_rules.au_rules)
+  else None
+;
+
+value gen_re = Pcre.regexp "^([a-zA-Z0-9_]+)__([0-9]{4})(__[0-9]{2})?$" ;
+value is_generated_entry_name n = Pcre.pmatch ~{rex=gen_re} n ;
+
+value find_empty_entry el =
+  el |> List.find_map (fun e ->
+      let ename = e.ae_name in
+      let formals = e.ae_formals in
+      if is_generated_entry_name e.ae_name && 1 = List.length e.ae_levels then
+        empty_level (ename, formals) (List.hd e.ae_levels)
+      else None
+  )
+;
+
+value eliminate_empty_entry (lhs, rhs) e =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASnterm loc nt actuals None when lhs = nt -> ASnterm loc rhs actuals None
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value rec exec0 el =
+    match find_empty_entry el with [
+        None -> el
+      | Some (ename, rhsname) ->
+         let rest_el = List.filter (fun e' -> ename <> e'.ae_name) el in
+         exec0 (List.map (eliminate_empty_entry (ename, rhsname)) rest_el)
+    ]
+;
+
+value exec (a,b,c) = (a,b, exec0 c) ;
+
+end ;
+
 module Top = struct
 open Pa_llk ;
 
@@ -1306,44 +1382,59 @@ value coalesce s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
-  |> Coalesce.exec
+  |> S1Coalesce.exec
 ;
 
 value precedence s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
-  |> Coalesce.exec
+  |> S1Coalesce.exec
   |> CheckLexical.exec
-  |> Precedence.exec
+  |> S2Precedence.exec
+;
+
+value empty_emtry_elim s =
+  s
+  |> RT.(with_file pa)
+  |> CheckLexical.exec
+  |> S1Coalesce.exec
+  |> CheckLexical.exec
+  |> S2Precedence.exec
+  |> CheckLexical.exec
+  |> CheckNoPosition.exec
+  |> CheckNoLabelAssocLevel.exec
+  |> EmptyEntryElim.exec
 ;
 
 value left_factorize s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
-  |> Coalesce.exec
+  |> S1Coalesce.exec
   |> CheckLexical.exec
-  |> Precedence.exec
+  |> S2Precedence.exec
   |> CheckLexical.exec
-  |> LeftFactorize.exec
   |> CheckNoPosition.exec
-  |> CheckNoLabelAssoc.exec
+  |> CheckNoLabelAssocLevel.exec
+  |> EmptyEntryElim.exec
+  |> S3LeftFactorize.exec
 ;
 
 value lambda_lift s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
-  |> Coalesce.exec
+  |> S1Coalesce.exec
   |> CheckLexical.exec
-  |> Precedence.exec
-  |> CheckLexical.exec
-  |> LeftFactorize.exec
+  |> S2Precedence.exec
   |> CheckLexical.exec
   |> CheckNoPosition.exec
-  |> CheckNoLabelAssoc.exec
-  |> LambdaLift.exec
+  |> CheckNoLabelAssocLevel.exec
+  |> EmptyEntryElim.exec
+  |> S3LeftFactorize.exec
+  |> CheckLexical.exec
+  |> S4LambdaLift.exec
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
@@ -1352,15 +1443,15 @@ value first s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
-  |> Coalesce.exec
+  |> S1Coalesce.exec
   |> CheckLexical.exec
-  |> Precedence.exec
+  |> S2Precedence.exec
   |> CheckLexical.exec
   |> CheckNoPosition.exec
-  |> CheckNoLabelAssoc.exec
-  |> LeftFactorize.exec
+  |> CheckNoLabelAssocLevel.exec
+  |> S3LeftFactorize.exec
   |> CheckLexical.exec
-  |> LambdaLift.exec
+  |> S4LambdaLift.exec
   |> CheckLexical.exec
   |> First.exec
 ;
@@ -1369,15 +1460,15 @@ value follow ~{top} s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
-  |> Coalesce.exec
+  |> S1Coalesce.exec
   |> CheckLexical.exec
-  |> Precedence.exec
+  |> S2Precedence.exec
   |> CheckLexical.exec
   |> CheckNoPosition.exec
-  |> CheckNoLabelAssoc.exec
-  |> LeftFactorize.exec
+  |> CheckNoLabelAssocLevel.exec
+  |> S3LeftFactorize.exec
   |> CheckLexical.exec
-  |> LambdaLift.exec
+  |> S4LambdaLift.exec
   |> CheckLexical.exec
   |> Follow.exec ~{top=top}
 ;
