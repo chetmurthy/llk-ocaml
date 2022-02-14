@@ -26,7 +26,7 @@ open Pr_llk ;
     2. That lexical environment MUST contain only distinct identifiers
    in patterns.
  *)
-module Lexical = struct
+module CheckLexical = struct
 
 value vars_of_patt p =
   let rec vrec = fun [
@@ -65,7 +65,7 @@ and check_rule env r =
       let patvars = match ps.ap_patt with [ None -> [] | Some p -> vars_of_patt p ] in do {
           patvars |> List.iter (fun v ->
             if Env.mem v env then
-              raise_failwithf ps.ap_loc "Lexical.check_rule: lexical hygiene violation on var %s" v
+              raise_failwithf ps.ap_loc "CheckLexical.check_rule: lexical hygiene violation on var %s" v
             else ()
           ) ;
           let env = Env.addl patvars env in
@@ -1262,78 +1262,78 @@ open Pa_llk ;
 value coalesce s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
 ;
 
 value coalesce s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Coalesce.exec
 ;
 
 value precedence s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Coalesce.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Precedence.exec
 ;
 
 value left_factorize s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Coalesce.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Precedence.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LeftFactorize.exec
 ;
 
 value lambda_lift s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Coalesce.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Precedence.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LeftFactorize.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LambdaLift.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> SortEntries.exec
 ;
 
 value first s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Coalesce.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Precedence.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LeftFactorize.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LambdaLift.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> First.exec
 ;
 
 value follow ~{top} s =
   s
   |> RT.(with_file pa)
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Coalesce.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Precedence.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LeftFactorize.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> LambdaLift.exec
-  |> Lexical.exec
+  |> CheckLexical.exec
   |> Follow.exec ~{top=top}
 ;
 
