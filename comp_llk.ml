@@ -1481,7 +1481,7 @@ value compile1_branch (fimap,fomap) ename (fi, fifo, r) = do {
     assert (TS.mt <> fifo) ;
   let patt = tokens_to_patt loc (TS.export fifo) in
   let body = compile1_rule (fimap,fomap) ename r in
-  (patt, <:vala< None >>, body)
+  (<:patt< Some $patt$ >>, <:vala< None >>, body)
 }
 ;
 
@@ -1498,7 +1498,8 @@ value compile1_entry (fimap, fomap) e =
     let branches =
       fi_fifo_rule_list
     |> List.map (compile1_branch (fimap,fomap) ename) in
-    let rhs = <:expr< match Stream.peek __strm__ with [ $list:branches$ ] >> in
+    let rhs = <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> in
+    let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   }
 ;

@@ -1,4 +1,4 @@
 EXTEND
 
-  e: [ [ f = FLAG "foo" -> f ] ] ;
+  e[x]: [ [ f = FLAG "foo" -> (f,x) ] ] ;
 END;
