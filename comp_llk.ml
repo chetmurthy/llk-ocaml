@@ -650,7 +650,7 @@ value exec ((_, _, el) as x) = do {
 
 end ;
 
-module S3LeftFactorize = struct
+module S4LeftFactorize = struct
 
 value extract_left_factors1 rl =
   if List.length rl > 1 &&
@@ -1204,7 +1204,7 @@ value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
 
 end ;
 
-module S4LambdaLift = struct
+module S5LambdaLift = struct
   (** in each entry, replace all multi-way rules with a new entry;
       repeat until there are no multi-way rules left in any entry.
    *)
@@ -1313,7 +1313,7 @@ end ;
   Such an entry can be eliminated, and all instances of entry "e"
   can be replaced with "f".
  *)
-module EmptyEntryElim = struct
+module S3EmptyEntryElim = struct
 
 value empty_rule (ename, formals) = fun [
       {ar_psymbols=[{ap_patt= Some <:patt< $lid:patt_x$ >>; ap_symb=ASnterm _ rhsname actuals None}];
@@ -1394,7 +1394,7 @@ value precedence s =
   |> S2Precedence.exec
 ;
 
-value empty_emtry_elim s =
+value empty_entry_elim s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
@@ -1404,7 +1404,7 @@ value empty_emtry_elim s =
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
-  |> EmptyEntryElim.exec
+  |> S3EmptyEntryElim.exec
 ;
 
 value left_factorize s =
@@ -1417,8 +1417,8 @@ value left_factorize s =
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
-  |> EmptyEntryElim.exec
-  |> S3LeftFactorize.exec
+  |> S3EmptyEntryElim.exec
+  |> S4LeftFactorize.exec
 ;
 
 value lambda_lift s =
@@ -1431,10 +1431,10 @@ value lambda_lift s =
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
-  |> EmptyEntryElim.exec
-  |> S3LeftFactorize.exec
+  |> S3EmptyEntryElim.exec
+  |> S4LeftFactorize.exec
   |> CheckLexical.exec
-  |> S4LambdaLift.exec
+  |> S5LambdaLift.exec
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
@@ -1449,9 +1449,9 @@ value first s =
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
-  |> S3LeftFactorize.exec
+  |> S4LeftFactorize.exec
   |> CheckLexical.exec
-  |> S4LambdaLift.exec
+  |> S5LambdaLift.exec
   |> CheckLexical.exec
   |> First.exec
 ;
@@ -1466,9 +1466,9 @@ value follow ~{top} s =
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
-  |> S3LeftFactorize.exec
+  |> S4LeftFactorize.exec
   |> CheckLexical.exec
-  |> S4LambdaLift.exec
+  |> S5LambdaLift.exec
   |> CheckLexical.exec
   |> Follow.exec ~{top=top}
 ;

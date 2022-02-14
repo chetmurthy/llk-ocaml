@@ -1,7 +1,8 @@
 EXTEND
-  elist[l]:
+  elist[(l:list int)]:
     [ [
         n = INT ; ";" ; rv=elist[[n::l]] -> rv
+      | n = INT ; ";" ; m = INT ; ";" ; rv=elist[[m;n::l]] -> rv
       | -> l ] ]
   ;
 
