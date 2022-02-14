@@ -729,10 +729,7 @@ value exec (loc, gl, el) = (loc, gl, List.map exec0 el) ;
 
 end ;
 
-type token = [
-    KWD of string
-  | CLS of string
-  ]
+type token = Token_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string ]
 ;
 
 module type TOKENSET = sig
@@ -744,6 +741,7 @@ module type TOKENSET = sig
   value mem : 'a -> t 'a -> bool ;
   value export : t 'a -> list 'a ;
   value union : t 'a -> t 'a -> t 'a ;
+  value disjoint : t 'a -> t 'a -> bool ;
   value unionl : list (t 'a) -> t 'a ;
   value except : 'a -> t 'a -> t 'a ;
   value map : ('a -> 'b) -> t 'a -> t 'b ;
@@ -760,6 +758,7 @@ module TokenSet : TOKENSET = struct
   value export l = l ;
   value union = addl ;
   value unionl l = l |> List.concat |> canon ;
+  value disjoint a b = [] = Std.intersect a b ;
   value except x l = Std.except x l ;
   value map f l = List.map f l |> canon ;
 end ;
@@ -809,7 +808,7 @@ module type MUTSETMAP = sig
   value add : t 'a -> (string * 'a) -> unit ;
   value lookup : string -> t 'a -> set_t 'a ;
   value addset : t 'a -> (string * set_t 'a) -> unit ;
-  value export : t 'a -> list (string * list 'a) ;
+  value export : t 'a -> SM.t 'a ;
 end ;
 
 module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
@@ -821,7 +820,7 @@ module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
   value lookup k mm = SM.lookup k mm.val ;
   value addset mm pl =
     mm.val := SM.addset mm.val pl ;
-  value export mm = SM.export mm.val ;
+  value export mm = mm.val ;
 end ;
 module MSM = MutSetMap ;
 
@@ -840,7 +839,7 @@ and psymbol m ps = symbol m ps.ap_symb
 
 and symbol m = fun [
       ASflag _ s -> TS.(union (symbol m s) (mk[None]))
-    | ASkeyw _ kw -> TS.mk [Some (KWD kw)]
+    | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
     | ASlist loc lml elem_s sepb_opt ->
        let felem = symbol m elem_s in
        if not (TS.mem None felem) then felem
@@ -866,7 +865,7 @@ and symbol m = fun [
   | ASself _ _ -> assert False
   | AStok _ cls _ -> TS.mk[Some (CLS cls)]
   | ASvala _ s sl ->
-     TS.(union (symbol m s) (sl |> List.concat_map (fun s -> [Some (KWD s); Some (KWD ("_"^s))]) |> mk))
+     TS.(union (symbol m s) (sl |> List.concat_map (fun s -> [Some (SPCL s); Some (SPCL ("_"^s))]) |> mk))
 ]
 
 and rule m r = psymbols m r.ar_psymbols
@@ -984,7 +983,7 @@ and fifo_symbol (fimap, mm) ff = fun [
           fifo_concat ~{must=True} loc fi_s ff
       }
 
-    | ASkeyw _ kw -> TS.mk[(KWD kw)]
+    | ASkeyw _ kw -> TS.mk[(SPCL kw)]
 
     | ASlist loc lml s sepopt_opt ->
        (* A. if a LIST has element that is NOT nullable, OR is LIST0,
@@ -1199,21 +1198,21 @@ value comp1 (fimap, mm) el =
   List.iter (comp1_entry (fimap, mm)) el ;
 
 value rec comprec el (fimap, mm) = do {
-  let m0 = MSM.export mm in
+  let m0 = mm in
   comp1 (fimap, mm) el ;
-  if m0 = MSM.export mm then m0 else comprec el (fimap, mm) ;
+  if m0 = mm then MSM.export m0 else comprec el (fimap, mm) ;
 }
 ;
 
-value compute_follow ~{top} el =
+value exec0 ~{top} el =
   let fimap = First.exec0 el in
   let mm = MSM.mk () in do {
-    MSM.(add mm (top, CLS "EOI")) ;
-    comprec el (fimap, mm)
+    if None <> top then MSM.(add mm (Std.outSome top, CLS "EOI")) else ();
+    (fimap, comprec el (fimap, mm))
   }
 ;
 
-value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
+value exec ?{top} (loc, gl, el) = exec0 ~{top=top} el ;
 
 end ;
 
@@ -1421,6 +1420,94 @@ value all_tokens el =
     List.sort_uniq Stdlib.compare acc.val
   }
 ;
+
+value token_to_pattern loc = fun [
+    CLS s -> <:patt< ($str:s$, "") >>
+  | SPCL s -> <:patt< ("", $str:s$) >>
+]
+;
+
+value compute_fifo loc fimap ff r =
+  let fi = First.rule fimap r in
+  let fifo = Follow.fifo_concat loc ~{if_nullable=True} fi ff in
+  (fi, fifo, r)
+;
+
+value disjoint ll =
+  let rec drec acc = fun [
+        [] -> True
+      | [h :: t] ->
+         TS.disjoint acc h
+         && drec (TS.union h acc) t
+      ] in
+  drec TS.mt ll
+;
+
+value tokens_to_patt loc l = 
+  let patts = List.map (token_to_pattern loc) l in
+  List.fold_left (fun p q -> <:patt< $p$ | $q$ >>)
+    (List.hd patts) (List.tl patts)
+;
+
+value rec compile1_symbol loc (fimap,fomap) ename s =
+  match s with [
+      ASflag loc s ->
+      let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in do {
+        assert (TS.mt <> tokens) ;
+        let fi_patt = tokens_to_patt loc (TS.export tokens) in
+        let s_body = compile1_symbol loc (fimap, fomap) ename s in
+        <:expr< match Stream.peek __strm__ with  [
+                    Some $fi_patt$ -> let _ = $s_body$ in True
+                  | _ -> False
+                  ] >>
+      }
+      | ASkeyw  loc kws ->
+         <:expr< do { assert (Stream.peek __strm__ = Some ("", $str:kws$)) ; Stream.junk __strm__ } >>
+    ]
+;
+
+value compile1_rule (fimap,fomap) ename r =
+  let loc = r.ar_loc in
+  List.fold_right (fun ps body ->
+      let ps_patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
+      let ps_symbol = compile1_symbol ps.ap_loc (fimap,fomap) ename ps.ap_symb in
+      <:expr< let $ps_patt$ = $ps_symbol$ in $body$ >>)
+    r.ar_psymbols
+    (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
+;
+
+value compile1_branch (fimap,fomap) ename (fi, fifo, r) = do {
+  let loc = r.ar_loc in
+    assert (TS.mt <> fifo) ;
+  let patt = tokens_to_patt loc (TS.export fifo) in
+  let body = compile1_rule (fimap,fomap) ename r in
+  (patt, <:vala< None >>, body)
+}
+;
+
+value compile1_entry (fimap, fomap) e =
+  let loc = e.ae_loc in
+  let ename = e.ae_name in
+  let ff = SM.lookup ename fomap in
+  let fi_fifo_rule_list =
+    (List.hd e.ae_levels).al_rules.au_rules
+    |> List.map (compute_fifo loc fimap ff) in do {
+    if not (disjoint (List.map Std.snd3 fi_fifo_rule_list)) then
+      raise_failwithf loc "compile1_entry: FIFO sets were not disjoint"
+    else () ;
+    let branches =
+      fi_fifo_rule_list
+    |> List.map (compile1_branch (fimap,fomap) ename) in
+    let rhs = <:expr< match Stream.peek __strm__ with [ $list:branches$ ] >> in
+    (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+  }
+;
+
+value exec ?{top} (loc, gl, el) =
+  let (fimap, fomap) = Follow.exec0 ~{top=top} el in
+  let fdefs = List.map (compile1_entry (fimap, fomap)) el in
+  <:str_item< value rec $list:fdefs$ >>
+;
 end ;
 
 module Top = struct
@@ -1525,6 +1612,25 @@ value follow ~{top} s =
   |> S5LambdaLift.exec
   |> CheckLexical.exec
   |> Follow.exec ~{top=top}
+;
+
+value codegen s =
+  s
+  |> RT.(with_file pa)
+  |> CheckLexical.exec
+  |> S1Coalesce.exec
+  |> CheckLexical.exec
+  |> S2Precedence.exec
+  |> CheckLexical.exec
+  |> CheckNoPosition.exec
+  |> CheckNoLabelAssocLevel.exec
+  |> S3EmptyEntryElim.exec
+  |> S4LeftFactorize.exec
+  |> CheckLexical.exec
+  |> S5LambdaLift.exec
+  |> CheckLexical.exec
+  |> SortEntries.exec
+  |> Codegen.exec
 ;
 
 end ;

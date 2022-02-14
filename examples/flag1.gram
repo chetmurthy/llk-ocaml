@@ -1,0 +1,4 @@
+EXTEND
+
+  e: [ [ f = FLAG "foo" -> f ] ] ;
+END;
