@@ -1451,34 +1451,39 @@ value tokens_to_patt loc l =
 
 value rec compile1_symbol loc (fimap,fomap) ename s =
   match s with [
-      ASflag loc s ->
-      let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in do {
+      ASflag loc s -> do {
+      let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
         assert (TS.mt <> tokens) ;
-        let fi_patt = tokens_to_patt loc (TS.export tokens) in
         let s_body = compile1_symbol loc (fimap, fomap) ename s in
-        <:expr< match Stream.peek __strm__ with  [
-                    Some $fi_patt$ -> let _ = $s_body$ in True
-                  | _ -> False
-                  ] >>
+        <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >>
       }
+
     | ASkeyw  loc kws ->
-       <:expr< do { assert (Stream.peek __strm__ = Some ("", $str:kws$)) ; Stream.junk __strm__ } >>
+       <:expr< parser [ [: `("", $str:kws$) :] -> () ] >>
+
     | ASnterm loc nt actuals None ->
        Expr.applist <:expr< $lid:nt$ >> (actuals@[<:expr< __strm__ >>])
+
     | AStok loc cls None ->
-       <:expr< match Stream.peek __strm__ with [
-                   Some ($str:cls$, __x__) -> do { Stream.junk __strm__ ; __x__ }
-                 | _ -> assert False
-                 ] >>
+       <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >>
+
+(*
+    | ASleft_assoc loc lhs restrhs e ->
+ *)       
     ]
 ;
-
+(*
+let left_assoc lhs restrhs combe =
+  parser [
+   [: x = lhs ; rv = parser [ [: y = restrhs :] -> combe x y | [: :] -> x ] :] -> rv
+    ]
+ *)
 value compile1_rule (fimap,fomap) ename r =
   let loc = r.ar_loc in
   List.fold_right (fun ps body ->
       let ps_patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
       let ps_symbol = compile1_symbol ps.ap_loc (fimap,fomap) ename ps.ap_symb in
-      <:expr< let $ps_patt$ = $ps_symbol$ in $body$ >>)
+      <:expr< parser [ [: $ps_patt$ = $ps_symbol$ ; __strm_ :] -> $body$ ] >>)
     r.ar_psymbols
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
 ;
@@ -1490,19 +1495,19 @@ value compile1_branch (fimap,fomap) ename (fi, fo, r) =
     let raw_tokens = TS.export (Follow.fi2fo loc fi) in
     let patt = tokens_to_patt loc raw_tokens in
     let tokens = List.map Std.inSome raw_tokens in
-    (tokens, (<:patt< Some $patt$ >>, <:vala< None >>, body))
+    (tokens, r, (<:patt< Some $patt$ >>, <:vala< None >>, body))
   else if TS.mt <> fo then
     let raw_tokens = TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
     let patt = tokens_to_patt loc raw_tokens in
     let tokens = List.map Std.inSome raw_tokens in
-    (tokens, (<:patt< Some $patt$ >>, <:vala< None >>, body))
+    (tokens, r, (<:patt< Some $patt$ >>, <:vala< None >>, body))
     else
-      ([None], (<:patt< _ >>, <:vala< None >>, body))
+      ([None], r, (<:patt< _ >>, <:vala< None >>, body))
 ;
 
 value reorder_branches l =
   let (concrete_branches, fallthru_branches) =
-    filter_split (fun (tl, _) -> List.for_all Std.isSome tl) l in
+    filter_split (fun (tl, _, _) -> List.for_all Std.isSome tl) l in
   concrete_branches @ fallthru_branches
 ;
 
@@ -1519,14 +1524,14 @@ value compile1_entry (fimap, fomap) e =
        && 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
-    let tokens_branches =
+    let tokens_rule_branches =
       fi_fo_rule_list
     |> List.map (compile1_branch (fimap,fomap) ename) in
-    let tokens_branches = reorder_branches tokens_branches in
-    let branches = List.map snd tokens_branches in
+    let tokens_rule_branches = reorder_branches tokens_rule_branches in
+    let branches = List.map Std.third3 tokens_rule_branches in
     let rhs =
       match branches with [
-        [(_,_,e)] -> <:expr< fun __strm__ -> $e$ >>
+        [(_,_,e)] -> e
       | [] -> assert False
       | _ ->
          let rhs = <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> in

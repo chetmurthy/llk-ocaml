@@ -13,14 +13,13 @@ Pcaml.inter_phrases := Some ";;\n";;
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
 
-
 #require "camlp5.pr_o";;
 
 (*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
  *)
-#require "camlp5.quotations" ;;
+#require "camlp5.parser_quotations" ;;
 
 #require "pa_ppx.utils";;
 open Pa_ppx_utils.Std ;;
