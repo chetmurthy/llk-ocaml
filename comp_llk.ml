@@ -279,7 +279,7 @@ end ;
 
 module Subst = struct
 
-type key_t = [ NT of string | NEXT | SELF ] ;
+type key_t = [ NT of string and option string | NEXT | SELF ] ;
 
 value lookup_rho s rho : string = List.assoc s rho ;
 
@@ -288,8 +288,8 @@ value make_dt rho =
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm loc id args sopt as s ->
-        (match lookup_rho (NT id) rho with [
-             id' -> ASnterm loc id' args sopt
+        (match lookup_rho (NT id sopt) rho with [
+             id' -> ASnterm loc id' args None
            | exception Not_found -> s
         ])
       
@@ -349,7 +349,7 @@ module Precedence = struct
 value rewrite_righta loc (ename,eformals) ~{cur} ~{next} rho rl =
   let right_rho = Subst.[
         (SELF, cur)
-       ;(NT ename, cur)
+       ;(NT ename None, cur)
     ] in
   let rl =
     rl
@@ -372,7 +372,7 @@ value rewrite_righta loc (ename,eformals) ~{cur} ~{next} rho rl =
 value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
   let left_rho = Subst.[
       (SELF, next)
-     ;(NT ename, next)
+     ;(NT ename None, next)
     ] in
   let left_symbol = (List.hd (List.hd rl).ar_psymbols).ap_symb in
   let right_rl =
@@ -432,7 +432,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
               |> Subst.rules Subst.[
                      (SELF, next)
                     ;(NEXT, next)
-                    ;(NT ename, next)
+                    ;(NT ename None, next)
                    ] in
             {
               (l) with
@@ -464,7 +464,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
              let rl = rewrite_righta loc (ename,eargs) ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
                          ;(SELF, next)
-                         ;(NT ename, next)
+                         ;(NT ename None, next)
                         ] rl in
              {
                (l) with
@@ -498,7 +498,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
              let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
                          ;(SELF, next)
-                         ;(NT ename, next)
+                         ;(NT ename None, next)
                         ] rl in
              {
                (l) with
@@ -564,7 +564,7 @@ value exec1 e = do {
     |> List.filter_map (fun (i, newname, l) ->
            match l.al_label with [
                None -> None
-             | Some lab -> Some (Subst.NT ename, newname)
+             | Some _ as lab -> Some (Subst.NT ename lab, newname)
          ]) in
   let newents =
     named_levels
@@ -1153,7 +1153,7 @@ value compute_follow ~{top} el =
 value exec ~{top} (loc, gl, el) = compute_follow ~{top} el ;
 
 end ;
-(*
+
 module LambdaLift = struct
   (** in each entry, replace all multi-way rules with a new entry;
       repeat until there are no multi-way rules left in any entry.
@@ -1163,32 +1163,99 @@ module Ctr = struct
   type t = ref int ;
   value mk () = ref 0 ;
   value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+
+  value fresh_name root ctr =
+    let n = next ctr in
+    Fmt.(str "%s__%02d" root n) ;
 end ;
 
-value lift_entry mut e =
-  let ll =  in
-  { (e) with ae_levels = lift_levels mut (e.ae_name, e.ae_args) e.ae_levels }
 
-and lift_levels mut esig ll = do {
+value rec lift_rules mut esig rl = { (rl) with au_rules = List.map (lift_rule mut esig) rl.au_rules }
+
+and lift_rule mut esig r =
+  let (_, revps) = List.fold_left (fun (stkpat, revps) ps ->
+    let ps = lift_psymbol mut esig stkpat ps in
+    let stkpat = match ps.ap_patt with [ None -> stkpat | Some p -> [p :: stkpat] ] in
+    (stkpat, [ps :: revps])
+  ) ([], []) r.ar_psymbols in
+  { (r) with ar_psymbols = List.rev revps }
+
+and lift_psymbol mut esig stkpat ps =
+  { (ps) with ap_symb = lift_symbol mut esig stkpat ps.ap_symb }
+
+and lift_symbol ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun [
+      ASflag loc s -> ASflag loc (lift_symbol mut esig revpats s)
+  | ASkeyw _ _ as s -> s
+
+  | ASlist loc lml s None ->
+     ASlist loc lml (lift_symbol mut esig revpats s) None
+  | ASlist loc lml s (Some (s2, b)) ->
+     ASlist loc lml (lift_symbol mut esig revpats s) (Some (lift_symbol mut esig revpats s2, b))
+
+  | ASnext _ _ as s -> s
+  | ASnterm _ _ _ _ as s -> s
+  | ASopt loc s -> ASopt loc (lift_symbol mut esig revpats s)
+
+  | ASleft_assoc loc s1 s2 e ->
+     ASleft_assoc loc (lift_symbol mut esig revpats s1) (lift_symbol mut esig revpats s2) e
+
+  | ASrules loc rl ->
+     let formals = eformals @ (List.rev revpats) in
+     let actuals = formals2actuals formals in
+     let new_ename = Ctr.fresh_name ename ctr in
+     let new_e = {
+         ae_loc = rl.au_loc
+       ; ae_name = new_ename
+       ; ae_pos = None
+       ; ae_formals = formals
+       ; ae_levels = [{al_loc = rl.au_loc; al_label = None ; al_assoc = None ; al_rules = rl}]
+       } in do {
+        Std.push acc new_e ;
+        ASnterm rl.au_loc new_ename actuals None
+      }
+
+  | ASself _ _ as s -> s
+  | AStok _ _ _ as s -> s
+  | ASvala loc s sl -> ASvala loc (lift_symbol mut esig revpats s) sl
+]
+;
+
+value lift_level mut esig l = { (l) with al_rules = lift_rules mut esig l.al_rules } ;
+
+value lift_levels mut esig ll = do {
     assert (1 = List.length ll) ;
     List.map (lift_level mut esig) ll
 }    
-
-and lift_level mut esig l = { (l) with al_rules = lift_rules mut esig l.al_rules }
-
-and lift_rules mut esig rl = { (rl) with au_rules = List.map (lift_rule mut esig) rl.au_rules }
-
-and lift_rule mut esig r =
-  { (r) with ar_psymbols = List.fold_left (fun (stkpat, revps) ps ->
-    if None <> ps.ap_patt then
-      let ps = lift_psymbol mut esig stkpat 
-      (stkpat, stkps
-
+;
+value lift_entry mut e =
+  let ll = lift_levels mut (e.ae_name, e.ae_formals) e.ae_levels in
+  { (e) with ae_levels = ll }
 ;
   
+value exec0 el =
+  let ctr = Ctr.mk() in 
+  let rec erec el =
+    let acc = ref [] in
+    let el = List.map (lift_entry (ctr, acc)) el in
+    if [] = acc.val then el
+    else erec (el @ acc.val)
+  in erec el
+;
+
+value exec (loc, gl, el) = (loc, gl, exec0 el) ;
 
 end ;
- *)
+
+module SortEntries = struct
+
+value exec0 el =
+  let cmp e1 e2 = String.compare e1.ae_name e2.ae_name in
+  List.stable_sort cmp el ;
+
+value exec (loc, gl, el) =  (loc, gl, exec0 el) ;
+
+end ;
+
 module Top = struct
 open Pa_llk ;
 
@@ -1225,6 +1292,21 @@ value left_factorize s =
   |> LeftFactorize.exec
 ;
 
+value lambda_lift s =
+  s
+  |> RT.(with_file pa)
+  |> Lexical.exec
+  |> Coalesce.exec
+  |> Lexical.exec
+  |> Precedence.exec
+  |> Lexical.exec
+  |> LeftFactorize.exec
+  |> Lexical.exec
+  |> LambdaLift.exec
+  |> Lexical.exec
+  |> SortEntries.exec
+;
+
 value first s =
   s
   |> RT.(with_file pa)
@@ -1234,6 +1316,8 @@ value first s =
   |> Precedence.exec
   |> Lexical.exec
   |> LeftFactorize.exec
+  |> Lexical.exec
+  |> LambdaLift.exec
   |> Lexical.exec
   |> First.exec
 ;
@@ -1247,6 +1331,8 @@ value follow ~{top} s =
   |> Precedence.exec
   |> Lexical.exec
   |> LeftFactorize.exec
+  |> Lexical.exec
+  |> LambdaLift.exec
   |> Lexical.exec
   |> Follow.exec ~{top=top}
 ;
