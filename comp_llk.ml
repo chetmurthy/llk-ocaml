@@ -250,6 +250,20 @@ module Coalesce = struct
 
 end ;
 
+module CheckNoPosition = struct
+
+value exec ((_, _, el) as x) = do {
+  el |> List.iter (fun e ->
+      if e.ae_pos <> None then
+        raise_failwithf e.ae_loc "CheckNoPosition: entry %s still has a position" e.ae_name
+      else ()
+    ) ;
+  x
+}
+;
+
+end ;
+
 (** convert entry [e]with multiple levels into multiple entries [e__%04d],
 
     An entry with N multiple levels
@@ -596,6 +610,29 @@ value exec (loc, gl, el) =
   let el = List.concat_map snd pl in
   let el = List.map (Subst.entry dict) el in
   (loc, gl, el)
+;
+
+end ;
+
+module CheckNoLabelAssoc = struct
+
+value exec ((_, _, el) as x) = do {
+  el |> List.iter (fun e ->
+    e.ae_levels |> List.iter (fun l -> do {
+      match l.al_label with [
+          None -> ()
+        | Some lab ->
+           raise_failwithf e.ae_loc "CheckNoLabelAssoc: entry %s still has a label %s" e.ae_name lab
+        ] ;
+      match l.al_assoc with [
+          None -> ()
+        | Some a ->
+           raise_failwithf e.ae_loc "CheckNoLabelAssoc: entry %s still has an assoc %a" e.ae_name pp_a_assoc a
+        ]
+    })
+  ) ;
+  x
+}
 ;
 
 end ;
@@ -1290,6 +1327,8 @@ value left_factorize s =
   |> Precedence.exec
   |> CheckLexical.exec
   |> LeftFactorize.exec
+  |> CheckNoPosition.exec
+  |> CheckNoLabelAssoc.exec
 ;
 
 value lambda_lift s =
@@ -1302,6 +1341,8 @@ value lambda_lift s =
   |> CheckLexical.exec
   |> LeftFactorize.exec
   |> CheckLexical.exec
+  |> CheckNoPosition.exec
+  |> CheckNoLabelAssoc.exec
   |> LambdaLift.exec
   |> CheckLexical.exec
   |> SortEntries.exec
@@ -1315,6 +1356,8 @@ value first s =
   |> CheckLexical.exec
   |> Precedence.exec
   |> CheckLexical.exec
+  |> CheckNoPosition.exec
+  |> CheckNoLabelAssoc.exec
   |> LeftFactorize.exec
   |> CheckLexical.exec
   |> LambdaLift.exec
@@ -1330,6 +1373,8 @@ value follow ~{top} s =
   |> CheckLexical.exec
   |> Precedence.exec
   |> CheckLexical.exec
+  |> CheckNoPosition.exec
+  |> CheckNoLabelAssoc.exec
   |> LeftFactorize.exec
   |> CheckLexical.exec
   |> LambdaLift.exec
