@@ -13,7 +13,7 @@ open Pa_ppx_utils ;
 open Ppxutil ;
 
 open Llk_types ;
-open Pr_llk ;
+open Print_gram ;
 
 
 (** Verify lexical hygiene of grammars.
@@ -1560,7 +1560,7 @@ value exec ?{top} (loc, gl, el) =
 end ;
 
 module Top = struct
-open Pa_llk ;
+open Parse_gram ;
 
 value parse s =
   s

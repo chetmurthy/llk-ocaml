@@ -10,7 +10,7 @@ open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
 open Llk_types ;
-open Pa_llk ;
+open Parse_gram ;
 
 module Pr = struct
 
