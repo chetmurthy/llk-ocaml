@@ -21,7 +21,7 @@ our %pkgmap = (
 version = "$Version::version"
 description = "pa_llk: camlp5-based LLK parser generator"
 
-package "compile" (
+package "compiler" (
 $compmeta
 )
 
