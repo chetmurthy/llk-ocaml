@@ -1,0 +1,5 @@
+EXTEND
+
+  e[x]: [ [ y = FLAG "foo" ; z = f[y] -> (x,z) ] ] ;
+  f[x]: [ [ z = INT -> (x,int_of_string z) ] ] ;
+END;

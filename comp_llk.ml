@@ -1422,7 +1422,7 @@ value all_tokens el =
 ;
 
 value token_to_pattern loc = fun [
-    CLS s -> <:patt< ($str:s$, "") >>
+    CLS s -> <:patt< ($str:s$, _) >>
   | SPCL s -> <:patt< ("", $str:s$) >>
 ]
 ;
@@ -1461,8 +1461,15 @@ value rec compile1_symbol loc (fimap,fomap) ename s =
                   | _ -> False
                   ] >>
       }
-      | ASkeyw  loc kws ->
-         <:expr< do { assert (Stream.peek __strm__ = Some ("", $str:kws$)) ; Stream.junk __strm__ } >>
+    | ASkeyw  loc kws ->
+       <:expr< do { assert (Stream.peek __strm__ = Some ("", $str:kws$)) ; Stream.junk __strm__ } >>
+    | ASnterm loc nt actuals None ->
+       Expr.applist <:expr< $lid:nt$ >> (actuals@[<:expr< __strm__ >>])
+    | AStok loc cls None ->
+       <:expr< match Stream.peek __strm__ with [
+                   Some ($str:cls$, __x__) -> do { Stream.junk __strm__ ; __x__ }
+                 | _ -> assert False
+                 ] >>
     ]
 ;
 
