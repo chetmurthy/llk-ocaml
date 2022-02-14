@@ -1429,14 +1429,14 @@ value token_to_pattern loc = fun [
 
 value compute_fifo loc fimap ff r =
   let fi = First.rule fimap r in
-  let fifo = Follow.fifo_concat loc ~{if_nullable=True} fi ff in
-  (fi, fifo, r)
+  (fi, ff, r)
 ;
 
-value disjoint ll =
+value disjoint loc ll =
   let rec drec acc = fun [
         [] -> True
-      | [h :: t] ->
+      | [(fi, ff,_) :: t] ->
+         let h = Follow.fifo_concat loc ~{if_nullable=True} fi ff in
          TS.disjoint acc h
          && drec (TS.union h acc) t
       ] in
@@ -1483,30 +1483,55 @@ value compile1_rule (fimap,fomap) ename r =
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
 ;
 
-value compile1_branch (fimap,fomap) ename (fi, fifo, r) = do {
+value compile1_branch (fimap,fomap) ename (fi, fo, r) =
   let loc = r.ar_loc in
-    assert (TS.mt <> fifo) ;
-  let patt = tokens_to_patt loc (TS.export fifo) in
   let body = compile1_rule (fimap,fomap) ename r in
-  (<:patt< Some $patt$ >>, <:vala< None >>, body)
-}
+  if not (Follow.nullable fi) then
+    let raw_tokens = TS.export (Follow.fi2fo loc fi) in
+    let patt = tokens_to_patt loc raw_tokens in
+    let tokens = List.map Std.inSome raw_tokens in
+    (tokens, (<:patt< Some $patt$ >>, <:vala< None >>, body))
+  else if TS.mt <> fo then
+    let raw_tokens = TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
+    let patt = tokens_to_patt loc raw_tokens in
+    let tokens = List.map Std.inSome raw_tokens in
+    (tokens, (<:patt< Some $patt$ >>, <:vala< None >>, body))
+    else
+      ([None], (<:patt< _ >>, <:vala< None >>, body))
+;
+
+value reorder_branches l =
+  let (concrete_branches, fallthru_branches) =
+    filter_split (fun (tl, _) -> List.for_all Std.isSome tl) l in
+  concrete_branches @ fallthru_branches
 ;
 
 value compile1_entry (fimap, fomap) e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let ff = SM.lookup ename fomap in
-  let fi_fifo_rule_list =
+  let fi_fo_rule_list =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.map (compute_fifo loc fimap ff) in do {
-    if not (disjoint (List.map Std.snd3 fi_fifo_rule_list)) then
+    if not (disjoint loc fi_fo_rule_list) then
       raise_failwithf loc "compile1_entry: FIFO sets were not disjoint"
+    else if TS.mt = ff 
+       && 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
+      raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
-    let branches =
-      fi_fifo_rule_list
+    let tokens_branches =
+      fi_fo_rule_list
     |> List.map (compile1_branch (fimap,fomap) ename) in
-    let rhs = <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> in
-    let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
+    let tokens_branches = reorder_branches tokens_branches in
+    let branches = List.map snd tokens_branches in
+    let rhs =
+      match branches with [
+        [(_,_,e)] -> <:expr< fun __strm__ -> $e$ >>
+      | [] -> assert False
+      | _ ->
+         let rhs = <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> in
+         List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs ]
+    in
     (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   }
 ;
@@ -1521,7 +1546,7 @@ end ;
 module Top = struct
 open Pa_llk ;
 
-value coalesce s =
+value parse s =
   s
   |> RT.(with_file pa)
   |> CheckLexical.exec
@@ -1529,27 +1554,20 @@ value coalesce s =
 
 value coalesce s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
+  |> parse
   |> S1Coalesce.exec
 ;
 
 value precedence s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
+  |> coalesce
   |> CheckLexical.exec
   |> S2Precedence.exec
 ;
 
 value empty_entry_elim s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
-  |> CheckLexical.exec
-  |> S2Precedence.exec
+  |> precedence
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
@@ -1558,30 +1576,13 @@ value empty_entry_elim s =
 
 value left_factorize s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
-  |> CheckLexical.exec
-  |> S2Precedence.exec
-  |> CheckLexical.exec
-  |> CheckNoPosition.exec
-  |> CheckNoLabelAssocLevel.exec
-  |> S3EmptyEntryElim.exec
+  |> empty_entry_elim
   |> S4LeftFactorize.exec
 ;
 
 value lambda_lift s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
-  |> CheckLexical.exec
-  |> S2Precedence.exec
-  |> CheckLexical.exec
-  |> CheckNoPosition.exec
-  |> CheckNoLabelAssocLevel.exec
-  |> S3EmptyEntryElim.exec
-  |> S4LeftFactorize.exec
+  |> left_factorize
   |> CheckLexical.exec
   |> S5LambdaLift.exec
   |> CheckLexical.exec
@@ -1590,53 +1591,19 @@ value lambda_lift s =
 
 value first s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
-  |> CheckLexical.exec
-  |> S2Precedence.exec
-  |> CheckLexical.exec
-  |> CheckNoPosition.exec
-  |> CheckNoLabelAssocLevel.exec
-  |> S4LeftFactorize.exec
-  |> CheckLexical.exec
-  |> S5LambdaLift.exec
-  |> CheckLexical.exec
+  |> lambda_lift
   |> First.exec
 ;
 
 value follow ~{top} s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
-  |> CheckLexical.exec
-  |> S2Precedence.exec
-  |> CheckLexical.exec
-  |> CheckNoPosition.exec
-  |> CheckNoLabelAssocLevel.exec
-  |> S4LeftFactorize.exec
-  |> CheckLexical.exec
-  |> S5LambdaLift.exec
-  |> CheckLexical.exec
+  |> lambda_lift
   |> Follow.exec ~{top=top}
 ;
 
 value codegen s =
   s
-  |> RT.(with_file pa)
-  |> CheckLexical.exec
-  |> S1Coalesce.exec
-  |> CheckLexical.exec
-  |> S2Precedence.exec
-  |> CheckLexical.exec
-  |> CheckNoPosition.exec
-  |> CheckNoLabelAssocLevel.exec
-  |> S3EmptyEntryElim.exec
-  |> S4LeftFactorize.exec
-  |> CheckLexical.exec
-  |> S5LambdaLift.exec
-  |> CheckLexical.exec
+  |> lambda_lift
   |> SortEntries.exec
   |> Codegen.exec
 ;

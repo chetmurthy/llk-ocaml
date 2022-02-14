@@ -33,6 +33,17 @@ Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
 
+let pp_token_stream strm =
+  let l = Stream.npeek !Toploop.max_printer_depth strm in
+  let rec trim_eoi = function
+    ("EOI",_ as x)::_ -> [x]
+  | h::t -> h::(trim_eoi t)
+  | [] -> []
+  in 
+  Fmt.(pf stdout "<strm<[%a]>>" (list ~sep:comma (parens (pair ~sep:comma (quote string) (quote string)))) (trim_eoi l))
+;;
+#install_printer pp_token_stream ;;
+
 let pp_ctyp ty = Fmt.(pf stdout "#<ctyp< %s >>" (Eprinter.apply Pcaml.pr_ctyp Pprintf.empty_pc ty));;
 let pp_expr ty = Fmt.(pf stdout "#<expr< %s >>" (Eprinter.apply Pcaml.pr_expr Pprintf.empty_pc ty));;
 let pp_patt ty = Fmt.(pf stdout "#<patt< %s >>" (Eprinter.apply Pcaml.pr_patt Pprintf.empty_pc ty));;

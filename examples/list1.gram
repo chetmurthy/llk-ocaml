@@ -1,8 +1,8 @@
 EXTEND
-  elist[(l:list int)]:
+  elist[(l:list (int * bool))]:
     [ [
-        n = INT ; ";" ; rv=elist[[n::l]] -> rv
-      | n = INT ; ";" ; m = INT ; ";" ; rv=elist[[m;n::l]] -> rv
+        n = INT ; ";" ; rv=elist[[(int_of_string n,True)::l]] -> rv
+      | n = INT ; ";" ; b = BOOL ; ";" ; rv=elist[[(int_of_string n,bool_of_string b)::l]] -> rv
       | -> l ] ]
   ;
 
