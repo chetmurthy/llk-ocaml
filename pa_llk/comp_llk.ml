@@ -1501,6 +1501,13 @@ and compile1_psymbol loc (fimap,fomap) ename ps =
     | AStok loc cls None ->
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
+
+    | ASleft_assoc loc lhs restrhs e ->
+       let lhs = compile1_symbol  loc (fimap,fomap) ename lhs in
+       let restrhs = compile1_symbol  loc (fimap,fomap) ename restrhs in
+       let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
+        (SpNtr loc patt e, SpoNoth)
+
     ]
 ;
 
@@ -1571,8 +1578,10 @@ value compile1_entry (fimap, fomap) e =
         [(_,_,e)] -> e
       | [] -> assert False
       | _ ->
-         let rhs = <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> in
-         List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs ]
+         let branches =
+           branches
+         |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
+         <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)

@@ -23,17 +23,39 @@ END;
 |foo}
 ] ;;
 
+[%llk
+{foo|
+GRAMMAR I:
+GLOBAL: e;
+  elist[(l:(int * bool) list)]:
+    [ [
+        n = INT ; ";" ; rv=elist[((int_of_string n,true)::l)] -> rv
+      | n = INT ; ";" ; b = bool ; ";" ; rv=elist[((int_of_string n,b)::l)] -> rv
+      | -> l ] ]
+  ;
+  bool: [ [ "true" -> true | "false" -> false ] ] ;
+  e: [ [ l = elist[[]] -> List.rev l ] ] ;
+END;
+
+|foo}
+] ;;
+
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2
 open OUnitTest
 let tests = "flag1" >::: [
-      "1" >:: (fun _ ->
+      "G" >:: (fun _ ->
         assert_equal (true, 1) (pa G.etop "foo")
       )
-    ; "2" >:: (fun _ ->
-        assert_equal (1, (true, 3)) (pa H.etop "foo 3")
-  )
+    ; "H" >:: (fun _ ->
+      assert_equal (1, (true, 3)) (pa H.etop "foo 3")
+    )
+    ; "I" >:: (fun _ ->
+        assert_equal [] (pa I.e "")
+      ; assert_equal [(1,true)] (pa I.e "1;")
+      ; assert_equal [(1,false);(2,true)] (pa I.e "1;false;2;")
+    )
 ]
 
 
