@@ -36,7 +36,6 @@ value rule_list = Grammar.Entry.create gram "rule_list";
 value level_list = Grammar.Entry.create gram "level_list";
 value level = Grammar.Entry.create gram "level";
 value symbol = Grammar.Entry.create gram "symbol";
-value semi_sep = Grammar.Entry.of_parser gram "';'" (parser [: `("", ";") :] -> ()) ;
 
 EXTEND
   GLOBAL:
@@ -49,11 +48,11 @@ EXTEND
   grammar_body:
     [ [ gid = UIDENT ; ":" ;
         sl = [ l = global -> l | -> [] ];
-        el = LIST1 [ e = entry; semi_sep -> e ] ->
+        el = LIST1 [ e = entry; ";" -> e ] ->
           {gram_loc=loc; gram_id=gid; gram_globals=sl; gram_entries=el} ] ]
   ;
   global:
-    [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; semi_sep -> sl ] ]
+    [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
   ;
   entry:
     [ [ n = LIDENT;
@@ -88,9 +87,9 @@ EXTEND
           {au_loc = loc; au_rules = rules} ] ]
   ;
   rule:
-    [ [ psl = LIST0 psymbol SEP semi_sep; "->"; act = expr ->
+    [ [ psl = LIST0 psymbol SEP ";"; "->"; act = expr ->
           {ar_loc = loc; ar_psymbols = psl; ar_action = Some act}
-      | psl = LIST0 psymbol SEP semi_sep ->
+      | psl = LIST0 psymbol SEP ";" ->
           {ar_loc = loc; ar_psymbols = psl; ar_action = None} ] ]
   ;
   psymbol:
