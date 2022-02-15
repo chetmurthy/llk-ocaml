@@ -11,14 +11,14 @@ PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5,pa_llk_runtime
 
 test:: all
 	mkdir -p _build
-	./flag1_test.exe
+	./simple_test.exe
 
-all: flag1_test.exe
+all: simple_test.exe
 
-flag1_test.exe: flag1_test.cmo
+simple_test.exe: simple_test.cmo
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -linkpkg -linkall -o $@ $<
 
-flag1_test.cmo: flag1_test.ml
+simple_test.cmo: simple_test.ml
 	$(NOT_OCAMLFIND) preprocess -package $(PACKAGES),camlp5.pr_o -syntax $(SYNTAX) $< > $<.ppo.ml
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<.ppo.ml
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<

@@ -78,7 +78,7 @@ let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2
 open OUnitTest
-let tests = "flag1" >::: [
+let tests = "simple" >::: [
       "G" >:: (fun _ ->
         assert_equal (true, 1) (pa G.etop "foo")
       )
