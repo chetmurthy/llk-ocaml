@@ -729,7 +729,7 @@ value exec g = {(g) with gram_entries = List.map exec0 g.gram_entries} ;
 
 end ;
 
-type token = Token_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string ]
+type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string ]
 ;
 
 module type TOKENSET = sig
@@ -1412,7 +1412,7 @@ end ;
  *)
 
 module Codegen = struct
-open Token_regexps ;
+open Llk_regexps ;
 open PatternBaseToken ;
 
 value all_tokens el =
