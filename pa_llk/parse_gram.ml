@@ -44,7 +44,7 @@ EXTEND
     top grammar_body symbol rule rule_list level level_list symbol
   ;
   top:
-    [ [ "GRAMMAR"; e = grammar_body; "END" ; ";" -> norm_top e ] ]
+    [ [ "GRAMMAR"; e = grammar_body; "END" ; ";" ; EOI -> norm_top e ] ]
   ;
   grammar_body:
     [ [ gid = UIDENT ; ":" ;

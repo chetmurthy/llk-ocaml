@@ -9,7 +9,7 @@ SYNTAX := camlp5o
 
 PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5
 
-all-tests:: all
+test:: all
 	mkdir -p _build
 	./flag1_test.exe
 
@@ -21,6 +21,5 @@ flag1_test.exe: flag1_test.cmo
 flag1_test.cmo: flag1_test.ml
 	$(NOT_OCAMLFIND) preprocess -package $(PACKAGES),camlp5.pr_o -syntax $(SYNTAX) $< > $<.ppo.ml
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
-
 clean::
 	rm -f *.cm* *.ppo* *.exe
