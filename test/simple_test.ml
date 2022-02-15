@@ -74,6 +74,18 @@ END;
 |foo}
 ] ;;
 
+[%llk
+{foo|
+GRAMMAR Re1:
+GLOBAL: e_top;
+REGEXPS: foo = "a" ; bar = "b" ; END ;
+  e_top: [ [ x = LIDENT -> x ] ] ;
+
+END;
+
+|foo}
+] ;;
+
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2

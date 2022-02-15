@@ -1623,10 +1623,16 @@ value compile1_entry (fimap, fomap) e =
   }
 ;
 
-value exec {gram_loc=loc; gram_globals=gl; gram_entries=el; gram_id=gid}  =
+value exec {gram_loc=loc; gram_globals=gl; gram_regexps=rl; gram_entries=el; gram_id=gid}  =
 let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
   let fdefs = List.map (compile1_entry (fimap, fomap)) el in
-  let token_patterns = all_tokens el in
+  let token_patterns =
+    all_tokens el @ (
+      rl
+      |> List.map snd
+      |> List.concat_map PatternRegexp.tokens
+    ) |> List.sort_uniq PatternBaseToken.compare
+  in
   let token_actions =
     token_patterns
     |> List.map (fun [
