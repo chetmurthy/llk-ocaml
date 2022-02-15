@@ -3,6 +3,10 @@
 
 open Asttools ;
 open Brzozowski ;
+open Pa_ppx_base ;
+open Pp_MLast ;
+open Pa_ppx_utils ;
+open Ppxutil ;
 
 module PatternBaseToken = struct
   type t = [ CLS of string | SPCL of string ] ;
@@ -85,37 +89,42 @@ value concatenation l =
   List.fold_left PSyn.(fun e1 e2 -> e1 @@ e2) (List.hd l) (List.tl l)
 ;
 
+type loc = Ploc.t ;
+value compare_loc a b = 0 ;
+value equal_loc a b = True ;
+
 type astre = [
-  Special of string
-| Class of string
-| DISJ of list astre
-| CONJ of list astre
-| CONC of list astre
-| STAR of astre
-| NEG of astre
-| EPS
-| LETIN of string and astre and astre
-| ID of string
-]
+  Special of loc and string
+| Class of loc and string
+| DISJ of loc and list astre
+| CONJ of loc and list astre
+| CONC of loc and list astre
+| STAR of loc and astre
+| NEG of loc and astre
+| EPS of loc
+| LETIN of loc and string and astre and astre
+| ID of loc and string
+] [@@deriving (show,eq,ord) ;]
 ;
 
-value conv x =
+value normalize_astre env x =
   let open PatternBaseToken in
   let rec convrec env = fun [
-        Special x -> PSyn.token (SPCL (Scanf.unescaped x))
-      | Class x -> PSyn.token (CLS (Scanf.unescaped x))
-      | DISJ l -> PSyn.disjunction (List.map (convrec env) l)
-      | CONJ l -> PSyn.conjunction (List.map (convrec env) l)
-      | CONC l -> concatenation (List.map (convrec env) l)
-      | STAR x -> PSyn.star (convrec env x)
-      | NEG x -> PSyn.neg (convrec env x)
-      | EPS -> PSyn.epsilon
-      | LETIN s e1 e2 ->
+        Special _ x -> PSyn.token (SPCL (Scanf.unescaped x))
+      | Class _ x -> PSyn.token (CLS (Scanf.unescaped x))
+      | DISJ _ l -> PSyn.disjunction (List.map (convrec env) l)
+      | CONJ _ l -> PSyn.conjunction (List.map (convrec env) l)
+      | CONC _ l -> concatenation (List.map (convrec env) l)
+      | STAR _ x -> PSyn.star (convrec env x)
+      | NEG _ x -> PSyn.neg (convrec env x)
+      | EPS _ -> PSyn.epsilon
+      | LETIN _ s e1 e2 ->
          convrec [(s,convrec env e1) :: env] e2
-      | ID s -> match List.assoc s env with [
-                    exception Not_found -> failwith Fmt.(str "Llk_regexps.conv: unrecognized ID: %s" s)
-                            | e -> e
-                  ]
+      | ID loc s -> match List.assoc s env with [
+           exception Not_found ->
+                     raise_failwithf loc "Llk_regexps.normalize_astre: unrecognized ID: %s" s
+         | e -> e
+         ]
       ]
-  in convrec [] x
+  in convrec env x
 ;

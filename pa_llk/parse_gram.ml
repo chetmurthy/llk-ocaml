@@ -50,7 +50,7 @@ EXTEND
         sl = [ l = global -> l | -> [] ];
         rl = [ l = regexps -> l | -> [] ];
         el = LIST1 [ e = entry; ";" -> e ] ->
-          {gram_loc=loc; gram_id=gid; gram_globals=sl; gram_regexps=rl; gram_entries=el} ] ]
+          {gram_loc=loc; gram_id=gid; gram_globals=sl; gram_regexp_asts=rl; gram_regexps=[]; gram_entries=el} ] ]
   ;
   global:
     [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
@@ -177,25 +177,28 @@ EXTEND
 
   regexp_entry: [ [ n = LIDENT ; "=" ; r = regexp ; ";" -> (n,r) ] ] ;
 
-  regexp: [ [ x = e5 -> conv x ] ] ;
+  regexp: [ [ x = e6 -> x ] ] ;
 
-  e5: [ [ l = LIST1 e4 SEP "|" -> DISJ l ] ] ;
+  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e5 -> LETIN loc s re1 re2
+        | x = e5 -> x
+        ] ] ;
 
-  e4: [ [ l = LIST1 e3 SEP "&" -> CONJ l ] ] ;
+  e5: [ [ l = LIST1 e4 SEP "|" -> DISJ loc l ] ] ;
 
-  e3: [ [ l = LIST1 e2 -> CONC l ] ] ;
+  e4: [ [ l = LIST1 e3 SEP "&" -> CONJ loc l ] ] ;
 
-  e2: [ [ "~"; x = e1 -> NEG x | x = e1 -> x ] ] ;
+  e3: [ [ l = LIST1 e2 -> CONC loc l ] ] ;
 
-  e1: [ [ x = e0; "*" -> STAR x | x = e0 -> x ] ] ;
+  e2: [ [ "~"; x = e1 -> NEG loc x | x = e1 -> x ] ] ;
+
+  e1: [ [ x = e0; "*" -> STAR loc x | x = e0 -> x ] ] ;
 
   e0:
-    [ [ x = STRING -> Special x
-      | x = UIDENT -> Class x
-      | "("; x = e5; ")" -> x
-      | "eps" -> EPS
-      | "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e5 -> LETIN s re1 re2
-      | x = LIDENT -> ID x
+    [ [ x = STRING -> Special loc x
+      | x = UIDENT -> Class loc x
+      | "("; x = e6; ")" -> x
+      | "eps" -> EPS loc
+      | x = LIDENT -> ID loc x
       ]
     ]
   ;

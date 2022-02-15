@@ -47,14 +47,14 @@ value position pc = fun [
   ]
 ;
 
+value pair_with s l = List.map (fun g -> (g, s)) l ;
+
 value entry_formals pc l =
-  let l = List.map (fun id -> (id, ",")) l in
-  pprintf pc "[%p]" (plist patt 0) l
+  pprintf pc "[%p]" (plist patt 0) (pair_with "," l)
 ;
 
 value entry_actuals pc l =
-  let l = List.map (fun id -> (id, ",")) l in
-  pprintf pc "[%p]" (plist expr 0) l
+  pprintf pc "[%p]" (plist expr 0) (pair_with "," l)
 ;
 
 value rec string_list pc =
@@ -95,8 +95,7 @@ value rec rule force_vertic pc { ar_psymbols=sl;  ar_action = a } =
               (fun () ->
                 pprintf pc "%s@;<1 4>%q" s1 (action expr) a "|")
           | None ->
-             let sl = List.map (fun s -> (s, ";")) sl in
-             pprintf pc "@[<2>%p →@;%q@]" (plist psymbol 0) sl
+             pprintf pc "@[<2>%p →@;%q@]" (plist psymbol 0) (pair_with ";" sl)
                (action expr) a "|" ])
     | (sl, None) ->
        (match
@@ -118,8 +117,7 @@ value rec rule force_vertic pc { ar_psymbols=sl;  ar_action = a } =
               (fun () ->
                 pprintf pc "%s" s1)
           | None ->
-             let sl = List.map (fun s -> (s, ";")) sl in
-             pprintf pc "@[<2>%p@]" (plist psymbol 0) sl ])
+             pprintf pc "@[<2>%p@]" (plist psymbol 0) (pair_with ";" sl) ])
     ]
 
 and psymbol pc { ap_patt= p; ap_symb = s } =
@@ -132,8 +130,7 @@ and pattern pc p =
   [ <:patt< $lid:i$ >> -> pprintf pc "%s" i
   | <:patt< _ >> -> pprintf pc "_"
   | <:patt< ($list:pl$) >> ->
-      let pl = List.map (fun p -> (p, ",")) pl in
-      pprintf pc "(%p)" (plist patt 1) pl
+      pprintf pc "(%p)" (plist patt 1) (pair_with "," pl)
   | p ->
       pprintf pc "@[<1>(%p)@]" patt p ]
 
@@ -240,19 +237,79 @@ and level force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
   
 ;
 
+open Llk_regexps ;
+
+value rec pr_regexp_ast pc re = pr_re_let pc re
+
+and pr_re_let pc = fun [
+      LETIN _ s re1 re2 -> pprintf pc "let %s = %p@ in %p" s
+                             pr_re_disj re1
+                             pr_re_disj re2
+    | re -> pr_re_disj pc re
+    ]
+
+and pr_re_disj pc = fun [
+      DISJ _ l -> pprintf pc "@[<b>%p@]" (plist pr_re_conj 2) (pair_with "|" l)
+    | re -> pr_re_conj pc re
+    ]
+
+and pr_re_conj pc = fun [
+      CONJ _ l -> pprintf pc "@[<b>%p@]" (plist pr_re_conc 2) (pair_with "&" l)
+    | re -> pr_re_conc pc re
+    ]
+
+and pr_re_conc pc = fun [
+      CONC _ l -> pprintf pc "@[<b>%p@]" (plist pr_re_neg 2) (pair_with "&" l)
+    | re -> pr_re_neg pc re
+    ]
+
+and pr_re_neg pc = fun [
+      NEG _ re -> pprintf pc "~ %p" pr_re_star re
+    | re -> pr_re_star pc re
+    ]
+
+and pr_re_star pc = fun [
+      STAR _ re -> pprintf pc "%p *" pr_re_simple re
+    | re -> pr_re_simple pc re
+    ]
+
+and pr_re_simple pc = fun [
+      Special _ x -> pprintf pc "\"%s\"" x
+      | Class _ x -> pprintf pc "%s" x
+      | EPS _ -> pprintf pc "eps"
+      | ID _ x -> pprintf pc "%s" x
+      | x -> pr_re_let pc x
+    ]
+;
+
 value ident pc id = pprintf pc "%s" id ;
 
-value extend_body pc (globals, entries) =
-  match globals with
-  [ [] -> vlist entry pc entries
+value pr_globals pc l =
+  match l with
+  [ [] -> pprintf pc ""
   | _ ->
-      let globals = List.map (fun g -> (g, "")) globals in
-      pprintf pc "@[<b>GLOBAL: %p;@ %p@]" (plist ident 2) globals
-        (vlist entry) entries ]
+      pprintf pc "GLOBAL: %p;@ " (plist ident 2) (pair_with "" l)
+  ]
+;
+
+value pr_regexp_binding pc (id, ast) =
+  pprintf pc "%s = %p;" id pr_regexp_ast ast
+;
+
+value pr_regexp_asts pc l =
+  match l with
+  [ [] -> pprintf pc ""
+  | _ ->
+      pprintf pc "REGEXPS: %p@ END ;@;" (plist pr_regexp_binding 0) (pair_with "" l)
+  ]
 ;
 
 value top pc g =
-  pprintf pc "GRAMMAR@;%s:@;%p@ END" g.gram_id extend_body (g.gram_globals,g.gram_entries) ;
+  pprintf pc "GRAMMAR@;%s:@;@[<b>%p%p%p@]@ END" g.gram_id
+    pr_regexp_asts g.gram_regexp_asts
+    pr_globals g.gram_globals
+    (vlist entry) g.gram_entries
+;
 
 end ;
 

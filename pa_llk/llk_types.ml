@@ -24,6 +24,8 @@ value compare_regexp = Llk_regexps.PSyn.R.compare ;
 value equal_regexp = Llk_regexps.PSyn.R.equal ;
 value pp_regexp pps re = Fmt.(pf pps "%s" (Llk_regexps.PSyn.print re)) ;
 
+type astre = Llk_regexps.astre [@@deriving (show,eq,ord) ;] ;
+
 type a_position = [
     POS_LEVEL of string
   | POS_LIKE of string
@@ -78,13 +80,13 @@ and _top = {
     gram_loc: loc
   ; gram_id: string
   ; gram_globals: list string
+  ; gram_regexp_asts: list (string * astre)
   ; gram_regexps: list (string * regexp)
   ; gram_entries : list a_entry
   } [@@deriving (show,eq,ord) ;] ;
 
 type top = _top ;
 value norm_top g = {(g) with gram_globals = List.sort String.compare g.gram_globals
-                           ; gram_regexps = List.sort (fun (a, _) (b, _) -> String.compare a b) g.gram_regexps
                            ; gram_entries = List.sort compare_a_entry g.gram_entries } ;
 value show_top = show__top ;
 value eq_top x y = equal__top (x |> norm_top) (y |> norm_top) ;

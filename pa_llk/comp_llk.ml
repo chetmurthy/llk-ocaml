@@ -15,6 +15,19 @@ open Ppxutil ;
 open Llk_types ;
 open Print_gram ;
 
+module S0NormalizeRegexps = struct
+open Llk_regexps ;
+
+value exec g =
+  let norml = List.fold_left (fun env (id, astre) ->
+                  let re = normalize_astre env astre in
+                  [(id,re)::env]
+                ) [] g.gram_regexp_asts in
+  {(g) with gram_regexps = List.rev norml }
+;
+
+end ;
+
 
 (** Verify lexical hygiene of grammars.
 
@@ -1649,9 +1662,15 @@ value parse s =
   |> CheckLexical.exec
 ;
 
-value coalesce s =
+value normre s =
   s
   |> parse
+  |> S0NormalizeRegexps.exec
+;
+
+value coalesce s =
+  s
+  |> normre
   |> S1Coalesce.exec
 ;
 
