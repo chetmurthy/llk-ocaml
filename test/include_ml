@@ -34,8 +34,10 @@ let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 
 #print_length 1048576 ;;
 #print_depth 1048576 ;;
+let pp_stream_length = ref 1024 ;;
+pp_stream_length :=  1024 ;;
 let pp_token_stream strm =
-  let l = Stream.npeek !Toploop.max_printer_depth strm in
+  let l = Stream.npeek !pp_stream_length strm in
   let rec trim_eoi = function
     ("EOI",_ as x)::_ -> [x]
   | h::t -> h::(trim_eoi t)
