@@ -1,1 +1,6 @@
-value x = 1 ;
+
+value parse_flag pfun = parser [
+  [: _ = pfun :] -> True
+| [: :] -> False
+]
+;

@@ -1449,6 +1449,8 @@ value tokens_to_patt loc l =
     (List.hd patts) (List.tl patts)
 ;
 
+open Exparser ;
+
 value rec compile1_symbol loc (fimap,fomap) ename s =
   match s with [
       ASflag loc s -> do {
@@ -1456,11 +1458,7 @@ value rec compile1_symbol loc (fimap,fomap) ename s =
         assert (TS.mt <> tokens) ;
         let s_body = compile1_symbol loc (fimap, fomap) ename s in
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
-        Exparser.(cparser loc
-                    (None,
-                     [([(SpNtr loc <:patt< _ >> s_body, SpoNoth)],
-                       None, <:expr< True >>);
-                      ([], None, <:expr< False >>)]))
+        <:expr< parse_flag $s_body$ >>
       }
 
     | ASkeyw  loc kws ->
@@ -1482,7 +1480,30 @@ value rec compile1_symbol loc (fimap,fomap) ename s =
     | ASleft_assoc loc lhs restrhs e ->
  *)       
     ]
+
+and compile1_psymbol loc (fimap,fomap) ename ps =
+  let patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
+  match ps.ap_symb with [
+      ASflag loc s -> do {
+      let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
+        assert (TS.mt <> tokens) ;
+        let s_body = compile1_symbol loc (fimap, fomap) ename s in
+        (SpNtr loc patt <:expr< parse_flag $s_body$ >>, SpoNoth)
+       }
+    | ASkeyw  loc kws ->
+       (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
+       ((SpTrm loc <:patt< ("", $str:kws$) >> <:vala<  None >>), SpoNoth)
+
+    | ASnterm loc nt actuals None ->
+       let e = Expr.applist <:expr< $lid:nt$ >> actuals in
+        (SpNtr loc patt e, SpoNoth)
+
+    | AStok loc cls None ->
+       (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
+       ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
+    ]
 ;
+
 (*
 let left_assoc lhs restrhs combe =
   parser [
@@ -1491,12 +1512,17 @@ let left_assoc lhs restrhs combe =
  *)
 value compile1_rule (fimap,fomap) ename r =
   let loc = r.ar_loc in
+(*
   List.fold_right (fun ps body ->
       let ps_patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
       let ps_symbol = compile1_symbol ps.ap_loc (fimap,fomap) ename ps.ap_symb in
       <:expr< parser [ [: $ps_patt$ = $ps_symbol$ ; __strm_ :] -> $body$ ] >>)
     r.ar_psymbols
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
+ *)
+  let spc_list = List.map (compile1_psymbol loc (fimap,fomap) ename) r.ar_psymbols in
+  let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
+  cparser loc (None, [(spc_list, None, action)])
 ;
 
 value compile1_branch (fimap,fomap) ename (fi, fo, r) =
@@ -1571,6 +1597,7 @@ let (fimap, fomap) = Follow.exec0 ~{top=top} el in
  value lexer = Plexer.gmake () ;
  value gram = Grammar.gcreate lexer ;
  module F = struct
+   open Pa_llk_runtime.Llk_runtime ;
    value rec $list:fdefs$ ;
  end ;
  open Plexing ;

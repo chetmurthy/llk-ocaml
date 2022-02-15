@@ -31,11 +31,9 @@ let tests = "flag1" >::: [
       "1" >:: (fun _ ->
         assert_equal (true, 1) (pa G.etop "foo")
       )
-(*
     ; "2" >:: (fun _ ->
-        assert_equal (true, 1) (pa H.etop "foo")
+        assert_equal (1, (true, 3)) (pa H.etop "foo 3")
   )
- *)
 ]
 
 
