@@ -733,7 +733,11 @@ type token = Token_regexps.PatternBaseToken.t == [ CLS of string | SPCL of strin
 ;
 
 module type TOKENSET = sig
+(*
   type t 'a = 'b ;
+ *)
+  type t 'a = list 'a ;
+
   value mt : t 'a ;
   value mk : list 'a -> t 'a ;
   value add : t 'a -> 'a -> t 'a ;
@@ -765,8 +769,13 @@ end ;
 module TS = TokenSet ;
 
 module type SETMAP = sig
+(*
   type t 'a = 'c;
   type set_t 'a = 'd ;
+ *)
+  type set_t 'a = TS.t 'a ;
+  type t 'a = list (string * set_t 'a) ;
+
   value canon : t 'a -> t 'a ;
   value mt : t 'a ;
   value add : t 'a -> (string * 'a) -> t 'a ;
@@ -802,8 +811,13 @@ end ;
 module SM = SetMap ;
 
 module type MUTSETMAP = sig
+(*
   type t 'a = 'c;
   type set_t 'a = 'd ;
+ *)
+  type set_t 'a = TS.t 'a ;
+  type t 'a = ref (list (string * set_t 'a)) ;
+
   value mk : unit -> t 'a ;
   value add : t 'a -> (string * 'a) -> unit ;
   value lookup : string -> t 'a -> set_t 'a ;
@@ -941,6 +955,9 @@ value fi2fo loc fi = fifo_concat loc ~{must=True} fi TS.mt ;
     add "full follow" to the FOLLOW set of the nonterminal.
 
  *)
+
+value watch_follow (nt : string) (ff : TS.t token) = () ;
+
 
 value rec fifo_psymbols (fimap, mm) ff = fun [
       [] -> ff
@@ -1132,6 +1149,7 @@ and fifo_symbol (fimap, mm) ff = fun [
 
   | ASnext loc _ | ASself loc _ -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
   | ASnterm loc nt _ _ as s -> do {
+        watch_follow nt ff ;
         MSM.addset mm (nt, ff) ;
         let fi_s = First.symbol fimap s in
         fifo_concat loc ~{if_nullable=True} fi_s ff
@@ -1139,18 +1157,18 @@ and fifo_symbol (fimap, mm) ff = fun [
 
   | ASleft_assoc loc s1 s2 _ ->
   (* 1. fifo is [FIRST s1].{is_nullable}.[FIRST s2].{is_nullable}.full-follow
-     2. compute [FIFO s1] with ff=[FIRST s2].{is_nullable}.full-follow
+     2. compute [FIFO s1] with ff=[FIRST s2] union full-follow
      3. compute [FIFO s2] with ff=[FIRST s2].{is_nullable}.full-follow
    *)                               
      let fi_s1 = First.symbol fimap s1 in
      let fi_s2 = First.symbol fimap s2 in
 
      let _ =
-       let ff = fifo_concat loc ~{if_nullable=True} fi_s2 ff in
+       let ff = TS.(union (fi2fo loc fi_s2) ff) in
        fifo_symbol (fimap, mm) ff s1 in
 
      let _ =
-       let ff = fifo_concat loc ~{if_nullable=True} fi_s2 ff in
+       let ff = TS.(union (fi2fo loc fi_s2) ff) in
        fifo_symbol (fimap, mm) ff s2 in
 
      fifo_concat loc ~{if_nullable=True} fi_s1
@@ -1198,21 +1216,22 @@ value comp1 (fimap, mm) el =
   List.iter (comp1_entry (fimap, mm)) el ;
 
 value rec comprec el (fimap, mm) = do {
-  let m0 = mm in
+  let m0 = MSM.export mm in
   comp1 (fimap, mm) el ;
-  if m0 = mm then MSM.export m0 else comprec el (fimap, mm) ;
+  if m0 = MSM.export mm then m0 else comprec el (fimap, mm) ;
 }
 ;
 
-value exec0 ~{top} el =
+value exec0 ~{tops} el =
   let fimap = First.exec0 el in
   let mm = MSM.mk () in do {
-    if None <> top then MSM.(add mm (Std.outSome top, CLS "EOI")) else ();
+    tops |> List.iter (fun t ->
+                MSM.(add mm (t, CLS "EOI")));
     (fimap, comprec el (fimap, mm))
   }
 ;
 
-value exec ?{top} g = exec0 ~{top=top} g.gram_entries ;
+value exec ~{tops} g = exec0 ~{tops=tops} g.gram_entries ;
 
 end ;
 
@@ -1581,6 +1600,9 @@ value compile1_entry (fimap, fomap) e =
          let branches =
            branches
          |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
+         let branches = branches @ [
+               (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
+             ] in
          <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
@@ -1588,8 +1610,8 @@ value compile1_entry (fimap, fomap) e =
   }
 ;
 
-value exec ?{top} {gram_loc=loc; gram_globals=gl; gram_entries=el; gram_id=gid}  =
-let (fimap, fomap) = Follow.exec0 ~{top=top} el in
+value exec {gram_loc=loc; gram_globals=gl; gram_entries=el; gram_id=gid}  =
+let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
   let fdefs = List.map (compile1_entry (fimap, fomap)) el in
   let token_patterns = all_tokens el in
   let token_actions =
@@ -1670,10 +1692,11 @@ value first s =
   |> First.exec
 ;
 
-value follow ~{top} s =
+value follow ~{tops} s =
   s
   |> lambda_lift
-  |> Follow.exec ~{top=top}
+  |> Follow.exec ~{tops=tops}
+  |> (fun (fimap, fomap) -> (SM.export fimap, SM.export fomap))
 ;
 
 value codegen s =

@@ -6,13 +6,13 @@
 #require "rresult";;
 #require "pcre";;
 #require "bos";;
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
+(*
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
-
+ *)
 #require "camlp5.pr_o";;
 
 (*
@@ -28,10 +28,12 @@ open Pa_ppx_utils.Std ;;
 open Pa_ppx_testutils.Papr_util ;;
 
 #require "pa_ppx.base";;
-Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
+Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
 
+#print_length 1048576 ;;
+#print_depth 1048576 ;;
 let pp_token_stream strm =
   let l = Stream.npeek !Toploop.max_printer_depth strm in
   let rec trim_eoi = function
@@ -55,14 +57,15 @@ let pp_ctyp ty = Fmt.(pf stdout "#<ctyp< %a >>" Pa_ppx_base.Pp_MLast.pp_ctyp ty)
 let pp_expr ty = Fmt.(pf stdout "#<expr< %a >>" Pa_ppx_base.Pp_MLast.pp_expr ty);;
 let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty);;
 *)
-
+(*
 #install_printer pp_ctyp ;;
 #install_printer pp_expr ;;
 #install_printer pp_patt ;;
 #install_printer pp_str_item ;;
 #install_printer pp_sig_item ;;
-
+ *)
 #require "pa_llk_compiler" ;;
+#require "pa_llk_runtime" ;;
 open Parse_gram ;;
 open Print_gram ;;
 open Comp_llk ;;

@@ -40,6 +40,40 @@ END;
 |foo}
 ] ;;
 
+[%llk
+{foo|
+GRAMMAR Calc:
+GLOBAL: e_top;
+  e_top: [ [ x = e -> x ] ] ;
+
+  e_star: [ [ x = e LEVEL "*" -> x ] ] ;
+
+  e: AFTER "**"
+    [ NONA [ x = FLOAT -> float_of_string x
+      | "("; x = e; ")" -> x ] ]
+  ;
+
+  e: BEFORE "*"
+    [ LEFTA [ x1 = e; "+"; y = e -> x1 +. y
+      | x2 = e; "-"; y = e -> x2 -. y ]
+    ]
+  ;
+
+  e: AFTER "*"
+    [ "**" RIGHTA [ x = e; "**"; y = e -> Float.pow x  y ]
+    ]
+  ;
+
+  e:
+    [ "*" LEFTA [ x = e; "*"; y = e -> x *. y
+      | x = e; "/"; y = e -> x /. y ] ]
+  ;
+
+END;
+
+|foo}
+] ;;
+
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2
@@ -55,6 +89,12 @@ let tests = "flag1" >::: [
         assert_equal [] (pa I.e "")
       ; assert_equal [(1,true)] (pa I.e "1;")
       ; assert_equal [(1,false);(2,true)] (pa I.e "1;false;2;")
+    )
+    ; "Calc" >:: (fun _ ->
+        assert_equal 5. (pa Calc.e_top "5.")
+      ; assert_equal 25. (pa Calc.e_top "5. ** 2.")
+      ; assert_equal 50. (pa Calc.e_top "5. ** 2. * 2.")
+      ; assert_equal 51. (pa Calc.e_top "5. ** 2. * 2. + 1.")
     )
 ]
 
