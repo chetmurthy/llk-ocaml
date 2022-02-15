@@ -251,8 +251,8 @@ value extend_body pc (globals, entries) =
         (vlist entry) entries ]
 ;
 
-value top pc (_, sl, el) =
-  pprintf pc "EXTEND@;%p@ END" extend_body (sl,el) ;
+value top pc g =
+  pprintf pc "GRAMMAR@;%s:@;%p@ END" g.gram_id extend_body (g.gram_globals,g.gram_entries) ;
 
 end ;
 
@@ -267,9 +267,7 @@ module RT = struct
 
   value string s = s |> pa |> pr ;
 
-  value with_file f name =
-    let s = name |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok in
-    f s ;
+  value read_file name =
+    name |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok ;
 
-  value file fn = with_file string fn ;
 end ;

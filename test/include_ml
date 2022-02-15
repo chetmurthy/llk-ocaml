@@ -62,9 +62,9 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 #install_printer pp_str_item ;;
 #install_printer pp_sig_item ;;
 
-#require "pa_llk.compiler" ;;
-open Pa_llk ;;
-open Pr_llk ;;
+#require "pa_llk_compiler" ;;
+open Parse_gram ;;
+open Print_gram ;;
 open Comp_llk ;;
 
 

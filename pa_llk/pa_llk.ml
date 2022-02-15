@@ -6,9 +6,12 @@ open Pa_ppx_base ;
 open Pa_passthru ;
 open Ppxutil ;
 
+open Comp_llk ;
 
 value rewrite_str_item arg = fun [
-  <:str_item:< [%llk $str:s$ ;] >> -> <:str_item< value x = 1 >>
+  <:str_item:< [%llk $str:s$ ;] >> ->
+  Top.codegen (Scanf.unescaped s)
+  
 | _ -> assert False
 ]
 ;

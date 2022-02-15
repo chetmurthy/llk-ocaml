@@ -7,15 +7,20 @@ OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 SYNTAX := camlp5o
 
-PACKAGES := $(PACKAGES),pa_ppx_seq
-
-all:
+PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5
 
 all-tests:: all
-	./ppx_seq.exe
+	mkdir -p _build
+	./flag1_test.exe
 
-ppx_seq.exe: ppx_seq.cmo
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -linkpkg -linkall -o $@ $<
+all: flag1_test.exe
+
+flag1_test.exe: flag1_test.cmo
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -linkpkg -linkall -o $@ $<
+
+flag1_test.cmo: flag1_test.ml
+	$(NOT_OCAMLFIND) preprocess -package $(PACKAGES),camlp5.pr_o -syntax $(SYNTAX) $< > $<.ppo.ml
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
 
 clean::
-	rm -f *.cm*
+	rm -f *.cm* *.ppo* *.exe

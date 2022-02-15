@@ -84,7 +84,7 @@ value check_levels env ll = List.iter (check_level env) ll ;
 value check_entry e =
   check_levels (e.ae_formals |> List.concat_map vars_of_patt |> Env.mk) e.ae_levels ;
 
-value exec ((_, _, el) as x) = do { List.iter check_entry el ; x } ;
+value exec g = do { List.iter check_entry g.gram_entries ; g } ;
 
 end ;
 
@@ -246,13 +246,13 @@ module S1Coalesce = struct
          ])
   ;
 
-  value exec (loc, gl, el) = (loc, gl, coalesce_entries el) ;
+  value exec g = {(g) with gram_entries = coalesce_entries g.gram_entries} ;
 
 end ;
 
 module CheckNoPosition = struct
 
-value exec ((_, _, el) as x) = do {
+value exec ({gram_entries=el} as x) = do {
   el |> List.iter (fun e ->
       if e.ae_pos <> None then
         raise_failwithf e.ae_loc "CheckNoPosition: entry %s still has a position" e.ae_name
@@ -605,12 +605,12 @@ value exec0 e =
   if List.length e.ae_levels <=1 then ([], [substitute_self e])
   else exec1 e ;
 
-value exec (loc, gl, el) =
-  let pl = List.map exec0 el in
+value exec g =
+  let pl = List.map exec0 g.gram_entries in
   let dict = pl |> List.concat_map fst in
   let el = List.concat_map snd pl in
   let el = List.map (Subst.entry dict) el in
-  (loc, gl, el)
+  {(g) with gram_entries = el }
 ;
 
 end ;
@@ -629,7 +629,7 @@ value check_no_level el =
   List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) el
 ;
 
-value exec ((_, _, el) as x) = do {
+value exec ({gram_entries=el} as x) = do {
   check_no_level el ;
   el |> List.iter (fun e ->
     e.ae_levels |> List.iter (fun l -> do {
@@ -725,7 +725,7 @@ value left_factorize_levels l = do {
 
 value exec0 e = {(e) with ae_levels = left_factorize_levels e.ae_levels } ;
 
-value exec (loc, gl, el) = (loc, gl, List.map exec0 el) ;
+value exec g = {(g) with gram_entries = List.map exec0 g.gram_entries} ;
 
 end ;
 
@@ -894,7 +894,7 @@ value rec comprec el m =
 value compute_first el = comprec el SM.mt ;
   
 value exec0 el = compute_first el ;
-value exec (loc, gl, el) = SM.export (exec0 el) ;
+value exec g = SM.export (exec0 g.gram_entries) ;
 
 end ;
 
@@ -1212,7 +1212,7 @@ value exec0 ~{top} el =
   }
 ;
 
-value exec ?{top} (loc, gl, el) = exec0 ~{top=top} el ;
+value exec ?{top} g = exec0 ~{top=top} g.gram_entries ;
 
 end ;
 
@@ -1304,7 +1304,7 @@ value exec0 el =
   in erec el
 ;
 
-value exec (loc, gl, el) = (loc, gl, exec0 el) ;
+value exec g = {(g) with gram_entries = exec0 g.gram_entries } ;
 
 end ;
 
@@ -1314,7 +1314,7 @@ value exec0 el =
   let cmp e1 e2 = String.compare e1.ae_name e2.ae_name in
   List.stable_sort cmp el ;
 
-value exec (loc, gl, el) =  (loc, gl, exec0 el) ;
+value exec g =  {(g) with gram_entries = exec0 g.gram_entries } ;
 
 end ;
 
@@ -1377,7 +1377,7 @@ value rec exec0 el =
     ]
 ;
 
-value exec (a,b,c) = (a,b, exec0 c) ;
+value exec g = {(g) with gram_entries = exec0 g.gram_entries } ;
 
 end ;
 
@@ -1470,7 +1470,7 @@ value rec compile1_symbol loc (fimap,fomap) ename s =
           None, <:expr< () >>)]))
 
     | ASnterm loc nt actuals None ->
-       Expr.applist <:expr< $lid:nt$ >> (actuals@[<:expr< __strm__ >>])
+       Expr.applist <:expr< $lid:nt$ >> actuals
 
     | AStok loc cls None ->
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
@@ -1548,23 +1548,46 @@ value compile1_entry (fimap, fomap) e =
          let rhs = <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> in
          List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs ]
     in
+    let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   }
 ;
 
-value exec ?{top} (loc, gl, el) =
-  let (fimap, fomap) = Follow.exec0 ~{top=top} el in
+value exec ?{top} {gram_loc=loc; gram_globals=gl; gram_entries=el; gram_id=gid}  =
+let (fimap, fomap) = Follow.exec0 ~{top=top} el in
   let fdefs = List.map (compile1_entry (fimap, fomap)) el in
-  <:str_item< value rec $list:fdefs$ >>
+  let token_patterns = all_tokens el in
+  let token_actions =
+    token_patterns
+    |> List.map (fun [
+      CLS c -> <:expr< lexer.tok_using ($str:c$, "") >>
+    | SPCL k -> <:expr< lexer.tok_using ("", $str:k$) >>
+                   ])
+  in
+  let global_entries =
+    gl
+  |> List.map (fun ename -> <:str_item< value $lid:ename$ = Grammar.Entry.of_parser gram $str:ename$ F. $lid:ename$ >>) in
+  <:str_item< module $uid:gid$ = struct
+ value lexer = Plexer.gmake () ;
+ value gram = Grammar.gcreate lexer ;
+ module F = struct
+   value rec $list:fdefs$ ;
+ end ;
+ open Plexing ;
+ do { $list:token_actions$ } ;
+ declare $list:global_entries$ end ;
+ end >>
 ;
 end ;
 
 module Top = struct
 open Parse_gram ;
 
+value read_file = RT.read_file ;
+
 value parse s =
   s
-  |> RT.(with_file pa)
+  |> RT.pa
   |> CheckLexical.exec
 ;
 

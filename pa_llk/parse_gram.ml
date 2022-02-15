@@ -29,7 +29,7 @@ end
 
 open Pcaml;
 value top = ( Grammar.Entry.create gram "top" : Grammar.Entry.e top);
-value extend_body = Grammar.Entry.create gram "extend_body";
+value grammar_body = Grammar.Entry.create gram "grammar_body";
 value symbol = Grammar.Entry.create gram "symbol";
 value rule = Grammar.Entry.create gram "rule";
 value rule_list = Grammar.Entry.create gram "rule_list";
@@ -41,15 +41,16 @@ value semi_sep = Grammar.Entry.of_parser gram "';'" (parser [: `("", ";") :] -> 
 EXTEND
   GLOBAL:
     expr
-    top extend_body symbol rule rule_list level level_list symbol
+    top grammar_body symbol rule rule_list level level_list symbol
   ;
   top:
-    [ [ "EXTEND"; /; e = extend_body; "END" ; ";" -> norm_top e ] ]
+    [ [ "GRAMMAR"; e = grammar_body; "END" ; ";" -> norm_top e ] ]
   ;
-  extend_body:
-    [ [ sl = [ l = global -> l | -> [] ];
+  grammar_body:
+    [ [ gid = UIDENT ; ":" ;
+        sl = [ l = global -> l | -> [] ];
         el = LIST1 [ e = entry; semi_sep -> e ] ->
-          (loc, sl, el) ] ]
+          {gram_loc=loc; gram_id=gid; gram_globals=sl; gram_entries=el} ] ]
   ;
   global:
     [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; semi_sep -> sl ] ]

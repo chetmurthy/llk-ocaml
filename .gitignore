@@ -5,3 +5,7 @@
 camlp5.*
 local-install
 META
+_build
+*.log
+*.cache
+*.ppo*

@@ -69,10 +69,16 @@ and a_symbol =
   ]
 and lmin_len =
   [ LML_0 | LML_1 ]
-and _top = (loc * list string * list a_entry) [@@deriving (show,eq,ord) ;] ;
+and _top = {
+    gram_loc: loc
+  ; gram_id: string
+  ; gram_globals: list string
+  ; gram_entries : list a_entry
+  } [@@deriving (show,eq,ord) ;] ;
 
 type top = _top ;
-value norm_top (loc, gl, el) = (loc, List.sort String.compare gl, List.sort compare_a_entry el) ;
+value norm_top g = {(g) with gram_globals = List.sort String.compare g.gram_globals
+                           ; gram_entries = List.sort compare_a_entry g.gram_entries } ;
 value show_top = show__top ;
 value eq_top x y = equal__top (x |> norm_top) (y |> norm_top) ;
 value compare_top x y = compare__top (x |> norm_top) (y |> norm_top) ;
