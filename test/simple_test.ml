@@ -1,3 +1,6 @@
+open Pa_ppx_testutils
+open Testutil
+
 [%llk
 {foo|
 GRAMMAR G:
@@ -76,15 +79,33 @@ END;
 
 [%llk
 {foo|
-GRAMMAR Re1:
-GLOBAL: e_top;
-REGEXPS: foo = "a" ; bar = "b" ; END ;
-  e_top: [ [ x = LIDENT -> x ] ] ;
-
+GRAMMAR Lists:
+GLOBAL: list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
+list0: [ [ l = LIST0 id -> l ] ] ;
+list1: [ [ l = LIST1 id -> l ] ] ;
+list0sep: [ [ l = LIST0 id SEP "," -> l ] ] ;
+list1sep: [ [ l = LIST1 id SEP "," -> l ] ] ;
+list0sep_opt: [ [ l = LIST0 id SEP "," OPT_SEP -> l ] ] ;
+list1sep_opt: [ [ l = LIST1 id SEP "," OPT_SEP -> l ] ] ;
+id: [ [ id = LIDENT -> id | id = UIDENT -> id ] ] ;
 END;
-
 |foo}
 ] ;;
+
+
+let matches ~pattern text =
+  match Str.search_forward (Str.regexp pattern) text 0 with
+    _ -> true
+  | exception Not_found -> false
+;;
+
+let assert_raises_exn_pattern pattern f =
+  Testutil.assert_raises_exn_pred
+    (fun e ->
+      let s = Printexc.to_string e in
+      matches ~pattern s)
+    f
+;;
 
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
@@ -107,6 +128,40 @@ let tests = "simple" >::: [
       ; assert_equal 25. (pa Calc.e_top "5. ** 2.")
       ; assert_equal 50. (pa Calc.e_top "5. ** 2. * 2.")
       ; assert_equal 51. (pa Calc.e_top "5. ** 2. * 2. + 1.")
+    )
+    ; "Lists:list0" >:: (fun _ ->
+        assert_equal [] (pa Lists.list0 "")
+      ; assert_equal ["x"] (pa Lists.list0 "x")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list0 "x Y z")
+    )
+    ; "Lists:list1" >:: (fun _ ->
+        assert_raises_exn_pattern "illegal begin of list1" (fun () -> pa Lists.list1 "")
+      ; assert_equal ["x"] (pa Lists.list1 "x")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list1 "x Y z")
+    )
+    ; "Lists:list0sep" >:: (fun _ ->
+        assert_equal [] (pa Lists.list0sep "")
+      ; assert_equal ["x"] (pa Lists.list0sep "x")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list0sep "x,Y,z")
+    )
+    ; "Lists:list1sep" >:: (fun _ ->
+        assert_raises_exn_pattern "illegal begin of list1" (fun () -> pa Lists.list1sep "")
+      ; assert_equal ["x"] (pa Lists.list1sep "x")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list1sep "x,Y,z")
+    )
+    ; "Lists:list0sep_opt" >:: (fun _ ->
+        assert_equal [] (pa Lists.list0sep_opt "")
+      ; assert_equal ["x"] (pa Lists.list0sep_opt "x")
+      ; assert_equal ["x"] (pa Lists.list0sep_opt "x,")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list0sep_opt "x,Y,z")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list0sep_opt "x,Y,z,")
+    )
+    ; "Lists:list1sep_opt" >:: (fun _ ->
+        assert_raises_exn_pattern "illegal begin of list1" (fun () -> pa Lists.list1sep_opt "")
+      ; assert_equal ["x"] (pa Lists.list1sep_opt "x")
+      ; assert_equal ["x"] (pa Lists.list1sep_opt "x,")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list1sep_opt "x,Y,z")
+      ; assert_equal ["x";"Y";"z"] (pa Lists.list1sep_opt "x,Y,z,")
     )
 ]
 

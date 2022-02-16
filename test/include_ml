@@ -13,7 +13,10 @@ Pcaml.inter_phrases := Some ";;\n";;
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
  *)
+(*
 #require "camlp5.pr_o";;
+*)
+#load "pr_o.cmo";;
 
 (*
 #require "camlp5.pr_r";;

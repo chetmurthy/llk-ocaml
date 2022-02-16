@@ -1540,15 +1540,43 @@ and compile1_psymbol loc (fimap,fomap) ename ps =
        let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
         (SpNtr loc patt e, SpoNoth)
 
+    | ASlist loc LML_0 elem None ->
+       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let e = <:expr< parse_list0 $elem$ >> in
+       (SpNtr loc patt e, SpoNoth)
+
+    | ASlist loc LML_1 elem None ->
+       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let e = <:expr< parse_list1 $elem$ >> in
+       (SpNtr loc patt e, SpoNoth)
+
+    | ASlist loc LML_0 elem (Some (sep, False)) ->
+       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let e = <:expr< parse_list0_with_sep $elem$ $sep$ >> in
+       (SpNtr loc patt e, SpoNoth)
+
+    | ASlist loc LML_1 elem (Some (sep, False)) ->
+       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let e = <:expr< parse_list1_with_sep $elem$ $sep$ >> in
+       (SpNtr loc patt e, SpoNoth)
+
+    | ASlist loc LML_0 elem (Some (sep, True)) ->
+       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let e = <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >> in
+       (SpNtr loc patt e, SpoNoth)
+
+    | ASlist loc LML_1 elem (Some (sep, True)) ->
+       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let e = <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >> in
+       (SpNtr loc patt e, SpoNoth)
+
     ]
 ;
 
-(*
-let left_assoc lhs restrhs combe =
-  parser [
-   [: x = lhs ; rv = parser [ [: y = restrhs :] -> combe x y | [: :] -> x ] :] -> rv
-    ]
- *)
 value compile1_rule (fimap,fomap) ename r =
   let loc = r.ar_loc in
 (*
