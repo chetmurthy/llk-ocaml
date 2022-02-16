@@ -1659,6 +1659,7 @@ let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
       rl
       |> List.map snd
       |> List.concat_map PatternRegexp.tokens
+      |> List.filter (fun [ CLS _ -> True | SPCL s -> s.[0] <> '$'])
     ) |> List.sort_uniq PatternBaseToken.compare
   in
   let token_actions =
