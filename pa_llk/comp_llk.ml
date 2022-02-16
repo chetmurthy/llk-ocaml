@@ -15,6 +15,17 @@ open Ppxutil ;
 open Llk_types ;
 open Print_gram ;
 
+
+module Ctr = struct
+  type t = ref int ;
+  value mk () = ref 0 ;
+  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+
+  value fresh_name root ctr =
+    let n = next ctr in
+    Fmt.(str "%s__%02d" root n) ;
+end ;
+
 module S0NormalizeRegexps = struct
 open Llk_regexps ;
 
@@ -687,22 +698,22 @@ value rec extract_left_factors rl =
     ]
 ;
 
-value left_factorize0 loc rl =
+value rec left_factorize0 ctr loc rl =
   match extract_left_factors rl with [
       ([], rl) -> rl
     | (factors,rl) ->
+       let n = Ctr.fresh_name "x" ctr in
        let right_psymb = {
            ap_loc = loc
-         ; ap_patt = Some <:patt< __x__ >>
-         ; ap_symb = ASrules loc { au_loc = loc ; au_rules = rl }
+         ; ap_patt = Some <:patt< $lid:n$ >>
+         ; ap_symb = ASrules loc { au_loc = loc ; au_rules = (left_factorize ctr loc rl) }
          } in
        [{ ar_loc = loc
         ; ar_psymbols = factors @ [ right_psymb ]
-        ; ar_action = Some <:expr< __x__ >> }]
+        ; ar_action = Some <:expr< $lid:n$ >> }]
     ]
-;
 
-value left_factorize loc rl =
+and left_factorize ctr loc rl =
   let mt_rules = List.filter (fun r -> [] = r.ar_psymbols) rl in
   let nonmt_rules = List.filter (fun r -> [] <> r.ar_psymbols) rl in
   let head_psymbols = List.map (fun r -> List.hd r.ar_psymbols) nonmt_rules in
@@ -711,16 +722,17 @@ value left_factorize loc rl =
     head_psymbols
     |> List.map (fun ps ->
            nonmt_rules |> List.filter (fun r -> equal_a_psymbol ps (List.hd r.ar_psymbols))) in
-  List.concat ((List.map (left_factorize0 loc) partitions) @ [mt_rules])
+  List.concat ((List.map (left_factorize0 ctr loc) partitions) @ [mt_rules])
 ;
 
 value make_dt () =
+  let ctr = Ctr.mk() in
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_level = dt.migrate_a_level in
   let migrate_a_level dt l = 
     let l = fallback_migrate_a_level dt l in
     let loc = l.al_loc in    
-    {(l) with al_rules = {(l.al_rules) with au_rules = left_factorize loc l.al_rules.au_rules } }
+    {(l) with al_rules = {(l.al_rules) with au_rules = left_factorize ctr loc l.al_rules.au_rules } }
   in
   { (dt) with Llk_migrate.migrate_a_level = migrate_a_level }
 ;
@@ -762,6 +774,7 @@ module type TOKENSET = sig
   value unionl : list (t 'a) -> t 'a ;
   value except : 'a -> t 'a -> t 'a ;
   value map : ('a -> 'b) -> t 'a -> t 'b ;
+  value print : ('a -> string) -> t 'a -> string ;
 end ;
 
 module TokenSet : TOKENSET = struct
@@ -778,6 +791,7 @@ module TokenSet : TOKENSET = struct
   value disjoint a b = [] = Std.intersect a b ;
   value except x l = Std.except x l ;
   value map f l = List.map f l |> canon ;
+  value print pf l = Printf.sprintf "[%s]" (String.concat " " (List.map pf l)) ;
 end ;
 module TS = TokenSet ;
 
@@ -1253,17 +1267,6 @@ module S5LambdaLift = struct
       repeat until there are no multi-way rules left in any entry.
    *)
 
-module Ctr = struct
-  type t = ref int ;
-  value mk () = ref 0 ;
-  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
-
-  value fresh_name root ctr =
-    let n = next ctr in
-    Fmt.(str "%s__%02d" root n) ;
-end ;
-
-
 value rec lift_rules mut esig rl = { (rl) with au_rules = List.map (lift_rule mut esig) rl.au_rules }
 
 and lift_rule mut esig r =
@@ -1516,12 +1519,12 @@ value infer_anti_kinds loc s kinds =
       ]
 ;
 
-value rec compile1_symbol loc (fimap,fomap) ename s =
+value rec compile1_symbol g loc (fimap,fomap) ename s =
   match s with [
       ASflag loc s -> do {
       let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
         assert (TS.mt <> tokens) ;
-        let s_body = compile1_symbol loc (fimap, fomap) ename s in
+        let s_body = compile1_symbol g loc (fimap, fomap) ename s in
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
         <:expr< parse_flag $s_body$ >>
       }
@@ -1546,13 +1549,13 @@ value rec compile1_symbol loc (fimap,fomap) ename s =
  *)       
     ]
 
-and compile1_psymbol loc (fimap,fomap) ename ps =
+and compile1_psymbol g loc (fimap,fomap) ename ps =
   let patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
   match ps.ap_symb with [
       ASflag loc s -> do {
       let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
         assert (TS.mt <> tokens) ;
-        let s_body = compile1_symbol loc (fimap, fomap) ename s in
+        let s_body = compile1_symbol g loc (fimap, fomap) ename s in
         (SpNtr loc patt <:expr< parse_flag $s_body$ >>, SpoNoth)
        }
     | ASkeyw  loc kws ->
@@ -1568,42 +1571,42 @@ and compile1_psymbol loc (fimap,fomap) ename ps =
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
 
     | ASleft_assoc loc lhs restrhs e ->
-       let lhs = compile1_symbol  loc (fimap,fomap) ename lhs in
-       let restrhs = compile1_symbol  loc (fimap,fomap) ename restrhs in
+       let lhs = compile1_symbol g loc (fimap,fomap) ename lhs in
+       let restrhs = compile1_symbol g loc (fimap,fomap) ename restrhs in
        let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
         (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem None ->
-       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
        let e = <:expr< parse_list0 $elem$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem None ->
-       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
        let e = <:expr< parse_list1 $elem$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem (Some (sep, False)) ->
-       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list0_with_sep $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem (Some (sep, False)) ->
-       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list1_with_sep $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem (Some (sep, True)) ->
-       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem (Some (sep, True)) ->
-       let elem = compile1_symbol  loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol  loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
@@ -1614,13 +1617,13 @@ and compile1_psymbol loc (fimap,fomap) ename ps =
          |> List.concat_map (fun k -> [k; "_"^k])
          |> List.map (fun k -> <:expr< $str:k$ >>)
          |> Ppxutil.convert_up_list_expr loc in
-       let elem = compile1_symbol loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
        let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
        (SpNtr loc patt e, SpoNoth)
     ]
 ;
 
-value compile1_rule (fimap,fomap) ename r =
+value compile1_rule g (fimap,fomap) ename r =
   let loc = r.ar_loc in
 (*
   List.fold_right (fun ps body ->
@@ -1630,14 +1633,35 @@ value compile1_rule (fimap,fomap) ename r =
     r.ar_psymbols
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
  *)
-  let spc_list = List.map (compile1_psymbol loc (fimap,fomap) ename) r.ar_psymbols in
+  let spc_list = List.map (compile1_psymbol g loc (fimap,fomap) ename) r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
   cparser loc (None, [(spc_list, None, action)])
 ;
 
-value compile1_branch (fimap,fomap) ename (fi, fo, r) =
+value print_token_option = fun [
+    None -> "eps"
+|   Some t -> PatternBaseToken.print t
+]
+;
+
+value report_disjointness_error g loc ename fi_fo_rule_list = do {
+  Fmt.(pf stdout "Failure of disjointness of FIRST-sets in entry %s\n" ename) ;
+  Fmt.(pf stdout "================================================================\n") ;
+  fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
+      Fmt.(pf stdout "First: %s\nFollow: %s\nRule: %s\n\n"
+          (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+          (Pr.rule False Pprintf.empty_pc r)
+                       )) ;
+  Fmt.(pf stdout "================================================================\n") ;
+  print_string (Pr.top Pprintf.empty_pc g) ;
+  Fmt.(pf stdout "\n%!") ;
+  raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
+}
+;
+
+value compile1_branch g (fimap,fomap) ename (fi, fo, r) =
   let loc = r.ar_loc in
-  let body = compile1_rule (fimap,fomap) ename r in
+  let body = compile1_rule g (fimap,fomap) ename r in
   if not (Follow.nullable fi) then
     let raw_tokens = TS.export (Follow.fi2fo loc fi) in
     let patt = tokens_to_patt loc raw_tokens in
@@ -1658,7 +1682,7 @@ value reorder_branches l =
   concrete_branches @ fallthru_branches
 ;
 
-value compile1_entry (fimap, fomap) e =
+value compile1_entry g (fimap, fomap) e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let ff = SM.lookup ename fomap in
@@ -1666,14 +1690,14 @@ value compile1_entry (fimap, fomap) e =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.map (compute_fifo loc fimap ff) in do {
     if not (disjoint loc fi_fo_rule_list) then
-      raise_failwithf loc "compile1_entry: FIFO sets were not disjoint"
+      report_disjointness_error g loc e.ae_name fi_fo_rule_list
     else if TS.mt = ff 
        && 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
     let tokens_rule_branches =
       fi_fo_rule_list
-    |> List.map (compile1_branch (fimap,fomap) ename) in
+    |> List.map (compile1_branch g (fimap,fomap) ename) in
     let tokens_rule_branches = reorder_branches tokens_rule_branches in
     let branches = List.map Std.third3 tokens_rule_branches in
     let rhs =
@@ -1694,9 +1718,9 @@ value compile1_entry (fimap, fomap) e =
   }
 ;
 
-value exec {gram_loc=loc; gram_globals=gl; gram_regexps=rl; gram_entries=el; gram_id=gid}  =
+value exec ({gram_loc=loc; gram_globals=gl; gram_regexps=rl; gram_entries=el; gram_id=gid} as g)  =
 let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
-  let fdefs = List.map (compile1_entry (fimap, fomap)) el in
+  let fdefs = List.map (compile1_entry g (fimap, fomap)) el in
   let token_patterns =
     all_tokens el @ (
       rl

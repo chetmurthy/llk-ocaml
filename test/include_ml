@@ -76,6 +76,9 @@ open Print_gram ;;
 open Comp_llk ;;
 
 
+let pp_regexp_ast e = Fmt.(pf stdout "<:regexp<%s>>" (Pr.pr_regexp_ast Pprintf.empty_pc e)) ;;
+#install_printer pp_regexp_ast ;;
+
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
 
@@ -91,6 +94,10 @@ let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" (Pr.psymbol Pprintf.empty_p
 let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" (Pr.rule true Pprintf.empty_pc e)) ;;
 #install_printer pp_a_rule ;;
 
+(* ================================================================ *)
+#require "str";;
+#load "regexp_test.cmo";;
+open Regexp_test ;;
 
 (*
 ;;; Local Variables: ***

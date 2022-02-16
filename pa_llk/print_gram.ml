@@ -249,17 +249,17 @@ and pr_re_let pc = fun [
     ]
 
 and pr_re_disj pc = fun [
-      DISJ _ l -> pprintf pc "@[<b>%p@]" (plist pr_re_conj 2) (pair_with "|" l)
+      DISJ _ l -> pprintf pc "@[%p@]" (plist pr_re_conj 2) (pair_with " | " l)
     | re -> pr_re_conj pc re
     ]
 
 and pr_re_conj pc = fun [
-      CONJ _ l -> pprintf pc "@[<b>%p@]" (plist pr_re_conc 2) (pair_with "&" l)
+      CONJ _ l -> pprintf pc "@[%p@]" (plist pr_re_conc 2) (pair_with "  & " l)
     | re -> pr_re_conc pc re
     ]
 
 and pr_re_conc pc = fun [
-      CONC _ l -> pprintf pc "@[<b>%p@]" (plist pr_re_neg 2) (pair_with "&" l)
+      CONC _ l -> pprintf pc "@[%p@]" (plist pr_re_neg 2) (pair_with " " l)
     | re -> pr_re_neg pc re
     ]
 
@@ -275,10 +275,11 @@ and pr_re_star pc = fun [
 
 and pr_re_simple pc = fun [
       Special _ x -> pprintf pc "\"%s\"" x
-      | Class _ x -> pprintf pc "%s" x
-      | EPS _ -> pprintf pc "eps"
-      | ID _ x -> pprintf pc "%s" x
-      | x -> pr_re_let pc x
+    | Class _ x -> pprintf pc "%s" x
+    | Anti _ x -> pprintf pc "$%s" x
+    | EPS _ -> pprintf pc "eps"
+    | ID _ x -> pprintf pc "%s" x
+    | x -> pr_re_let pc x
     ]
 ;
 
@@ -305,7 +306,7 @@ value pr_regexp_asts pc l =
 ;
 
 value top pc g =
-  pprintf pc "GRAMMAR@;%s:@;@[<b>%p%p%p@]@ END" g.gram_id
+  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@]@ END" g.gram_id
     pr_regexp_asts g.gram_regexp_asts
     pr_globals g.gram_globals
     (vlist entry) g.gram_entries
