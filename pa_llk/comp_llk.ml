@@ -809,7 +809,7 @@ value exec g = {(g) with gram_entries = List.map exec0 g.gram_entries} ;
 
 end ;
 
-type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string ]
+type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ]
 ;
 
 module type TOKENSET = sig

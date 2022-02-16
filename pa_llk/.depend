@@ -1,4 +1,6 @@
-ord_MLast.cmo llk_regexps.cmo llk_types.cmo llk_migrate.cmo parse_gram.cmo print_gram.cmo comp_llk.cmo pa_llk.cmo ord_MLast.cmi llk_regexps.cmi llk_types.cmi llk_migrate.cmi parse_gram.cmi print_gram.cmi comp_llk.cmi pa_llk.cmi ord_MLast.cmx llk_regexps.cmx llk_types.cmx llk_migrate.cmx parse_gram.cmx print_gram.cmx comp_llk.cmx pa_llk.cmx: 
+brzozowski2.cmo ord_MLast.cmo llk_regexps.cmo llk_types.cmo llk_migrate.cmo parse_gram.cmo print_gram.cmo comp_llk.cmo pa_llk.cmo brzozowski2.cmi ord_MLast.cmi llk_regexps.cmi llk_types.cmi llk_migrate.cmi parse_gram.cmi print_gram.cmi comp_llk.cmi pa_llk.cmi brzozowski2.cmx ord_MLast.cmx llk_regexps.cmx llk_types.cmx llk_migrate.cmx parse_gram.cmx print_gram.cmx comp_llk.cmx pa_llk.cmx: 
+brzozowski2.cmo :
+brzozowski2.cmx :
 llk_migrate.cmo : \
     llk_types.cmo
 llk_migrate.cmx : \
@@ -22,8 +24,10 @@ comp_llk.cmx : \
     llk_types.cmx \
     llk_regexps.cmx \
     llk_migrate.cmx
-llk_regexps.cmo :
-llk_regexps.cmx :
+llk_regexps.cmo : \
+    brzozowski2.cmo
+llk_regexps.cmx : \
+    brzozowski2.cmx
 llk_types.cmo : \
     ord_MLast.cmi \
     llk_regexps.cmo
@@ -45,8 +49,10 @@ parse_gram.cmx : \
 print_gram.cmo : \
     parse_gram.cmo \
     ord_MLast.cmi \
-    llk_types.cmo
+    llk_types.cmo \
+    llk_regexps.cmo
 print_gram.cmx : \
     parse_gram.cmx \
     ord_MLast.cmx \
-    llk_types.cmx
+    llk_types.cmx \
+    llk_regexps.cmx

@@ -2,25 +2,27 @@
 (* token_regexps.ml,v *)
 
 open Asttools ;
-open Brzozowski ;
+open Brzozowski2 ;
 open Pa_ppx_base ;
 open Pp_MLast ;
 open Pa_ppx_utils ;
 open Ppxutil ;
 
 module PatternBaseToken = struct
-  type t = [ CLS of string | SPCL of string | ANTI of string ] ;
+  type t = [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ] ;
   value hash = Hashtbl.hash;
   value print = fun [
       SPCL s -> Printf.sprintf "\"%s\"" (String.escaped s)
     | CLS ty -> Printf.sprintf "%s" ty
     | ANTI s -> Printf.sprintf "$%s" s
+    | OUTPUT n -> Printf.sprintf "#%d" n
     ]
   ;
   value compare t1 t2 = match (t1, t2) with [
     (CLS s1, CLS s2) -> String.compare s1 s2
   | (SPCL s1, SPCL s2) -> String.compare s1 s2
   | (ANTI s1, ANTI s2) -> String.compare s1 s2
+  | (OUTPUT s1, OUTPUT s2) -> Int.compare s1 s2
   | (a, b) -> Int.compare Obj.(tag (repr a)) Obj.(tag (repr b))
   ]
   ;                            
@@ -32,9 +34,10 @@ module PSyn = RESyntax(PatternBaseToken)(PatternRegexp) ;
 module Compile(R : sig value rex : PatternRegexp.regexp ;
                        value extra : list PatternBaseToken.t ;
                    end) = struct
+  open PatternBaseToken ;
   value toks = (PatternRegexp.tokens R.rex @ R.extra)
-               |> sort PatternBaseToken.compare
-               |> ListAux.uniq PatternBaseToken.compare ;
+               |> List.filter (fun [ OUTPUT _ -> False | _ -> True ])
+               |> List.sort_uniq compare ;
   module PatternToken = struct
     include PatternBaseToken ;
     value foreach f = do {
@@ -98,6 +101,7 @@ type astre = [
   Special of loc and string
 | Class of loc and string
 | Anti of loc and string
+| Output of loc and int
 | DISJ of loc and list astre
 | CONJ of loc and list astre
 | CONC of loc and list astre
@@ -115,6 +119,7 @@ value normalize_astre env x =
         Special _ x -> PSyn.token (SPCL (Scanf.unescaped x))
       | Class _ x -> PSyn.token (CLS (Scanf.unescaped x))
       | Anti _ x -> PSyn.token (ANTI (Scanf.unescaped x))
+      | Output _ x -> PSyn.token (OUTPUT x)
       | DISJ _ l -> PSyn.disjunction (List.map (convrec env) l)
       | CONJ _ l -> PSyn.conjunction (List.map (convrec env) l)
       | CONC _ l -> concatenation (List.map (convrec env) l)
