@@ -1,3 +1,4 @@
+open Pa_ppx_utils ;
 
 value parse_flag pfun = parser [
   [: _ = pfun :] -> True
@@ -51,5 +52,15 @@ value parse_list1_with_sep_opt_trailing elem sep = parser [
   [: e = elem ; _ = sep ; l = parse_list0_with_sep_opt_trailing elem sep :] -> [e :: l]
 | [: e = elem ; _ = sep :] -> [e]
 | [: e = elem :] -> [e]
+]
+;
+
+value parse_antiquot elem kinds = parser [
+  [: `("ANTIQUOT", x) when
+      match Plexer.parse_antiquot x with [
+          Some (k, _) -> List.mem k kinds
+        | _ -> False
+        ] :] -> Ploc.VaAnt x
+| [: v = elem :] -> Ploc.VaVal v
 ]
 ;

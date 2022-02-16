@@ -92,6 +92,16 @@ END;
 |foo}
 ] ;;
 
+[%llk
+{foo|
+GRAMMAR VALA:
+GLOBAL: vala1 vala2;
+vala1: [ [ x = V LIDENT -> x ] ] ;
+vala2: [ [ x = V LIDENT "a" "b" -> x ] ] ;
+END;
+|foo}
+] ;;
+
 
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
@@ -162,6 +172,13 @@ let tests = "simple" >::: [
       ; assert_equal ["x"] (pa Lists.list1sep_opt "x,")
       ; assert_equal ["x";"Y";"z"] (pa Lists.list1sep_opt "x,Y,z")
       ; assert_equal ["x";"Y";"z"] (pa Lists.list1sep_opt "x,Y,z,")
+    )
+    ; "VALA" >:: (fun _ ->
+        assert_equal (Ploc.VaVal "x") (pa VALA.vala1 "x")
+      ; assert_equal (Ploc.VaAnt "lid:x") (pa VALA.vala1 "$lid:x$")
+      ; assert_equal (Ploc.VaVal "x") (pa VALA.vala2 "x")
+      ; assert_equal (Ploc.VaAnt "a:x") (pa VALA.vala2 "$a:x$")
+      ; assert_equal (Ploc.VaAnt "b:x") (pa VALA.vala2 "$b:x$")
     )
 ]
 

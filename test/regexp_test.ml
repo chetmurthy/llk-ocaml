@@ -8,12 +8,12 @@ REGEXPS:
 
   tyvar = "'" (LIDENT | UIDENT) | GIDENT ;
   type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") ;
-  type_parameters = ("$list" | "$_list" | type_parameter* ) ;
-  check_type_decl = ("$flag" | "$_flag" |
+  type_parameters = ($list | $_list | type_parameter* ) ;
+  check_type_decl = ($flag | $_flag |
           ("rec"|"nonrec") |
-          ("$list" | "$_list") |
-          (LIDENT | "$tp" | "$_tp" | "$lid" | "$_lid") type_parameters ("=" | ":=")) ;
-  check_type_extension = UIDENT | "$lilongid" | "$_lilongid" | (LIDENT type_parameters "+=") ;
+          ($list | $_list) |
+          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":=")) ;
+  check_type_extension = UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=") ;
 END ;
 *)
 str_item: [ [ x = LIDENT -> x ] ] ;

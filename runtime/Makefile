@@ -12,7 +12,7 @@ LAUNCH=env TOP=$(TOP) $(TOP)/tools/LAUNCH
 OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 
-PACKAGES = rresult,fmt,camlp5
+PACKAGES = rresult,fmt,camlp5,pa_ppx.utils
 TARGET = pa_llk_runtime.cma
 ML = llk_runtime.ml
 MLI =

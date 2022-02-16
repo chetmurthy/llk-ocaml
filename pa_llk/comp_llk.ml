@@ -742,7 +742,7 @@ value exec g = {(g) with gram_entries = List.map exec0 g.gram_entries} ;
 
 end ;
 
-type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string ]
+type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string ]
 ;
 
 module type TOKENSET = sig
@@ -1439,8 +1439,7 @@ value all_tokens el =
         | AStok loc s (Some _) -> raise_failwith loc "unupported"
         | ASvala _ s0 sl -> do {
             ignore (dt.migrate_a_symbol dt s0) ;
-            List.iter (fun s2 -> Std.push acc (SPCL s2)) sl ;
-            List.iter (fun s2 -> Std.push acc (SPCL ("_"^s2))) sl
+            List.iter (fun s2 -> Std.push acc (ANTI s2)) sl
           }
         | s -> ignore(fallback_migrate_a_symbol dt s)
         ];
@@ -1482,6 +1481,40 @@ value tokens_to_patt loc l =
 ;
 
 open Exparser ;
+
+(**
+
+["flag"] for FLAG
+["list"] for LIST0 and LIST1
+["opt"] for OPT
+["chr"] for CHAR
+["flo"] for FLOAT
+["int"] for INT
+["int32"] for INT_l
+["int64"] for INT_L
+["nativeint"] for INT_n
+["lid"] for LIDENT
+["str"] for STRING
+["uid"] for UIDENT
+ *)
+value infer_anti_kinds loc s kinds =
+  if kinds <> [] then kinds else
+    match s with [
+        ASflag _ _ -> ["flag"]
+      | ASlist _ _ _ _ -> ["list"]
+      | ASopt _ _ -> ["opt"]
+      | AStok loc "CHAR" _ -> ["chr"]
+      | AStok loc "FLOAT" _ -> ["flo"]
+      | AStok loc "INT" _ -> ["int"]
+      | AStok loc "INT_l" _ -> ["int32"]
+      | AStok loc "INT_L" _ -> ["int64"]
+      | AStok loc "INT_n" _ -> ["nativeint"]
+      | AStok loc "LIDENT" _ -> ["lid"]
+      | AStok loc "STRING" _ -> ["str"]
+      | AStok loc "UIDENT" _ -> ["uid"]
+      | _ -> raise_failwith loc "cannot infer antiquotation kind"
+      ]
+;
 
 value rec compile1_symbol loc (fimap,fomap) ename s =
   match s with [
@@ -1574,6 +1607,16 @@ and compile1_psymbol loc (fimap,fomap) ename ps =
        let e = <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
+    | ASvala loc elem kinds ->
+       let anti_kinds = infer_anti_kinds loc elem kinds in
+       let kinds_list_expr =
+         anti_kinds
+         |> List.concat_map (fun k -> [k; "_"^k])
+         |> List.map (fun k -> <:expr< $str:k$ >>)
+         |> Ppxutil.convert_up_list_expr loc in
+       let elem = compile1_symbol loc (fimap,fomap) ename elem in
+       let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
+       (SpNtr loc patt e, SpoNoth)
     ]
 ;
 
@@ -1659,8 +1702,9 @@ let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
       rl
       |> List.map snd
       |> List.concat_map PatternRegexp.tokens
-      |> List.filter (fun [ CLS _ -> True | SPCL s -> s.[0] <> '$'])
-    ) |> List.sort_uniq PatternBaseToken.compare
+    )
+    |> List.filter (fun [ CLS _ | SPCL _ -> True | ANTI _ -> False])
+    |> List.sort_uniq PatternBaseToken.compare
   in
   let token_actions =
     token_patterns

@@ -9,18 +9,19 @@ open Pa_ppx_utils ;
 open Ppxutil ;
 
 module PatternBaseToken = struct
-  type t = [ CLS of string | SPCL of string ] ;
+  type t = [ CLS of string | SPCL of string | ANTI of string ] ;
   value hash = Hashtbl.hash;
   value print = fun [
       SPCL s -> Printf.sprintf "\"%s\"" (String.escaped s)
     | CLS ty -> Printf.sprintf "%s" ty
+    | ANTI s -> Printf.sprintf "$%s" s
     ]
   ;
   value compare t1 t2 = match (t1, t2) with [
     (CLS s1, CLS s2) -> String.compare s1 s2
   | (SPCL s1, SPCL s2) -> String.compare s1 s2
-  | (CLS _, SPCL _) -> -1
-  | (SPCL _, CLS _) -> 1
+  | (ANTI s1, ANTI s2) -> String.compare s1 s2
+  | (a, b) -> Int.compare Obj.(tag (repr a)) Obj.(tag (repr b))
   ]
   ;                            
   value equal t1 t2 = 0 = compare t1 t2 ;
@@ -57,8 +58,8 @@ value convert_token =
   let open PatternBaseToken in
   fun [
       ("",s) -> Some (SPCL s)
-    | ("ANTIQUOT", s) -> s |> Plexer.parse_antiquot |> option_map fst |> option_map (fun s -> SPCL s)
-    | ("ANTIQUOT_LOC", s) -> s |> Plexer.parse_antiloc |> option_map snd3 |> option_map (fun s -> SPCL s)
+    | ("ANTIQUOT", s) -> s |> Plexer.parse_antiquot |> option_map fst |> option_map (fun s -> ANTI s)
+    | ("ANTIQUOT_LOC", s) -> s |> Plexer.parse_antiloc |> option_map snd3 |> option_map (fun s -> ANTI s)
     | (s, _) -> Some (CLS s)
 ]
 ;
@@ -96,6 +97,7 @@ value equal_loc a b = True ;
 type astre = [
   Special of loc and string
 | Class of loc and string
+| Anti of loc and string
 | DISJ of loc and list astre
 | CONJ of loc and list astre
 | CONC of loc and list astre
@@ -112,6 +114,7 @@ value normalize_astre env x =
   let rec convrec env = fun [
         Special _ x -> PSyn.token (SPCL (Scanf.unescaped x))
       | Class _ x -> PSyn.token (CLS (Scanf.unescaped x))
+      | Anti _ x -> PSyn.token (ANTI (Scanf.unescaped x))
       | DISJ _ l -> PSyn.disjunction (List.map (convrec env) l)
       | CONJ _ l -> PSyn.conjunction (List.map (convrec env) l)
       | CONC _ l -> concatenation (List.map (convrec env) l)

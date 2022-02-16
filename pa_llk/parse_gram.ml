@@ -196,6 +196,7 @@ EXTEND
   e0:
     [ [ x = STRING -> Special loc x
       | x = UIDENT -> Class loc x
+      | "$" ; x = LIDENT -> Anti loc x
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
       | x = LIDENT -> ID loc x
