@@ -67,6 +67,7 @@ and a_symbol =
       option (a_symbol * bool)
   | ASnext of loc and list expr
   | ASnterm of loc and string and list expr and option string
+  | ASregexp of loc and string
   | ASopt of loc and a_symbol
   | ASleft_assoc of loc and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules

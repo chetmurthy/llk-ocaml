@@ -161,6 +161,9 @@ EXTEND
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
         ASnterm loc id args lev
 
+      | UIDENT "REGEXP" ; id = LIDENT ->
+        ASregexp loc id
+
       | "("; s_t = SELF; ")" -> s_t ] ]
   ;
   pattern:

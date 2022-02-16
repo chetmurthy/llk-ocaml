@@ -26,15 +26,69 @@ module Ctr = struct
     Fmt.(str "%s__%02d" root n) ;
 end ;
 
-module S0NormalizeRegexps = struct
+module S0ProcessRegexps = struct
 open Llk_regexps ;
 
-value exec g =
+value normalize_regexps g =
   let norml = List.fold_left (fun env (id, astre) ->
                   let re = normalize_astre env astre in
                   [(id,re)::env]
                 ) [] g.gram_regexp_asts in
   {(g) with gram_regexps = List.rev norml }
+;
+
+value identify_regexps g =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
+  let migrate_a_psymbol dt = fun [
+        {ap_symb=ASnterm loc nt [] None} as ps
+           when List.mem_assoc nt g.gram_regexps ->
+                {(ps) with ap_symb = ASregexp loc nt}
+      | {ap_symb=ASnterm loc nt _ _}
+           when not (g.gram_entries |> List.exists (fun e -> nt = e.ae_name)) ->
+                raise_failwithf loc "CheckSyntax: no nonterminal %s found in grammar" nt
+      | ps -> fallback_migrate_a_psymbol dt ps
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_psymbol = migrate_a_psymbol } in
+  {(g) with gram_entries = List.map (dt.migrate_a_entry dt) g.gram_entries}
+;
+
+value exec g = g |> normalize_regexps |> identify_regexps ;
+
+end ;
+
+
+module CheckSyntax = struct
+
+value check g =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASnterm loc nt _ _
+           when not (g.gram_entries |> List.exists (fun e -> nt = e.ae_name)) ->
+                raise_failwithf loc "CheckSyntax: no nonterminal %s defined in grammar" nt
+      | ASregexp loc nt ->
+         raise_failwithf loc "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
+  let migrate_a_psymbol dt = fun [
+        {ap_symb=ASregexp loc nt} when not (List.mem_assoc nt g.gram_regexp_asts) ->
+            raise_failwithf loc "CheckSyntax: no regexp %s defined in grammar" nt
+      | {ap_symb=ASregexp _ _ } as ps -> ps
+      | s -> fallback_migrate_a_psymbol dt s
+      ] in
+  let dt = { (dt) with
+             Llk_migrate.migrate_a_symbol = migrate_a_symbol
+           ; Llk_migrate.migrate_a_psymbol = migrate_a_psymbol
+           } in
+  List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) g.gram_entries
+;
+
+value exec x = do {
+  check x ;
+  x
+}
 ;
 
 end ;
@@ -76,6 +130,7 @@ value rec check_symbol env = fun [
 
   | ASnext _ _ -> ()
   | ASnterm _ _ _ _ -> ()
+  | ASregexp _ _ -> ()
   | ASopt _ s -> check_symbol env s
   | ASleft_assoc _ s1 s2 _ ->  do { check_symbol env s1 ; check_symbol env s2 }
   | ASrules _ rs -> check_rules env rs
@@ -1291,6 +1346,7 @@ and lift_symbol ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun [
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
+  | ASregexp _ _ as s -> s
   | ASopt loc s -> ASopt loc (lift_symbol mut esig revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
@@ -1762,13 +1818,14 @@ value read_file = RT.read_file ;
 value parse s =
   s
   |> RT.pa
+  |> CheckSyntax.exec
   |> CheckLexical.exec
 ;
 
 value normre s =
   s
   |> parse
-  |> S0NormalizeRegexps.exec
+  |> S0ProcessRegexps.exec
 ;
 
 value coalesce s =
