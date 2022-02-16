@@ -103,6 +103,22 @@ END;
 ] ;;
 
 
+[%llk
+{foo|
+GRAMMAR Longident:
+GLOBAL: longident longident_eoi;
+
+  longident:
+    [ LEFTA
+      [ me1 = SELF; "."; i = V UIDENT "uid" -> me1 @ [i] ]
+    | [ i = V UIDENT "uid" -> [i] ]
+    ]
+  ;
+  longident_eoi: [ [ x = longident ; EOI -> x ] ] ;
+END ;
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -180,6 +196,10 @@ let tests = "simple" >::: [
       ; assert_equal (Ploc.VaAnt "a:x") (pa VALA.vala2 "$a:x$")
       ; assert_equal (Ploc.VaAnt "b:x") (pa VALA.vala2 "$b:x$")
     )
+    ; "Longident" >:: (fun _ ->
+          assert_equal [<:vala< "A" >>; <:vala< "B" >>; <:vala< "C" >>] (pa Longident.longident_eoi "A.B.C")
+        ; assert_equal [<:vala< "A" >>] (pa Longident.longident_eoi "A")
+      )
 ]
 
 

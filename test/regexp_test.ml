@@ -1,39 +1,20 @@
 
 [%llk
 {foo|
-GRAMMAR LLK:
-GLOBAL: str_item;
-(*
+GRAMMAR Longident:
+GLOBAL: longident longident_eoi;
+
 REGEXPS:
-
-  tyvar = "'" (LIDENT | UIDENT) | GIDENT ;
-  type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") ;
-  type_parameters = ($list | $_list | type_parameter* ) ;
-  check_type_decl = ($flag | $_flag |
-          ("rec"|"nonrec") |
-          ($list | $_list) |
-          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":=")) ;
-  check_type_extension = UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=") ;
-END ;
-*)
-str_item: [ [ x = LIDENT -> x ] ] ;
-
-(*
-str_item:
-    [ [
-        "type"; check_type_decl ; nrfl = V (FLAG "nonrec"); tdl = V (LIST1 type_decl SEP "and") → do {
-          vala_it (fun tdl ->
-            if List.exists (fun td -> not (Pcaml.unvala td.MLast.tdIsDecl)) tdl then
-              failwith "type-declaration cannot mix decl and subst"
-            else ()) tdl ;
-            <:str_item< type $_flag:nrfl$ $_list:tdl$ >>
-          }
-      | "type" ; check_type_extension ; te = type_extension →
-          <:str_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >>
-      ] ] ;
-*)
+  check_dot_uid = "." (UIDENT | $uid | $_uid) ;
 END;
-
+  longident:
+    [ LEFTA
+      [ me1 = SELF; (* check_dot_uid ;*) "."; i = V UIDENT "uid" -> me1 @ [i] ]
+    | [ i = V UIDENT "uid" -> [i] ]
+    ]
+  ;
+  longident_eoi: [ [ x = longident ; EOI -> x ] ] ;
+END ;
 |foo}
 ] ;;
 
@@ -43,7 +24,8 @@ open OUnit2
 open OUnitTest
 let tests = "simple" >::: [
       "LLK" >:: (fun _ ->
-        ()
+          assert_equal [<:vala< "A" >>; <:vala< "B" >>; <:vala< "C" >>] (pa Longident.longident_eoi "A.B.C")
+        ; assert_equal [<:vala< "A" >>] (pa Longident.longident_eoi "A")
       )
 ]
 
