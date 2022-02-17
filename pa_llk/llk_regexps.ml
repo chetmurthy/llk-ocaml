@@ -27,6 +27,7 @@ module PatternBaseToken = struct
   ]
   ;                            
   value equal t1 t2 = 0 = compare t1 t2 ;
+  value is_output = fun [ OUTPUT _ -> True | _ -> False ] ;
 end ;
 module PatternRegexp = Regexp(PatternBaseToken) ;
 module PSyn = RESyntax(PatternBaseToken)(PatternRegexp) ;
@@ -47,8 +48,8 @@ module Compile(R : sig value rex : PatternRegexp.regexp ;
     ;
   end ;
   module BEval = Eval(PatternToken)(PatternRegexp) ;
-  value dfa = BEval.dfa R.rex ;
-  value exec input = BEval.exec dfa input ;
+  value dfa = BEval.Dfa.dfa R.rex ;
+  value exec input = BEval.Dfa.exec dfa input ;
 end
 ;
 
