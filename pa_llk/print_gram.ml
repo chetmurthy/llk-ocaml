@@ -162,7 +162,7 @@ and symbol pc = fun [
 and simple_symbol pc sy =
   match sy with
   [ ASregexp _ id ->
-    pprintf pc "REGEXP %s" id
+    pprintf pc "PREDICT %s" id
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
     pprintf pc "%s%p" id (pr_option entry_actuals) args_opt
@@ -266,7 +266,12 @@ and pr_re_conc pc = fun [
     ]
 
 and pr_re_neg pc = fun [
-      NEG _ re -> pprintf pc "~ %p" pr_re_star re
+      NEG _ re -> pprintf pc "~ %p" pr_re_opt re
+    | re -> pr_re_opt pc re
+    ]
+
+and pr_re_opt pc = fun [
+      OPT _ re -> pprintf pc "%p ?" pr_re_star re
     | re -> pr_re_star pc re
     ]
 
@@ -330,5 +335,11 @@ module RT = struct
 
   value read_file name =
     name |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok ;
+
+ value pa_regexp_ast s =
+ s |> Stream.of_string |> Grammar.Entry.parse Pa.regexp ;
+
+  value pr_regexp_ast x = 
+    x |> Pr.pr_regexp_ast Pprintf.empty_pc |> print_string ;
 
 end ;

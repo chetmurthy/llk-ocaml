@@ -450,8 +450,8 @@ let nullable : regexp -> bool =
   let module M = Memoize.ForHashedType(R) in
   M.fix (fun nullable e ->
     match skeleton e with
-    | EToken _ ->
-        false
+    | EToken c ->
+        Token.is_output c
     | EEpsilon
     | EStar _ ->
         true
@@ -862,17 +862,18 @@ let final_state e =
   let lo = last_outputs e in
   let fo = first_outputs e in
   if List.length lo = 1
-     && (fo = [] || fo = lo)
-     && not (nullable e) then
-    Some (List.hd fo)
+     && (fo = [] || fo = lo) then
+    Some (List.hd lo)
   else None
 
 
 (* A state is failed if last-outputs=[] *)
 let failed_state e = last_outputs e = []
 
-(* A state is an internal error if nullable *)
-let internal_error_state e = nullable e
+(* A state is an internal error if nullable but has more than one last-output *)
+let internal_error_state e =
+  let lo = last_outputs e in
+  nullable e && List.length lo > 1
 
 (* A state may have successors if:
 
@@ -883,7 +884,10 @@ let may_have_successors (e : regexp) : bool =
   && not (failed_state e)
   && not (internal_error_state e)
 
+let watch_regexp (e : regexp) = e
+
 let dfa (e : regexp) : dfa =
+  let e0 = e in
   (* Discover and number the nonempty reachable expressions. The most
      nontrivial aspect of this phase is termination. The fact that expressions
      are considered equal modulo a certain equational theory is crucial here.
@@ -893,16 +897,20 @@ let dfa (e : regexp) : dfa =
   let module G = struct
     type t = regexp
     let foreach_successor e yield =
-      if may_have_successors e then
+      if internal_error_state e then
+        failwith Fmt.(str "while compiling dfa for regexp %s, reached internal error: %s"
+                        (print e0) (print e))
+      else if may_have_successors e then
         (* The successors of [e] are its derivatives along every character
            [a], provided they are nonempty. *)
         Token.foreach (fun a ->
+            if not (Token.is_output a) then
           let e' = delta a e in
-          if nonempty e' then yield e'
+          if nonempty e' then yield (watch_regexp e')
         )
     (* The single root is [e], if it is nonempty. *)
     let foreach_root yield =
-      if nonempty e && may_have_successors e then yield e
+      if nonempty e then yield (watch_regexp e)
   end in
   let module N = GraphNumbering.ForHashedType(R)(G) in
   (* We have [n] states which are mapped to nonempty expressions by [decode]. *)
@@ -995,7 +1003,16 @@ let exec a input =
 let size { n; _ } =
   n
 
-let dump f { n; init; decode; transition } =
+let state_label ~rexlabels ({ n; init; decode; transition } as dfa) q =
+  let final q = final_state (decode q) in
+  let rhs = if rexlabels then
+              String.escaped (print (decode q))
+            else if internal_error_state (decode q) then
+              "ERROR"
+            else match final q with None -> "" | Some n -> Token.print n in
+  Printf.sprintf "%d / %s" q rhs
+
+let dump ~rexlabels f ({ n; init; decode; transition } as dfa) =
   let final q = final_state (decode q) in
   (* Header. *)
   fprintf f "digraph G {\n";
@@ -1005,7 +1022,7 @@ let dump f { n; init; decode; transition } =
   for q = 0 to n - 1 do
     fprintf f "q%02d [ label=\"%s\", style = solid, shape = %s ] ;\n"
       q
-      (String.escaped (print (decode q)))
+      (state_label dfa ~rexlabels q)
       (if None <> final q then "doublecircle" else "circle")
   done;
   (* Indicate the initial state. *)
@@ -1023,6 +1040,7 @@ let dump f { n; init; decode; transition } =
        labels, separated with "|". *)
     let edges = ref [] in
     Token.foreach (fun a ->
+            if not (Token.is_output a) then
       match transition q a with
       | None ->
           fprintf f "// No transition out of q%02d along %s\n"
@@ -1056,6 +1074,7 @@ let export { n; init; decode; transition } =
     let rex = decode i in
     let transacc = ref [] in
     Token.foreach (fun a ->
+            if not (Token.is_output a) then
         match transition i a with
           None -> ()
         | Some j -> transacc := (a, j) :: !transacc

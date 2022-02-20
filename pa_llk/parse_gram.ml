@@ -36,11 +36,14 @@ value rule_list = Grammar.Entry.create gram "rule_list";
 value level_list = Grammar.Entry.create gram "level_list";
 value level = Grammar.Entry.create gram "level";
 value symbol = Grammar.Entry.create gram "symbol";
+value regexp = Grammar.Entry.create gram "regexp";
+value e2' = Grammar.Entry.create gram "e2'";
+value e1 = Grammar.Entry.create gram "e1";
 
 EXTEND
   GLOBAL:
-    expr
-    top grammar_body symbol rule rule_list level level_list symbol
+    expr e1 e2'
+    top grammar_body symbol rule rule_list level level_list symbol regexp
   ;
   top:
     [ [ "GRAMMAR"; e = grammar_body; "END" ; ";" ; EOI -> norm_top e ] ]
@@ -161,7 +164,7 @@ EXTEND
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
         ASnterm loc id args lev
 
-      | UIDENT "REGEXP" ; id = LIDENT ->
+      | UIDENT "PREDICT" ; id = LIDENT ->
         ASregexp loc id
 
       | "("; s_t = SELF; ")" -> s_t ] ]
@@ -192,7 +195,9 @@ EXTEND
 
   e3: [ [ l = LIST1 e2 -> CONC loc l ] ] ;
 
-  e2: [ [ "~"; x = e1 -> NEG loc x | x = e1 -> x ] ] ;
+  e2: [ [ "~"; x = e2' -> NEG loc x | x = e2' -> x ] ] ;
+ 
+  e2': [ [ x = e1 ; "?" -> OPT loc x | x = e1 -> x ] ] ;
 
   e1: [ [ x = e0; "*" -> STAR loc x | x = e0 -> x ] ] ;
 

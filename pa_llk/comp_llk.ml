@@ -924,6 +924,7 @@ module First = struct
 
 value rec psymbols m = fun [
   [] -> TS.mk [None]
+| [{ap_symb=ASregexp _ _} :: t] -> psymbols m t
 | [h::t] ->
    let fh = psymbol m h in
    if TS.mem None fh then
@@ -962,6 +963,8 @@ and symbol m = fun [
   | AStok _ cls _ -> TS.mk[Some (CLS cls)]
   | ASvala _ s sl ->
      TS.(union (symbol m s) (sl |> List.concat_map (fun s -> [Some (SPCL s); Some (SPCL ("_"^s))]) |> mk))
+  | ASregexp loc _ as s ->
+     raise_failwithf loc "First.symbol: internal error: unrecognized %a" pp_a_symbol s
 ]
 
 and rule m r = psymbols m r.ar_psymbols
@@ -1043,6 +1046,7 @@ value watch_follow (nt : string) (ff : TS.t token) = () ;
 
 value rec fifo_psymbols (fimap, mm) ff = fun [
       [] -> ff
+    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols (fimap, mm) ff t
     | [h::t] ->
        let ft = fifo_psymbols (fimap, mm) ff t in
        fifo_psymbol (fimap, mm) ft h
@@ -1701,16 +1705,16 @@ value print_token_option = fun [
 ;
 
 value report_disjointness_error g loc ename fi_fo_rule_list = do {
-  Fmt.(pf stdout "Failure of disjointness of FIRST-sets in entry %s\n" ename) ;
-  Fmt.(pf stdout "================================================================\n") ;
+  Fmt.(pf stderr "Failure of disjointness of FIRST-sets in entry %s\n" ename) ;
+  Fmt.(pf stderr "================================================================\n") ;
   fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
-      Fmt.(pf stdout "First: %s\nFollow: %s\nRule: %s\n\n"
+      Fmt.(pf stderr "First: %s\nFollow: %s\nRule: %s\n\n"
           (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
           (Pr.rule False Pprintf.empty_pc r)
                        )) ;
-  Fmt.(pf stdout "================================================================\n") ;
+  Fmt.(pf stderr "================================================================\n") ;
   print_string (Pr.top Pprintf.empty_pc g) ;
-  Fmt.(pf stdout "\n%!") ;
+  Fmt.(pf stderr "\n%!") ;
   raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
 }
 ;
@@ -1818,14 +1822,14 @@ value read_file = RT.read_file ;
 value parse s =
   s
   |> RT.pa
-  |> CheckSyntax.exec
-  |> CheckLexical.exec
 ;
 
 value normre s =
   s
   |> parse
   |> S0ProcessRegexps.exec
+  |> CheckSyntax.exec
+  |> CheckLexical.exec
 ;
 
 value coalesce s =

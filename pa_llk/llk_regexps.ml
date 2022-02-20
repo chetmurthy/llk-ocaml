@@ -37,7 +37,6 @@ module Compile(R : sig value rex : PatternRegexp.regexp ;
                    end) = struct
   open PatternBaseToken ;
   value toks = (PatternRegexp.tokens R.rex @ R.extra)
-               |> List.filter (fun [ OUTPUT _ -> False | _ -> True ])
                |> List.sort_uniq compare ;
   module PatternToken = struct
     include PatternBaseToken ;
@@ -108,6 +107,7 @@ type astre = [
 | CONC of loc and list astre
 | STAR of loc and astre
 | NEG of loc and astre
+| OPT of loc and astre
 | EPS of loc
 | LETIN of loc and string and astre and astre
 | ID of loc and string
@@ -126,6 +126,7 @@ value normalize_astre env x =
       | CONC _ l -> concatenation (List.map (convrec env) l)
       | STAR _ x -> PSyn.star (convrec env x)
       | NEG _ x -> PSyn.neg (convrec env x)
+      | OPT _ x -> PSyn.disjunction [(convrec env x); PSyn.epsilon]
       | EPS _ -> PSyn.epsilon
       | LETIN _ s e1 e2 ->
          convrec [(s,convrec env e1) :: env] e2

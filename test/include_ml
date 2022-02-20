@@ -74,10 +74,13 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 open Parse_gram ;;
 open Print_gram ;;
 open Comp_llk ;;
+open Llk_regexps ;;
 
-
-let pp_regexp_ast e = Fmt.(pf stdout "<:regexp<%s>>" (Pr.pr_regexp_ast Pprintf.empty_pc e)) ;;
+let pp_regexp_ast e = Fmt.(pf stdout "<:regexp_ast< %s >>" (Pr.pr_regexp_ast Pprintf.empty_pc e)) ;;
 #install_printer pp_regexp_ast ;;
+
+let pp_regexp e = Fmt.(pf stdout "<:regexp< %s >>" (PSyn.print e)) ;;
+#install_printer pp_regexp ;;
 
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
@@ -96,8 +99,41 @@ let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" (Pr.rule true Pprintf.empty_pc e)
 
 (* ================================================================ *)
 #require "str";;
+let ast1 = RT.pa_regexp_ast {| "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") #4|} ;;
+let re1 = normalize_astre []  ast1;;
+let ast2 = RT.pa_regexp_ast {| (UIDENT | $uid | $_uid) ":=" #3 |} ;;
+let re2 = normalize_astre []  ast2;;
+let re3 = PSyn.disjunction [re1; re2] ;;
+
+(*
+module X0 = Compile(struct
+  let rex = PSyn.epsilon
+  open PatternBaseToken ;;
+  let extra = [CLS "UIDENT";
+ SPCL "_";
+ SPCL "rec";
+ ANTI "_uidopt";
+ ANTI "uidopt"] end) ;;
+ *)
+module X = Compile(struct let rex = re3 let extra = [] end) ;;
+
+(*
+#trace X.BEval.nullable ;;
+#trace X.BEval.delta ;;
+#trace X.BEval.nonempty ;;
+#trace X.BEval.OutputDfa.may_have_successors ;;
+#trace X.BEval.OutputDfa.failed_state ;;
+#trace X.BEval.OutputDfa.final_state ;;
+#trace X.BEval.OutputDfa.internal_error_state ;;
+#trace X.BEval.OutputDfa.watch_regexp ;;
+#trace X.BEval.OutputDfa.dfa ;;
+ *)
+
+(*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
+ *)
+
 
 (*
 ;;; Local Variables: ***
