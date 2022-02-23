@@ -120,6 +120,8 @@ let re =  {|  (UIDENT | $uid | $_uid) ":=" #3 | "alias" #0 | "type" #1 | (eps | 
 
 module X = Compile(struct let rex = re let extra = [] end) ;;
 (*
+X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
+
 #trace X.BEval.nullable ;;
 #trace X.BEval.delta ;;
 #trace X.BEval.nonempty ;;

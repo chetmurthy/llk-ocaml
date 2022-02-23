@@ -74,3 +74,9 @@ value parse_antiquot elem kinds = parser [
 | [: v = elem :] -> Ploc.VaVal v
 ]
 ;
+
+value must_peek_nth n strm =
+  let l = Stream.npeek n strm in
+  if List.length l = n then fst (Asttools.sep_last l)
+  else None
+;

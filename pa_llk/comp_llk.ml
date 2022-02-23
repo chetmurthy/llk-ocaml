@@ -1787,6 +1787,48 @@ value compile1a_entry g (fimap, fomap) e =
   }
 ;
 
+value token_pattern loc = fun [
+        CLS s -> (<:patt< Some ($str:s$, _) >>, None)
+      | SPCL s -> (<:patt< Some ("", $str:s$) >>, None)
+      | ANTI s ->
+        (<:patt< Some ("ANTIQUOT", x) >>,
+         Some <:expr< match Plexer.parse_antiquot x with [
+                      Some (k, _) -> k = $str:s$
+                      | _ -> False
+                      ] >>)
+  ] ;
+
+value letrec_nest (init, initre, states) =
+  let open PatternBaseToken in
+  let loc = Ploc.dummy in
+  let statename i = Printf.sprintf "q%04d" i in
+  let export_state (i, rex, final, edges) =
+    match final with [
+      Some (OUTPUT output) ->
+      (<:patt< $lid:(statename i)$ >>, <:expr< fun ofs -> Some (ofs, $int:string_of_int output$) >>, <:vala< [] >>)
+    | None ->
+      let branches =
+        edges |> List.map (fun (tok, newst) ->
+            let (patt, whene) = token_pattern loc tok in
+            (patt, <:vala< whene >>, <:expr< $lid:(statename newst)$ (ofs+1) >>)
+          ) in
+      let branches = branches @ [
+          (<:patt< _ >>, <:vala< None >>, <:expr< None >>)
+        ] in
+      let rhs = <:expr< fun ofs ->
+                        match must_peek_nth (ofs+1) strm with [
+                            $list:branches$
+                          ] >> in
+      (<:patt< $lid:(statename i)$ >>, rhs, <:vala< [] >>)
+    ] in
+  let bindl = List.map export_state states in
+  <:expr< fun strm ->
+    let open Llk_regexps in
+    let open PatternBaseToken in
+    let rec $list:bindl$ in $lid:(statename init)$ 0 >>
+;
+
+
 (** user-provided regexps as fallback to FIRST/FOLLOW.
 
     1. do as above, computing FIRST/FOLLOW
