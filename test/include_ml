@@ -115,8 +115,10 @@ module X0 = Compile(struct
  ANTI "_uidopt";
  ANTI "uidopt"] end) ;;
  *)
-module X = Compile(struct let rex = re3 let extra = [] end) ;;
 
+let re =  {|  (UIDENT | $uid | $_uid) ":=" #3 | "alias" #0 | "type" #1 | (eps | "rec") (UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") #2 |} |> Stream.of_string |> Grammar.Entry.parse Pa.regexp |> normalize_astre [] ;;
+
+module X = Compile(struct let rex = re let extra = [] end) ;;
 (*
 #trace X.BEval.nullable ;;
 #trace X.BEval.delta ;;

@@ -1704,7 +1704,7 @@ value print_token_option = fun [
 ]
 ;
 
-value report_disjointness_error g loc ename fi_fo_rule_list = do {
+value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list = do {
   Fmt.(pf stderr "Failure of disjointness of FIRST-sets in entry %s\n" ename) ;
   Fmt.(pf stderr "================================================================\n") ;
   fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
@@ -1715,7 +1715,9 @@ value report_disjointness_error g loc ename fi_fo_rule_list = do {
   Fmt.(pf stderr "================================================================\n") ;
   print_string (Pr.top Pprintf.empty_pc g) ;
   Fmt.(pf stderr "\n%!") ;
-  raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
+  if and_raise then
+    raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
+  else ()
 }
 ;
 
@@ -1742,7 +1744,15 @@ value reorder_branches l =
   concrete_branches @ fallthru_branches
 ;
 
-value compile1_entry g (fimap, fomap) e =
+(** FIRST/FOLLOW compilation strategy.
+
+    1. compute FIRST/FOLLOW for each branch of the rule
+    2. combine FIRST.{if_nullable}.FOLLOW -> FFO
+    3. if these sets are not disjoint, then we can't use them to compile the entry.
+    4. If they are disjoint, but more than one FIRST set is nullable, again, can't compile the entry.
+    5. compile a match, with each case_branch one of the rule-branches, and the pattern being the FFO set.
+ *)
+value compile1a_entry g (fimap, fomap) e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let ff = SM.lookup ename fomap in
@@ -1750,9 +1760,8 @@ value compile1_entry g (fimap, fomap) e =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.map (compute_fifo loc fimap ff) in do {
     if not (disjoint loc fi_fo_rule_list) then
-      report_disjointness_error g loc e.ae_name fi_fo_rule_list
-    else if TS.mt = ff 
-       && 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
+      report_disjointness_error ~{and_raise=True} g loc e.ae_name fi_fo_rule_list
+    else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
     let tokens_rule_branches =
@@ -1776,6 +1785,67 @@ value compile1_entry g (fimap, fomap) e =
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   }
+;
+
+(** user-provided regexps as fallback to FIRST/FOLLOW.
+
+    1. do as above, computing FIRST/FOLLOW
+    2. compute FFO
+    3. don't bother computing disjointness or nullability test.
+    4. Instead, pull out the first ASregexp in each rule-branch (if any) and replace the FFO with that.
+    5. construct the multi-way regexp with this hybrid set.
+ *)
+value compile1b_entry g (fimap, fomap) e =
+  let loc = e.ae_loc in
+  let ename = e.ae_name in
+  let ff = SM.lookup ename fomap in
+  let fi_fo_rule_list =
+    (List.hd e.ae_levels).al_rules.au_rules
+    |> List.map (compute_fifo loc fimap ff) in
+  let ffo_rule_list =
+    fi_fo_rule_list
+  |> List.map (fun (fi, ff, r) ->
+         let ffo = Follow.fifo_concat loc ~{if_nullable=True} fi ff in
+         (ffo, r)
+       ) in
+  let ffo_regexp_rule_list =
+    ffo_rule_list
+  |> List.map (fun (ffo, r) ->
+        let regexp_opt = match r with [
+              {ar_psymbols=[{ap_symb=(ASregexp _ rexname)} :: _]} -> Some rexname
+            | _ -> None
+            ] in
+        (ffo, regexp_opt, r)
+      ) in
+  let fullre = 
+    ffo_regexp_rule_list
+    |> List.mapi (fun i -> fun [
+                       (ffo, None, _) ->
+                       ffo |> List.map PSyn.token
+                       |> PSyn.disjunction
+                       |> (fun r -> PSyn.(r @@ PSyn.token (OUTPUT i)))
+                     | (ffo, Some rexname, _) ->
+                        match List.assoc rexname g.gram_regexps with [
+                            exception Not_found ->
+                                      raise_failwithf loc "compile1b_entry: undefined regexp %s" rexname
+                          | x -> x
+                          ]
+                        |> (fun r -> PSyn.(r @@ PSyn.token (OUTPUT i)))
+      ])
+    |> PSyn.disjunction in
+  fullre
+  ;
+
+
+value compile1_entry g (fimap, fomap) e =
+  match compile1a_entry g (fimap, fomap) e with [
+      exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
+        Fmt.(pf stderr "compile1_entry: FIRST/FOLLOW strategy failed\n%!") ;
+        let _ = compile1b_entry g (fimap, fomap) e in
+        raise exn
+      }
+    | x -> x
+    ]
 ;
 
 value exec ({gram_loc=loc; gram_globals=gl; gram_regexps=rl; gram_entries=el; gram_id=gid} as g)  =
