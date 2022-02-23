@@ -37,12 +37,10 @@ value level_list = Grammar.Entry.create gram "level_list";
 value level = Grammar.Entry.create gram "level";
 value symbol = Grammar.Entry.create gram "symbol";
 value regexp = Grammar.Entry.create gram "regexp";
-value e2' = Grammar.Entry.create gram "e2'";
-value e1 = Grammar.Entry.create gram "e1";
 
 EXTEND
   GLOBAL:
-    expr e1 e2'
+    expr
     top grammar_body symbol rule rule_list level level_list symbol regexp
   ;
   top:
