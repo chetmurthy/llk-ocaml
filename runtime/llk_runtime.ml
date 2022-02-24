@@ -77,6 +77,6 @@ value parse_antiquot elem kinds = parser [
 
 value must_peek_nth n strm =
   let l = Stream.npeek n strm in
-  if List.length l = n then fst (Asttools.sep_last l)
+  if List.length l = n then Some (fst (Asttools.sep_last l))
   else None
 ;

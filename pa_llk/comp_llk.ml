@@ -1683,6 +1683,14 @@ and compile1_psymbol g loc (fimap,fomap) ename ps =
     ]
 ;
 
+value compile1_psymbols g loc (fimap,fomap) ename psl =
+  let rec crec = fun [
+        [{ap_symb=ASregexp _ _} :: t] -> crec t
+      | [] -> []
+      | [h ::t] -> [compile1_psymbol g loc (fimap,fomap) ename h :: crec t]
+      ] in crec psl
+;
+
 value compile1_rule g (fimap,fomap) ename r =
   let loc = r.ar_loc in
 (*
@@ -1693,7 +1701,7 @@ value compile1_rule g (fimap,fomap) ename r =
     r.ar_psymbols
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
  *)
-  let spc_list = List.map (compile1_psymbol g loc (fimap,fomap) ename) r.ar_psymbols in
+  let spc_list = compile1_psymbols g loc (fimap,fomap) ename r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
   cparser loc (None, [(spc_list, None, action)])
 ;
@@ -1713,7 +1721,7 @@ value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list =
           (Pr.rule False Pprintf.empty_pc r)
                        )) ;
   Fmt.(pf stderr "================================================================\n") ;
-  print_string (Pr.top Pprintf.empty_pc g) ;
+  prerr_string (Pr.top Pprintf.empty_pc g) ;
   Fmt.(pf stderr "\n%!") ;
   if and_raise then
     raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
@@ -1721,7 +1729,7 @@ value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list =
 }
 ;
 
-value compile1_branch g (fimap,fomap) ename (fi, fo, r) =
+value compile1a_branch g (fimap,fomap) ename (fi, fo, r) =
   let loc = r.ar_loc in
   let body = compile1_rule g (fimap,fomap) ename r in
   if not (Follow.nullable fi) then
@@ -1766,7 +1774,7 @@ value compile1a_entry g (fimap, fomap) e =
     else () ;
     let tokens_rule_branches =
       fi_fo_rule_list
-    |> List.map (compile1_branch g (fimap,fomap) ename) in
+    |> List.map (compile1a_branch g (fimap,fomap) ename) in
     let tokens_rule_branches = reorder_branches tokens_rule_branches in
     let branches = List.map Std.third3 tokens_rule_branches in
     let rhs =
@@ -1828,6 +1836,11 @@ value letrec_nest (init, initre, states) =
     let rec $list:bindl$ in $lid:(statename init)$ 0 >>
 ;
 
+value compile1b_branch g (fimap,fomap) ename branchnum r =
+  let loc = r.ar_loc in
+  let body = compile1_rule g (fimap,fomap) ename r in
+  (<:patt< Some (_, $int:string_of_int branchnum$ ) >>, <:vala< None >>, body)
+;
 
 (** user-provided regexps as fallback to FIRST/FOLLOW.
 
@@ -1875,7 +1888,18 @@ value compile1b_entry g (fimap, fomap) e =
                         |> (fun r -> PSyn.(r @@ PSyn.token (OUTPUT i)))
       ])
     |> PSyn.disjunction in
-  fullre
+  let module C = Compile(struct value rex = fullre ; value extra = []; end) in
+  let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
+  let predictor = letrec_nest exported_dfa in
+  let branches = 
+    ffo_regexp_rule_list
+    |> List.map Std.third3
+    |> List.mapi (compile1b_branch g (fimap, fomap) ename) in
+  let rhs =
+    <:expr< fun __strm__ -> match $predictor$ __strm__ with [
+                                $list:branches$
+                              ] >> in
+  (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   ;
 
 
@@ -1883,8 +1907,7 @@ value compile1_entry g (fimap, fomap) e =
   match compile1a_entry g (fimap, fomap) e with [
       exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
         Fmt.(pf stderr "compile1_entry: FIRST/FOLLOW strategy failed\n%!") ;
-        let _ = compile1b_entry g (fimap, fomap) e in
-        raise exn
+        compile1b_entry g (fimap, fomap) e
       }
     | x -> x
     ]
