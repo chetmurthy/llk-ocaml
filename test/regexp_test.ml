@@ -2,7 +2,7 @@
 [%llk
 {foo|
 GRAMMAR Mod:
-GLOBAL: ident functor_parameter uidopt
+GLOBAL: ident functor_parameter uidopt module_declaration mod_decl_binding
         sig_item;
 
 REGEXPS:
@@ -46,7 +46,18 @@ let tests = "simple" >::: [
           assert_equal "a" (pa Mod.ident "a")
         ; assert_equal () (pa Mod.functor_parameter "()")
         ; assert_equal (Some <:vala< "U" >>) (pa Mod.uidopt "U")
-        ; assert_equal (Some <:vala< "U" >>) (pa Mod.uidopt "$uid:x$")
+        ; assert_equal None (pa Mod.uidopt "_")
+        ; assert_equal (Some (Ploc.VaAnt "uid:x")) (pa Mod.uidopt "$uid:x$")
+        ; assert_equal 1 (pa Mod.module_declaration ":")
+        ; assert_equal 2 (pa Mod.module_declaration "()")
+        ; assert_equal 2 (pa Mod.module_declaration "$_fp:x$")
+        ; assert_equal () (pa Mod.mod_decl_binding "_ :")
+        ; assert_equal 1 (pa Mod.sig_item "module rec _ :")
+        ; assert_equal 1 (pa Mod.sig_item "module X :")
+        ; assert_equal 2 (pa Mod.sig_item "module X :=")
+        ; assert_equal 3 (pa Mod.sig_item "module type x =")
+        ; assert_equal 4 (pa Mod.sig_item "module type x :=")
+        ; assert_equal 5 (pa Mod.sig_item "module alias X =")
       )
 ]
 

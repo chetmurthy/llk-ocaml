@@ -101,13 +101,15 @@ let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" (Pr.rule true Pprintf.empty_pc e)
 
 (* ================================================================ *)
 #require "str";;
+
+(*
 let ast1 = RT.pa_regexp_ast {| "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") #4|} ;;
 let re1 = normalize_astre []  ast1;;
 let ast2 = RT.pa_regexp_ast {| (UIDENT | $uid | $_uid) ":=" #3 |} ;;
 let re2 = normalize_astre []  ast2;;
 let re3 = PSyn.disjunction [re1; re2] ;;
 
-(*
+
 module X0 = Compile(struct
   let rex = PSyn.epsilon
   open PatternBaseToken ;;
@@ -118,10 +120,11 @@ module X0 = Compile(struct
  ANTI "uidopt"] end) ;;
  *)
 
+(*
 let re =  {|  (UIDENT | $uid | $_uid) ":=" #3 | "alias" #0 | "type" #1 | (eps | "rec") (UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") #2 |} |> Stream.of_string |> Grammar.Entry.parse Pa.regexp |> normalize_astre [] ;;
 
 module X = Compile(struct let rex = re let extra = [] end) ;;
-(*
+
 X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 
 #trace X.BEval.nullable ;;
@@ -135,11 +138,14 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-(*
+
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
 
+(*
+#load "simple_test.cmo";;
+open Simple_test ;;
+ *)
 
 (*
 ;;; Local Variables: ***

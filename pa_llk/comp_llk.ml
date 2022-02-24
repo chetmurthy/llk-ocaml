@@ -1736,27 +1736,51 @@ value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list =
 }
 ;
 
-value compile1a_branch g (fimap,fomap) ename (fi, fo, r) =
-  let loc = r.ar_loc in
-  let body = compile1_rule g (fimap,fomap) ename r in
-  if not (Follow.nullable fi) then
-    let raw_tokens = TS.export (Follow.fi2fo loc fi) in
-    let patt = tokens_to_patt loc raw_tokens in
-    let tokens = List.map Std.inSome raw_tokens in
-    (tokens, r, (<:patt< Some $patt$ >>, <:vala< None >>, body))
-  else if TS.mt <> fo then
-    let raw_tokens = TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
-    let patt = tokens_to_patt loc raw_tokens in
-    let tokens = List.map Std.inSome raw_tokens in
-    (tokens, r, (<:patt< Some $patt$ >>, <:vala< None >>, body))
-    else
-      ([None], r, (<:patt< _ >>, <:vala< None >>, body))
+value token_to_match_branch loc i = fun [
+    CLS s -> (<:patt< Some ($str:s$, _) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+  | SPCL s -> (<:patt< Some ("", $str:s$) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+  | ANTI s ->
+     let whene = <:expr< match Plexer.parse_antiquot x with [
+                             Some (k, _) -> k = $str:s$
+                           | _ -> False
+                           ] >> in
+     (<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, <:expr< $int:string_of_int i$ >>)
+]
 ;
 
-value reorder_branches l =
-  let (concrete_branches, fallthru_branches) =
-    filter_split (fun (tl, _, _) -> List.for_all Std.isSome tl) l in
-  concrete_branches @ fallthru_branches
+value match_nest_branches g (fimap,fomap) ename i (fi, fo, r) =
+  let loc = r.ar_loc in
+  if not (Follow.nullable fi) then
+    let raw_tokens = TS.export (Follow.fi2fo loc fi) in
+    raw_tokens |> List.map (token_to_match_branch loc i)
+  else if TS.mt <> fo then
+    let raw_tokens = TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
+    raw_tokens |> List.map (token_to_match_branch loc i)
+  else
+    [(<:patt< _ >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)]
+;
+
+value build_match_nest loc g (fimap,fomap) ename fi_fo_rule_list =
+  let branches =
+    fi_fo_rule_list
+    |> List.mapi (match_nest_branches g (fimap,fomap) ename)
+    |> List.concat in
+  let (null_branches, normal_branches) =
+    Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
+  let null_branches = match null_branches with [
+        [] -> [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
+      | [_] as l -> l
+      | _ -> 
+         raise_failwithf loc "internal error in build_match_nest: more than one NULL branch for entry %s" ename
+      ] in
+  let branches = normal_branches @ null_branches in
+  <:expr< match Stream.peek __strm__ with [ $list:branches$ ] >>
+;
+
+value compile1a_branch g (fimap,fomap) ename i (fi, fo, r) =
+  let loc = r.ar_loc in
+  let body = compile1_rule g (fimap,fomap) ename r in
+  (<:patt< $int:string_of_int i$ >>, <:vala< None >>, body)
 ;
 
 (** FIRST/FOLLOW compilation strategy.
@@ -1779,11 +1803,10 @@ value compile1a_entry g (fimap, fomap) e =
     else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
-    let tokens_rule_branches =
+    let match_nest = build_match_nest loc g (fimap,fomap) ename fi_fo_rule_list in
+    let branches =
       fi_fo_rule_list
-    |> List.map (compile1a_branch g (fimap,fomap) ename) in
-    let tokens_rule_branches = reorder_branches tokens_rule_branches in
-    let branches = List.map Std.third3 tokens_rule_branches in
+    |> List.mapi (compile1a_branch g (fimap,fomap) ename) in
     let rhs =
       match branches with [
         [(_,_,e)] -> e
@@ -1795,7 +1818,7 @@ value compile1a_entry g (fimap, fomap) e =
          let branches = branches @ [
                (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
              ] in
-         <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >> ]
+         <:expr< fun __strm__ -> match $match_nest$ with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
@@ -1902,6 +1925,9 @@ value compile1b_entry g (fimap, fomap) e =
     ffo_regexp_rule_list
     |> List.map Std.third3
     |> List.mapi (compile1b_branch g (fimap, fomap) ename) in
+  let branches =
+    branches
+    |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
   let rhs =
     <:expr< fun __strm__ -> match $predictor$ __strm__ with [
                                 $list:branches$

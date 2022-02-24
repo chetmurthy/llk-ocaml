@@ -80,7 +80,7 @@ END;
 [%llk
 {foo|
 GRAMMAR Lists:
-GLOBAL: list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
+GLOBAL: id list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
 list0: [ [ l = LIST0 id -> l ] ] ;
 list1: [ [ l = LIST1 id -> l ] ] ;
 list0sep: [ [ l = LIST0 id SEP "," -> l ] ] ;
@@ -166,7 +166,9 @@ let tests = "simple" >::: [
       ; assert_equal 51. (pa Calc.e_top "5. ** 2. * 2. + 1.")
     )
     ; "Lists:list0" >:: (fun _ ->
-        assert_equal [] (pa Lists.list0 "")
+        assert_equal "x" (pa Lists.id "x")
+      ; assert_equal "X" (pa Lists.id "X")
+      ; assert_equal [] (pa Lists.list0 "")
       ; assert_equal ["x"] (pa Lists.list0 "x")
       ; assert_equal ["x";"Y";"z"] (pa Lists.list0 "x Y z")
     )
