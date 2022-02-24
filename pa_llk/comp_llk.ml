@@ -2006,8 +2006,8 @@ value compile1_entry g (fimap, fomap) e =
     ]
 ;
 
-value exec ({gram_loc=loc; gram_globals=gl; gram_regexps=rl; gram_entries=el; gram_id=gid} as g)  =
-let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
+value exec ({gram_loc=loc; gram_exports=expl; gram_regexps=rl; gram_entries=el; gram_id=gid} as g)  =
+let (fimap, fomap) = Follow.exec0 ~{tops=expl} el in
   let fdefs = List.map (compile1_entry g (fimap, fomap)) el in
   let token_patterns =
     all_tokens el @ (
@@ -2025,8 +2025,8 @@ let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
     | SPCL k -> <:expr< lexer.tok_using ("", $str:k$) >>
                    ])
   in
-  let global_entries =
-    gl
+  let exported_entries =
+    expl
   |> List.map (fun ename -> <:str_item< value $lid:ename$ = Grammar.Entry.of_parser gram $str:ename$ F. $lid:ename$ >>) in
   <:str_item< module $uid:gid$ = struct
  value lexer = Plexer.gmake () ;
@@ -2037,7 +2037,7 @@ let (fimap, fomap) = Follow.exec0 ~{tops=gl} el in
  end ;
  open Plexing ;
  do { $list:token_actions$ } ;
- declare $list:global_entries$ end ;
+ declare $list:exported_entries$ end ;
  end >>
 ;
 end ;

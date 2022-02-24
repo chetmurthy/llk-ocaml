@@ -293,11 +293,19 @@ and pr_re_simple pc = fun [
 
 value ident pc id = pprintf pc "%s" id ;
 
-value pr_globals pc l =
+value pr_exports pc l =
   match l with
   [ [] -> pprintf pc ""
   | _ ->
-      pprintf pc "GLOBAL: %p;@ " (plist ident 2) (pair_with "" l)
+      pprintf pc "EXPORT: %p;@ " (plist ident 2) (pair_with "" l)
+  ]
+;
+
+value pr_externals pc l =
+  match l with
+  [ [] -> pprintf pc ""
+  | _ ->
+      pprintf pc "EXTERNAL: %p;@ " (plist ident 2) (pair_with "" l)
   ]
 ;
 
@@ -314,9 +322,10 @@ value pr_regexp_asts pc l =
 ;
 
 value top pc g =
-  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@]@ END" g.gram_id
+  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@]@ END" g.gram_id
     pr_regexp_asts g.gram_regexp_asts
-    pr_globals g.gram_globals
+    pr_exports g.gram_exports
+    pr_externals g.gram_externals
     (vlist entry) g.gram_entries
 ;
 

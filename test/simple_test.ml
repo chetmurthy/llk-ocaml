@@ -4,7 +4,7 @@ open Testutil
 [@@@llk
 {foo|
 GRAMMAR G:
-GLOBAL: etop ;
+EXPORT: etop ;
 
   e[x]: [ [ f = FLAG "foo" -> (f,x) ] ] ;
   etop: [ [ x = e[1] -> x ] ] ;
@@ -17,7 +17,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR H:
-GLOBAL: etop;
+EXPORT: etop;
   e[x]: [ [ y = FLAG "foo" ; z = f[y] -> (x,z) ] ] ;
   f[x]: [ [ z = INT -> (x,int_of_string z) ] ] ;
   etop: [ [ l = e[1] -> l ] ] ;
@@ -29,7 +29,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR I:
-GLOBAL: e;
+EXPORT: e;
   elist[(l:(int * bool) list)]:
     [ [
         n = INT ; ";" ; rv=elist[((int_of_string n,true)::l)] -> rv
@@ -46,7 +46,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR Calc:
-GLOBAL: e_top;
+EXPORT: e_top;
   e_top: [ [ x = e -> x ] ] ;
 
   e_star: [ [ x = e LEVEL "*" -> x ] ] ;
@@ -80,7 +80,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR Lists:
-GLOBAL: id list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
+EXPORT: id list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
 list0: [ [ l = LIST0 id -> l ] ] ;
 list1: [ [ l = LIST1 id -> l ] ] ;
 list0sep: [ [ l = LIST0 id SEP "," -> l ] ] ;
@@ -95,7 +95,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR VALA:
-GLOBAL: vala1 vala2;
+EXPORT: vala1 vala2;
 vala1: [ [ x = V LIDENT -> x ] ] ;
 vala2: [ [ x = V LIDENT "a" "b" -> x ] ] ;
 END;
@@ -106,7 +106,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR Longident:
-GLOBAL: longident longident_eoi;
+EXPORT: longident longident_eoi;
 
   longident:
     [ LEFTA
@@ -122,7 +122,7 @@ END ;
 [@@@llk
 {foo|
 GRAMMAR VUID:
-GLOBAL: uidopt;
+EXPORT: uidopt;
 
   uidopt: [ [ m = V UIDENT -> Some m | "_" -> None ] ] ;
 END ;
@@ -132,7 +132,7 @@ END ;
 [@@@llk
 {foo|
 GRAMMAR LF:
-GLOBAL: top;
+EXPORT: top;
 
   a: [ [ x = INT -> int_of_string x ] ];
   b: [ [ x = FLOAT -> float_of_string x ] ];
@@ -150,7 +150,7 @@ END ;
 [@@@llk
 {foo|
 GRAMMAR LLift:
-GLOBAL: top;
+EXPORT: top;
 
   a: [ [ x = INT -> int_of_string x ] ];
   b: [ [ x = FLOAT -> float_of_string x ] ];

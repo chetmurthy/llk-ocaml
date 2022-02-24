@@ -48,13 +48,17 @@ EXTEND
   ;
   grammar_body:
     [ [ gid = UIDENT ; ":" ;
-        sl = [ l = global -> l | -> [] ];
+        expl = [ l = exports -> l | -> [] ];
+        extl = [ l = externals -> l | -> [] ];
         rl = [ l = regexps -> l | -> [] ];
         el = LIST1 [ e = entry; ";" -> e ] ->
-          {gram_loc=loc; gram_id=gid; gram_globals=sl; gram_regexp_asts=rl; gram_regexps=[]; gram_entries=el} ] ]
+          {gram_loc=loc; gram_id=gid; gram_exports=expl; gram_externals=extl; gram_regexp_asts=rl; gram_regexps=[]; gram_entries=el} ] ]
   ;
-  global:
-    [ [ UIDENT "GLOBAL"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
+  exports:
+    [ [ UIDENT "EXPORT"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
+  ;
+  externals:
+    [ [ UIDENT "EXTERNAL"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
   ;
   regexps:
     [ [ UIDENT "REGEXPS"; ":"; rl = LIST1 regexp_entry; "END" ; ";" -> rl ] ]
