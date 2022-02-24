@@ -1796,28 +1796,38 @@ value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list =
 }
 ;
 
-value token_to_match_branch loc i = fun [
-    CLS s -> (<:patt< Some ($str:s$, _) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
-  | SPCL s -> (<:patt< Some ("", $str:s$) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
-  | ANTI s ->
+value tokens_to_match_branches loc i toks =
+  let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
+  let rest_branches =
+    rest
+    |> List.map (fun [
+         CLS s -> (<:patt< Some ($str:s$, _) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+       | SPCL s -> (<:patt< Some ("", $str:s$) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+                   ]) in
+  let anti_branches =
+    if antis = [] then [] else
+    let kinds = antis |> List.map (fun [ ANTI s -> s ]) in
+    let kinds_list_expr = 
+      kinds
+      |> List.map (fun s -> <:expr< $str:s$ >>)
+      |> Ppxutil.convert_up_list_expr loc in
      let whene = <:expr< match Plexer.parse_antiquot x with [
-                             Some (k, _) -> k = $str:s$
+                             Some (k, _) -> List.mem k $kinds_list_expr$
                            | _ -> False
                            ] >> in
-     (<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, <:expr< $int:string_of_int i$ >>)
-]
+     [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, <:expr< $int:string_of_int i$ >>)]
+  in rest_branches @ anti_branches
 ;
 
 value match_nest_branches g (fimap,fomap) ename i (fi, fo, r) =
   let loc = r.ar_loc in
-  if not (Follow.nullable fi) then
-    let raw_tokens = TS.export (Follow.fi2fo loc fi) in
-    raw_tokens |> List.map (token_to_match_branch loc i)
-  else if TS.mt <> fo then
-    let raw_tokens = TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
-    raw_tokens |> List.map (token_to_match_branch loc i)
-  else
-    [(<:patt< _ >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)]
+  let raw_tokens =
+    TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
+  let nullable_branch =
+    if Follow.nullable fi && TS.mt = fo then
+      [(<:patt< _ >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)]
+    else [] in
+  (tokens_to_match_branches loc i raw_tokens) @ nullable_branch
 ;
 
 value build_match_nest loc g (fimap,fomap) ename fi_fo_rule_list =
