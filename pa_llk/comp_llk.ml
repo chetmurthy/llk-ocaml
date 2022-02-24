@@ -1556,12 +1556,6 @@ value all_tokens el =
   }
 ;
 
-value token_to_pattern loc = fun [
-    CLS s -> <:patt< ($str:s$, _) >>
-  | SPCL s -> <:patt< ("", $str:s$) >>
-]
-;
-
 value compute_fifo loc fimap ff r =
   let fi = First.rule fimap r in
   (fi, ff, r)
@@ -1576,12 +1570,6 @@ value disjoint loc ll =
          && drec (TS.union h acc) t
       ] in
   drec TS.mt ll
-;
-
-value tokens_to_patt loc l = 
-  let patts = List.map (token_to_pattern loc) l in
-  List.fold_left (fun p q -> <:patt< $p$ | $q$ >>)
-    (List.hd patts) (List.tl patts)
 ;
 
 open Exparser ;
