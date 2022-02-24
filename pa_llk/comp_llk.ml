@@ -920,6 +920,45 @@ module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
 end ;
 module MSM = MutSetMap ;
 
+module Anti = struct
+
+(**
+
+["flag"] for FLAG
+["list"] for LIST0 and LIST1
+["opt"] for OPT
+["chr"] for CHAR
+["flo"] for FLOAT
+["int"] for INT
+["int32"] for INT_l
+["int64"] for INT_L
+["nativeint"] for INT_n
+["lid"] for LIDENT
+["str"] for STRING
+["uid"] for UIDENT
+ *)
+value infer_kinds loc s kinds =
+  if kinds <> [] then kinds else
+    match s with [
+        ASflag _ _ -> ["flag"]
+      | ASlist _ _ _ _ -> ["list"]
+      | ASopt _ _ -> ["opt"]
+      | AStok loc "CHAR" _ -> ["chr"]
+      | AStok loc "FLOAT" _ -> ["flo"]
+      | AStok loc "INT" _ -> ["int"]
+      | AStok loc "INT_l" _ -> ["int32"]
+      | AStok loc "INT_L" _ -> ["int64"]
+      | AStok loc "INT_n" _ -> ["nativeint"]
+      | AStok loc "LIDENT" _ -> ["lid"]
+      | AStok loc "STRING" _ -> ["str"]
+      | AStok loc "UIDENT" _ -> ["uid"]
+      | _ -> raise_failwith loc "cannot infer antiquotation kind"
+      ]
+;
+
+end
+;
+
 module First = struct
 
 value rec psymbols m = fun [
@@ -961,8 +1000,9 @@ and symbol m = fun [
   | ASrules _ rl -> rules m rl
   | ASself _ _ -> assert False
   | AStok _ cls _ -> TS.mk[Some (CLS cls)]
-  | ASvala _ s sl ->
-     TS.(union (symbol m s) (sl |> List.concat_map (fun s -> [Some (SPCL s); Some (SPCL ("_"^s))]) |> mk))
+  | ASvala loc s kinds ->
+     let anti_kinds = Anti.infer_kinds loc s kinds in
+     TS.(union (symbol m s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
   | ASregexp loc _ as s ->
      raise_failwithf loc "First.symbol: internal error: unrecognized %a" pp_a_symbol s
 ]
@@ -1491,6 +1531,7 @@ module Codegen = struct
 open Llk_regexps ;
 open PatternBaseToken ;
 
+
 value all_tokens el =
   let open Llk_migrate in
   let acc = ref [] in
@@ -1544,40 +1585,6 @@ value tokens_to_patt loc l =
 ;
 
 open Exparser ;
-
-(**
-
-["flag"] for FLAG
-["list"] for LIST0 and LIST1
-["opt"] for OPT
-["chr"] for CHAR
-["flo"] for FLOAT
-["int"] for INT
-["int32"] for INT_l
-["int64"] for INT_L
-["nativeint"] for INT_n
-["lid"] for LIDENT
-["str"] for STRING
-["uid"] for UIDENT
- *)
-value infer_anti_kinds loc s kinds =
-  if kinds <> [] then kinds else
-    match s with [
-        ASflag _ _ -> ["flag"]
-      | ASlist _ _ _ _ -> ["list"]
-      | ASopt _ _ -> ["opt"]
-      | AStok loc "CHAR" _ -> ["chr"]
-      | AStok loc "FLOAT" _ -> ["flo"]
-      | AStok loc "INT" _ -> ["int"]
-      | AStok loc "INT_l" _ -> ["int32"]
-      | AStok loc "INT_L" _ -> ["int64"]
-      | AStok loc "INT_n" _ -> ["nativeint"]
-      | AStok loc "LIDENT" _ -> ["lid"]
-      | AStok loc "STRING" _ -> ["str"]
-      | AStok loc "UIDENT" _ -> ["uid"]
-      | _ -> raise_failwith loc "cannot infer antiquotation kind"
-      ]
-;
 
 value rec compile1_symbol g loc (fimap,fomap) ename s =
   match s with [
@@ -1671,7 +1678,7 @@ and compile1_psymbol g loc (fimap,fomap) ename ps =
        (SpNtr loc patt e, SpoNoth)
 
     | ASvala loc elem kinds ->
-       let anti_kinds = infer_anti_kinds loc elem kinds in
+       let anti_kinds = Anti.infer_kinds loc elem kinds in
        let kinds_list_expr =
          anti_kinds
          |> List.concat_map (fun k -> [k; "_"^k])

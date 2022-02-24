@@ -2,7 +2,8 @@
 [%llk
 {foo|
 GRAMMAR Mod:
-GLOBAL: sig_item;
+GLOBAL: ident functor_parameter uidopt
+        sig_item;
 
 REGEXPS:
   check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
@@ -23,7 +24,7 @@ sig_item: [ [
       | arg = V functor_parameter "functor_parameter" "fp" → 2
  ] ]
   ;
-  functor_parameter: [ [ "("; ")" -> None ] ] ;
+  functor_parameter: [ [ "("; ")" -> () ] ] ;
   uidopt: [ [ m = V UIDENT -> Some m | "_" -> None ] ] ;
   ident:
     [ [ i = LIDENT → i
@@ -42,7 +43,10 @@ open OUnit2
 open OUnitTest
 let tests = "simple" >::: [
       "Mod" >:: (fun _ ->
-        ()
+          assert_equal "a" (pa Mod.ident "a")
+        ; assert_equal () (pa Mod.functor_parameter "()")
+        ; assert_equal (Some <:vala< "U" >>) (pa Mod.uidopt "U")
+        ; assert_equal (Some <:vala< "U" >>) (pa Mod.uidopt "$uid:x$")
       )
 ]
 

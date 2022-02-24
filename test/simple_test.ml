@@ -119,6 +119,16 @@ END ;
 |foo}
 ] ;;
 
+[%llk
+{foo|
+GRAMMAR VUID:
+GLOBAL: uidopt;
+
+  uidopt: [ [ m = V UIDENT -> Some m | "_" -> None ] ] ;
+END ;
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -200,6 +210,11 @@ let tests = "simple" >::: [
           assert_equal [<:vala< "A" >>; <:vala< "B" >>; <:vala< "C" >>] (pa Longident.longident_eoi "A.B.C")
         ; assert_equal [<:vala< "A" >>] (pa Longident.longident_eoi "A")
       )
+    ; "VUID" >:: (fun _ ->
+        assert_equal None (pa VUID.uidopt "_")
+      ; assert_equal (Some <:vala< "U" >>) (pa VUID.uidopt "U")
+      ; assert_equal (Ploc.VaAnt "lid:x") (pa VALA.vala1 "$lid:x$")
+    )
 ]
 
 
