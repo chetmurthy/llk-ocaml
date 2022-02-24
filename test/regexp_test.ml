@@ -1,5 +1,5 @@
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR Mod:
 GLOBAL: ident functor_parameter uidopt module_declaration mod_decl_binding

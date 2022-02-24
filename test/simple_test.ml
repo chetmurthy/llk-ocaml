@@ -1,7 +1,7 @@
 open Pa_ppx_testutils
 open Testutil
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR G:
 GLOBAL: etop ;
@@ -14,7 +14,7 @@ END;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR H:
 GLOBAL: etop;
@@ -26,7 +26,7 @@ END;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR I:
 GLOBAL: e;
@@ -43,7 +43,7 @@ END;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR Calc:
 GLOBAL: e_top;
@@ -77,7 +77,7 @@ END;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR Lists:
 GLOBAL: id list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
@@ -92,7 +92,7 @@ END;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR VALA:
 GLOBAL: vala1 vala2;
@@ -103,7 +103,7 @@ END;
 ] ;;
 
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR Longident:
 GLOBAL: longident longident_eoi;
@@ -119,7 +119,7 @@ END ;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR VUID:
 GLOBAL: uidopt;
@@ -129,7 +129,7 @@ END ;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR LF:
 GLOBAL: top;
@@ -147,7 +147,7 @@ END ;
 |foo}
 ] ;;
 
-[%llk
+[@@@llk
 {foo|
 GRAMMAR LLift:
 GLOBAL: top;
