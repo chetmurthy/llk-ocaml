@@ -1906,20 +1906,50 @@ value token_pattern loc = fun [
                       ] >>)
   ] ;
 
+value statename i = Printf.sprintf "q%04d" i ;
+
+value edge_group_to_branches loc edges =
+  let newst = snd (List.hd edges) in
+  let branch_body = <:expr< $lid:(statename newst)$ (ofs+1) >> in
+  let toks = List.map fst edges in
+  let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
+  let rest_branches =
+    if [] = rest then [] else
+      let patt =
+        let rest = rest |> List.map (fun [
+                                         CLS s -> <:patt< Some ($str:s$, _) >>
+                                       | SPCL s -> <:patt< Some ("", $str:s$) >>
+                             ]) in
+        List.fold_left (fun p1 p2 -> <:patt< $p1$ | $p2$ >>) (List.hd rest) (List.tl rest) in
+      [(patt, <:vala< None >>, branch_body)] in
+
+  let antis_branches =
+    if [] = antis then [] else
+      let kinds = antis |> List.map (fun [ ANTI s -> s ]) in
+      let kinds_list_expr = 
+        kinds
+        |> List.map (fun s -> <:expr< $str:s$ >>)
+        |> Ppxutil.convert_up_list_expr loc in
+      let whene = <:expr< match Plexer.parse_antiquot x with [
+                              Some (k, _) -> List.mem k $kinds_list_expr$
+                            | _ -> False
+                            ] >> in
+      [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, branch_body)] in
+  rest_branches @ antis_branches
+;
+
 value letrec_nest (init, initre, states) =
   let open PatternBaseToken in
   let loc = Ploc.dummy in
-  let statename i = Printf.sprintf "q%04d" i in
   let export_state (i, rex, final, edges) =
     match final with [
       Some (OUTPUT output) ->
       (<:patt< $lid:(statename i)$ >>, <:expr< fun ofs -> Some (ofs, $int:string_of_int output$) >>, <:vala< [] >>)
     | None ->
-      let branches =
-        edges |> List.map (fun (tok, newst) ->
-            let (patt, whene) = token_pattern loc tok in
-            (patt, <:vala< whene >>, <:expr< $lid:(statename newst)$ (ofs+1) >>)
-          ) in
+       let branches =
+         let edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') edges in
+         edge_groups
+         |> List.concat_map (edge_group_to_branches loc) in
       let branches = branches @ [
           (<:patt< _ >>, <:vala< None >>, <:expr< None >>)
         ] in
