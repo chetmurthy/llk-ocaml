@@ -129,6 +129,44 @@ END ;
 |foo}
 ] ;;
 
+[%llk
+{foo|
+GRAMMAR LF:
+GLOBAL: top;
+
+  a: [ [ x = INT -> int_of_string x ] ];
+  b: [ [ x = FLOAT -> float_of_string x ] ];
+  c: [ [ x = STRING -> x ] ];
+  d: [ [ x = UIDENT -> x ] ];
+  e: [ [ x = LIDENT -> x ] ];
+
+  top: [ [ x = a ; y = b ; z = c; w = e -> (x,y,z,w)
+         | x = a ; y = b ; z = c; w = d -> (x,y,z,w)
+         ] ] ;
+END ;
+|foo}
+] ;;
+
+[%llk
+{foo|
+GRAMMAR LLift:
+GLOBAL: top;
+
+  a: [ [ x = INT -> int_of_string x ] ];
+  b: [ [ x = FLOAT -> float_of_string x ] ];
+  c: [ [ x = STRING -> x ] ];
+  d: [ [ x = UIDENT -> x ] ];
+  e: [ [ x = LIDENT -> x ] ];
+
+  top: [ [ x = a ; y = b ;
+           (z2,w2) = [ z = c; w = e -> (z,w)
+                   | z = c; w = d -> (z,w)
+                   ] -> (x,y,z2,w2)
+         ] ] ;
+END ;
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -216,6 +254,10 @@ let tests = "simple" >::: [
         assert_equal None (pa VUID.uidopt "_")
       ; assert_equal (Some <:vala< "U" >>) (pa VUID.uidopt "U")
       ; assert_equal (Ploc.VaAnt "lid:x") (pa VALA.vala1 "$lid:x$")
+    )
+    ; "LF" >:: (fun _ ->
+        assert_equal (1, 2., "c", "X") (pa LF.top {|1 2. "c" X|})
+      ; assert_equal (1, 2., "c", "y") (pa LF.top {|1 2. "c" y|})
     )
 ]
 

@@ -138,11 +138,11 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-
+(*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
 
-(*
+
 #load "simple_test.cmo";;
 open Simple_test ;;
  *)

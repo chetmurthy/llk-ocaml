@@ -783,13 +783,14 @@ and left_factorize ctr loc rl =
 value make_dt () =
   let ctr = Ctr.mk() in
   let dt = Llk_migrate.make_dt () in
-  let fallback_migrate_a_level = dt.migrate_a_level in
-  let migrate_a_level dt l = 
-    let l = fallback_migrate_a_level dt l in
-    let loc = l.al_loc in    
-    {(l) with al_rules = {(l.al_rules) with au_rules = left_factorize ctr loc l.al_rules.au_rules } }
+  let fallback_migrate_a_rules = dt.migrate_a_rules in
+  let migrate_a_rules dt rs = 
+    let rs = fallback_migrate_a_rules dt rs in
+    let loc = rs.au_loc in    
+    {(rs) with au_rules = left_factorize ctr loc rs.au_rules }
   in
-  { (dt) with Llk_migrate.migrate_a_level = migrate_a_level }
+
+  { (dt) with Llk_migrate.migrate_a_rules = migrate_a_rules }
 ;
 
 value left_factorize_level l =
@@ -1366,6 +1367,73 @@ module S5LambdaLift = struct
       repeat until there are no multi-way rules left in any entry.
    *)
 
+value free_lids_of_expr e =
+  let acc = ref [] in
+  let pushid id = Std.push acc id in
+  let dt = Llk_migrate.Camlp5.make_dt () in
+  let fallback_migrate_expr = dt.migrate_expr in
+  let migrate_expr dt e = do {
+    match e with [
+        <:expr< $lid:x$ >> -> pushid x
+      | _ -> ()
+      ] ;
+      fallback_migrate_expr dt e
+  } in
+  let dt = { (dt) with migrate_expr = migrate_expr } in do {
+    ignore (dt.migrate_expr dt e) ;
+    acc.val |> List.sort_uniq Stdlib.compare
+  }
+;
+
+value free_lids_of_patt e =
+  let acc = ref [] in
+  let pushid id = Std.push acc id in
+  let dt = Llk_migrate.Camlp5.make_dt () in
+  let fallback_migrate_patt = dt.migrate_patt in
+  let migrate_patt dt e = do {
+    match e with [
+        <:patt< $lid:x$ >> -> pushid x
+      | _ -> ()
+      ] ;
+      fallback_migrate_patt dt e
+  } in
+  let dt = { (dt) with migrate_patt = migrate_patt } in do {
+    ignore (dt.migrate_patt dt e) ;
+    acc.val |> List.sort_uniq Stdlib.compare
+  }
+;
+
+value free_lids_of_a_rules rs =
+  let acc = ref [] in
+  let pushe e =
+    e |> free_lids_of_expr |> List.iter (Std.push acc) in
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let fallback_migrate_a_rule = dt.migrate_a_rule in
+  let migrate_a_symbol dt s = 
+    do { match s with [
+             ASleft_assoc _ _ _ e -> pushe e
+           | ASself _ el -> List.iter pushe el
+           | ASnext _ el -> List.iter pushe el
+           | ASnterm _ _ el _ -> List.iter pushe el
+           | _ -> ()
+           ];
+         fallback_migrate_a_symbol dt s
+       } in
+  let migrate_a_rule dt r = do {
+    match r.ar_action with [
+        None -> () | Some e -> pushe e
+      ] ;
+    fallback_migrate_a_rule dt r
+  } in
+  let dt = { (dt) with migrate_a_rule = migrate_a_rule
+                     ; migrate_a_symbol = migrate_a_symbol } in
+  do {
+    ignore (dt.migrate_a_rules dt rs) ;
+    acc.val |> List.sort_uniq Stdlib.compare
+  }
+;
+
 value rec lift_rules mut esig rl = { (rl) with au_rules = List.map (lift_rule mut esig) rl.au_rules }
 
 and lift_rule mut esig r =
@@ -1398,6 +1466,10 @@ and lift_symbol ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun [
 
   | ASrules loc rl ->
      let formals = eformals @ (List.rev revpats) in
+     let ids_of_rl = free_lids_of_a_rules rl in
+     let formals =
+       formals
+     |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) ids_of_rl) in
      let actuals = formals2actuals formals in
      let new_ename = Ctr.fresh_name ename ctr in
      let new_e = {
