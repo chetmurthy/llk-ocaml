@@ -50,6 +50,8 @@ module CompilingGrammar = struct
 
   value gram_regexp cg id = List.assoc id (snd cg).gram_regexps ;
 
+  value exists_regexp_ast cg nt = List.mem_assoc nt (g cg).gram_regexp_asts ;
+
 end ;
 module CG = CompilingGrammar ;
 
@@ -94,7 +96,7 @@ value check cg =
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm loc nt _ _
-           when not ((CG.g cg).gram_entries |> List.exists (fun e -> nt = e.ae_name)) ->
+           when not (CG.exists_entry cg nt) ->
                 raise_failwithf loc "CheckSyntax: no nonterminal %s defined in grammar" nt
       | ASregexp loc nt ->
          raise_failwithf loc "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
@@ -102,7 +104,7 @@ value check cg =
       ] in
   let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
   let migrate_a_psymbol dt = fun [
-        {ap_symb=ASregexp loc nt} when not (List.mem_assoc nt (CG.g cg).gram_regexp_asts) ->
+        {ap_symb=ASregexp loc nt} when not (CG.exists_regexp_ast cg nt) ->
             raise_failwithf loc "CheckSyntax: no regexp %s defined in grammar" nt
       | {ap_symb=ASregexp _ _ } as ps -> ps
       | s -> fallback_migrate_a_psymbol dt s
@@ -111,7 +113,7 @@ value check cg =
              Llk_migrate.migrate_a_symbol = migrate_a_symbol
            ; Llk_migrate.migrate_a_psymbol = migrate_a_psymbol
            } in
-  List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.g cg).gram_entries
+  List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg)
 ;
 
 value exec x = do {
