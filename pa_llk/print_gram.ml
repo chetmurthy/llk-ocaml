@@ -301,12 +301,12 @@ value pr_exports pc l =
   ]
 ;
 
+value pr_external pc (id, ast) =
+  pprintf pc "external %s : PREDICTION %p;" id pr_regexp_ast ast
+;
+
 value pr_externals pc l =
-  match l with
-  [ [] -> pprintf pc ""
-  | _ ->
-      pprintf pc "EXTERNAL: %p;@ " (plist ident 2) (pair_with "" l)
-  ]
+    pprintf pc "%p" (plist pr_external 0) (pair_with "" l)
 ;
 
 value pr_regexp_binding pc (id, ast) =

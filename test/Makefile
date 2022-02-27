@@ -13,8 +13,9 @@ test:: all
 	mkdir -p _build
 	./simple_test.exe
 	./regexp_test.exe
+	./external_test.exe
 
-all: simple_test.exe regexp_test.exe
+all: simple_test.exe external_test.exe
 
 %_test.exe: %_test.cmo
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -linkpkg -linkall -o $@ $<
