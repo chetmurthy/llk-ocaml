@@ -13,7 +13,7 @@ END;
 
 external expr : PREDICTION LIDENT ;
 
-expr1 : [ [ e = expr -> e ] ] ;
+expr1 : [ [ e = expr -> Some e | -> None ] ] ;
 
 END ;
 |foo}
@@ -21,12 +21,18 @@ END ;
 
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
+type expr = MLast.expr
+type patt = MLast.patt
+let equal_expr = Reloc.eq_expr
+let equal_patt = Reloc.eq_patt
+type expr_option = expr option [@@deriving eq]
+
 open OUnit2
 open OUnitTest
 let loc = Ploc.dummy
 let tests = "simple" >::: [
       "Mod" >:: (fun _ ->
-          assert_equal ~cmp:Reloc.eq_expr <:expr< a >> (pa Mod.expr1 "a")
+          assert_equal ~cmp:equal_expr_option (Some <:expr< a >>) (pa Mod.expr1 "a")
       )
 ]
 

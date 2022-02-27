@@ -10,6 +10,8 @@ open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
 
+type expr = MLast.expr ;
+type patt = MLast.patt ;
 value equal_expr = Reloc.eq_expr ;
 value equal_patt = Reloc.eq_patt ;
 
