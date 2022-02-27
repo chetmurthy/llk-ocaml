@@ -26,46 +26,75 @@ module Ctr = struct
     Fmt.(str "%s__%02d" root n) ;
 end ;
 
+module CompilingGrammar = struct
+  type mut_data_t = {
+      ctr : Ctr.t
+    ; gram_regexps: mutable list (string * regexp)
+    ; last : unit
+    } ;
+  type t = (Llk_types.top * mut_data_t) ;
+
+  value mk t = (t, {
+                  ctr = Ctr.mk()
+                ; gram_regexps = []
+                ; last = ()
+               }) ;
+  value g = fst ;
+  value withg cg g = (g, snd cg) ;
+  value add_gram_regexp cg x =
+    (snd cg).gram_regexps := [x :: (snd cg).gram_regexps] ;
+  value gram_regexp_asts cg = (g cg).gram_regexp_asts ;
+
+  value gram_entries cg = (g cg).gram_entries ;
+  value exists_entry cg nt = List.exists (fun e -> nt = e.ae_name) (g cg).gram_entries ;
+
+  value gram_regexp cg id = List.assoc id (snd cg).gram_regexps ;
+
+end ;
+module CG = CompilingGrammar ;
+
 module S0ProcessRegexps = struct
 open Llk_regexps ;
 
-value normalize_regexps g =
+value process_regexps cg =
   let norml = List.fold_left (fun env (id, astre) ->
                   let re = normalize_astre env astre in
                   [(id,re)::env]
-                ) [] g.gram_regexp_asts in
-  {(g) with gram_regexps = List.rev norml }
+                ) [] (CG.gram_regexp_asts cg) in do {
+  List.iter (CG.add_gram_regexp cg) norml ;
+  cg
+}
 ;
 
-value identify_regexps g =
+value convert_regexp_references cg =
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
   let migrate_a_psymbol dt = fun [
         {ap_symb=ASnterm loc nt [] None} as ps
-           when List.mem_assoc nt g.gram_regexps ->
+           when List.mem_assoc nt (CG.gram_regexp_asts cg) ->
                 {(ps) with ap_symb = ASregexp loc nt}
       | {ap_symb=ASnterm loc nt _ _}
-           when not (g.gram_entries |> List.exists (fun e -> nt = e.ae_name)) ->
-                raise_failwithf loc "CheckSyntax: no nonterminal %s found in grammar" nt
+           when not (CG.exists_entry cg nt) ->
+                raise_failwithf loc "S0ProcessRegexps: no nonterminal %s found in grammar" nt
       | ps -> fallback_migrate_a_psymbol dt ps
       ] in
   let dt = { (dt) with Llk_migrate.migrate_a_psymbol = migrate_a_psymbol } in
-  {(g) with gram_entries = List.map (dt.migrate_a_entry dt) g.gram_entries}
+  CG.withg cg {(CG.g cg) with gram_entries = List.map (dt.migrate_a_entry dt) (CG.gram_entries cg)}
 ;
 
-value exec g = g |> normalize_regexps |> identify_regexps ;
+value exec cg = cg |> process_regexps |> convert_regexp_references ;
 
 end ;
 
 
 module CheckSyntax = struct
 
-value check g =
+value check cg =
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm loc nt _ _
-           when not (g.gram_entries |> List.exists (fun e -> nt = e.ae_name)) ->
+           when not ((CG.g cg).gram_entries |> List.exists (fun e -> nt = e.ae_name)) ->
                 raise_failwithf loc "CheckSyntax: no nonterminal %s defined in grammar" nt
       | ASregexp loc nt ->
          raise_failwithf loc "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
@@ -73,7 +102,7 @@ value check g =
       ] in
   let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
   let migrate_a_psymbol dt = fun [
-        {ap_symb=ASregexp loc nt} when not (List.mem_assoc nt g.gram_regexp_asts) ->
+        {ap_symb=ASregexp loc nt} when not (List.mem_assoc nt (CG.g cg).gram_regexp_asts) ->
             raise_failwithf loc "CheckSyntax: no regexp %s defined in grammar" nt
       | {ap_symb=ASregexp _ _ } as ps -> ps
       | s -> fallback_migrate_a_psymbol dt s
@@ -82,7 +111,7 @@ value check g =
              Llk_migrate.migrate_a_symbol = migrate_a_symbol
            ; Llk_migrate.migrate_a_psymbol = migrate_a_psymbol
            } in
-  List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) g.gram_entries
+  List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.g cg).gram_entries
 ;
 
 value exec x = do {
@@ -163,7 +192,7 @@ value check_levels env ll = List.iter (check_level env) ll ;
 value check_entry e =
   check_levels (e.ae_formals |> List.concat_map vars_of_patt |> Env.mk) e.ae_levels ;
 
-value exec g = do { List.iter check_entry g.gram_entries ; g } ;
+value exec cg = do { List.iter check_entry (CG.gram_entries cg) ; cg } ;
 
 end ;
 
@@ -325,13 +354,13 @@ module S1Coalesce = struct
          ])
   ;
 
-  value exec g = {(g) with gram_entries = coalesce_entries g.gram_entries} ;
+  value exec cg = CG.withg cg {(CG.g cg) with gram_entries = coalesce_entries (CG.gram_entries cg)} ;
 
 end ;
 
 module CheckNoPosition = struct
 
-value exec ({gram_entries=el} as x) = do {
+value exec (({gram_entries=el}, _) as x) = do {
   el |> List.iter (fun e ->
       if e.ae_pos <> None then
         raise_failwithf e.ae_loc "CheckNoPosition: entry %s still has a position" e.ae_name
@@ -684,12 +713,12 @@ value exec0 e =
   if List.length e.ae_levels <=1 then ([], [substitute_self e])
   else exec1 e ;
 
-value exec g =
-  let pl = List.map exec0 g.gram_entries in
+value exec cg =
+  let pl = List.map exec0 (CG.gram_entries cg) in
   let dict = pl |> List.concat_map fst in
   let el = List.concat_map snd pl in
   let el = List.map (Subst.entry dict) el in
-  {(g) with gram_entries = el }
+  CG.withg cg {(CG.g cg) with gram_entries = el }
 ;
 
 end ;
@@ -708,7 +737,7 @@ value check_no_level el =
   List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) el
 ;
 
-value exec ({gram_entries=el} as x) = do {
+value exec (({gram_entries=el}, _) as x) = do {
   check_no_level el ;
   el |> List.iter (fun e ->
     e.ae_levels |> List.iter (fun l -> do {
@@ -806,7 +835,7 @@ value left_factorize_levels l = do {
 
 value exec0 e = {(e) with ae_levels = left_factorize_levels e.ae_levels } ;
 
-value exec g = {(g) with gram_entries = List.map exec0 g.gram_entries} ;
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = List.map exec0 (CG.gram_entries cg)} ;
 
 end ;
 
@@ -1034,7 +1063,7 @@ value rec comprec el m =
 value compute_first el = comprec el SM.mt ;
   
 value exec0 el = compute_first el ;
-value exec g = SM.export (exec0 g.gram_entries) ;
+value exec cg = SM.export (exec0 (CG.gram_entries cg)) ;
 
 end ;
 
@@ -1358,7 +1387,7 @@ value exec0 ~{tops} el =
   }
 ;
 
-value exec ~{tops} g = exec0 ~{tops=tops} g.gram_entries ;
+value exec ~{tops} cg = exec0 ~{tops=tops} (CG.gram_entries cg) ;
 
 end ;
 
@@ -1511,7 +1540,7 @@ value exec0 el =
   in erec el
 ;
 
-value exec g = {(g) with gram_entries = exec0 g.gram_entries } ;
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 (CG.gram_entries cg) } ;
 
 end ;
 
@@ -1521,7 +1550,7 @@ value exec0 el =
   let cmp e1 e2 = String.compare e1.ae_name e2.ae_name in
   List.stable_sort cmp el ;
 
-value exec g =  {(g) with gram_entries = exec0 g.gram_entries } ;
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 (CG.gram_entries cg) } ;
 
 end ;
 
@@ -1584,7 +1613,7 @@ value rec exec0 el =
     ]
 ;
 
-value exec g = {(g) with gram_entries = exec0 g.gram_entries } ;
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 (CG.gram_entries cg) } ;
 
 end ;
 
@@ -1779,7 +1808,7 @@ value print_token_option = fun [
 ]
 ;
 
-value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list = do {
+value report_disjointness_error ?{and_raise=False} cg loc ename fi_fo_rule_list = do {
   Fmt.(pf stderr "Failure of disjointness of FIRST-sets in entry %s\n" ename) ;
   Fmt.(pf stderr "================================================================\n") ;
   fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
@@ -1788,7 +1817,7 @@ value report_disjointness_error ?{and_raise=False} g loc ename fi_fo_rule_list =
           (Pr.rule False Pprintf.empty_pc r)
                        )) ;
   Fmt.(pf stderr "================================================================\n") ;
-  prerr_string (Pr.top Pprintf.empty_pc g) ;
+  prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
   Fmt.(pf stderr "\n%!") ;
   if and_raise then
     raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
@@ -1819,7 +1848,7 @@ value tokens_to_match_branches loc i toks =
   in rest_branches @ anti_branches
 ;
 
-value match_nest_branches g (fimap,fomap) ename i (fi, fo, r) =
+value match_nest_branches cg (fimap,fomap) ename i (fi, fo, r) =
   let loc = r.ar_loc in
   let raw_tokens =
     TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
@@ -1830,10 +1859,10 @@ value match_nest_branches g (fimap,fomap) ename i (fi, fo, r) =
   (tokens_to_match_branches loc i raw_tokens) @ nullable_branch
 ;
 
-value build_match_nest loc g (fimap,fomap) ename fi_fo_rule_list =
+value build_match_nest loc cg (fimap,fomap) ename fi_fo_rule_list =
   let branches =
     fi_fo_rule_list
-    |> List.mapi (match_nest_branches g (fimap,fomap) ename)
+    |> List.mapi (match_nest_branches cg (fimap,fomap) ename)
     |> List.concat in
   let (null_branches, normal_branches) =
     Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
@@ -1861,7 +1890,7 @@ value compile1a_branch g (fimap,fomap) ename i (fi, fo, r) =
     4. If they are disjoint, but more than one FIRST set is nullable, again, can't compile the entry.
     5. compile a match, with each case_branch one of the rule-branches, and the pattern being the FFO set.
  *)
-value compile1a_entry g (fimap, fomap) e =
+value compile1a_entry cg (fimap, fomap) e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let ff = SM.lookup ename fomap in
@@ -1869,14 +1898,14 @@ value compile1a_entry g (fimap, fomap) e =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.map (compute_fifo loc fimap ff) in do {
     if not (disjoint loc fi_fo_rule_list) then
-      report_disjointness_error ~{and_raise=True} g loc e.ae_name fi_fo_rule_list
+      report_disjointness_error ~{and_raise=True} cg loc e.ae_name fi_fo_rule_list
     else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
-    let match_nest = build_match_nest loc g (fimap,fomap) ename fi_fo_rule_list in
+    let match_nest = build_match_nest loc cg (fimap,fomap) ename fi_fo_rule_list in
     let branches =
       fi_fo_rule_list
-    |> List.mapi (compile1a_branch g (fimap,fomap) ename) in
+    |> List.mapi (compile1a_branch cg (fimap,fomap) ename) in
     let rhs =
       match branches with [
         [(_,_,e)] -> e
@@ -1966,9 +1995,9 @@ value letrec_nest (init, initre, states) =
     let rec $list:bindl$ in $lid:(statename init)$ 0 >>
 ;
 
-value compile1b_branch g (fimap,fomap) ename branchnum r =
+value compile1b_branch cg (fimap,fomap) ename branchnum r =
   let loc = r.ar_loc in
-  let body = compile1_rule g (fimap,fomap) ename r in
+  let body = compile1_rule cg (fimap,fomap) ename r in
   (<:patt< Some (_, $int:string_of_int branchnum$ ) >>, <:vala< None >>, body)
 ;
 
@@ -1980,7 +2009,7 @@ value compile1b_branch g (fimap,fomap) ename branchnum r =
     4. Instead, pull out the first ASregexp in each rule-branch (if any) and replace the FFO with that.
     5. construct the multi-way regexp with this hybrid set.
  *)
-value compile1b_entry g (fimap, fomap) e =
+value compile1b_entry cg (fimap, fomap) e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let ff = SM.lookup ename fomap in
@@ -2010,7 +2039,7 @@ value compile1b_entry g (fimap, fomap) e =
                        |> PSyn.disjunction
                        |> (fun r -> PSyn.(r @@ PSyn.token (OUTPUT i)))
                      | (ffo, Some rexname, _) ->
-                        match List.assoc rexname g.gram_regexps with [
+                        match CG.gram_regexp cg rexname with [
                             exception Not_found ->
                                       raise_failwithf loc "compile1b_entry: undefined regexp %s" rexname
                           | x -> x
@@ -2024,7 +2053,7 @@ value compile1b_entry g (fimap, fomap) e =
   let branches = 
     ffo_regexp_rule_list
     |> List.map Std.third3
-    |> List.mapi (compile1b_branch g (fimap, fomap) ename) in
+    |> List.mapi (compile1b_branch cg (fimap, fomap) ename) in
   let branches =
     branches
     |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
@@ -2036,19 +2065,19 @@ value compile1b_entry g (fimap, fomap) e =
   ;
 
 
-value compile1_entry g (fimap, fomap) e =
-  match compile1a_entry g (fimap, fomap) e with [
+value compile1_entry cg (fimap, fomap) e =
+  match compile1a_entry cg (fimap, fomap) e with [
       exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
         Fmt.(pf stderr "compile1_entry: FIRST/FOLLOW strategy failed\n%!") ;
-        compile1b_entry g (fimap, fomap) e
+        compile1b_entry cg (fimap, fomap) e
       }
     | x -> x
     ]
 ;
 
-value exec ({gram_loc=loc; gram_exports=expl; gram_regexps=rl; gram_entries=el; gram_id=gid} as g)  =
+value exec (({gram_loc=loc; gram_exports=expl; gram_regexps=rl; gram_entries=el; gram_id=gid}, _) as cg)  =
 let (fimap, fomap) = Follow.exec0 ~{tops=expl} el in
-  let fdefs = List.map (compile1_entry g (fimap, fomap)) el in
+  let fdefs = List.map (compile1_entry cg (fimap, fomap)) el in
   let token_patterns =
     all_tokens el @ (
       rl
@@ -2094,7 +2123,7 @@ value parse s =
 
 value normre s =
   s
-  |> parse
+  |> parse |> CG.mk
   |> S0ProcessRegexps.exec
   |> CheckSyntax.exec
   |> CheckLexical.exec
