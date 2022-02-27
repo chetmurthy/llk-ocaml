@@ -1,4 +1,6 @@
 
+open Pcaml ;;
+
 [@@@llk
 {foo|
 GRAMMAR Mod:
@@ -21,12 +23,10 @@ let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2
 open OUnitTest
+let loc = Ploc.dummy
 let tests = "simple" >::: [
       "Mod" >:: (fun _ ->
-(*
-          assert_equal "a" (pa Mod.e "a")
-*)
-        ()
+          assert_equal ~cmp:Reloc.eq_expr <:expr< a >> (pa Mod.expr1 "a")
       )
 ]
 

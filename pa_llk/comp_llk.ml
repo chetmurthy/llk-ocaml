@@ -47,6 +47,7 @@ module CompilingGrammar = struct
 
   value gram_entries cg = (g cg).gram_entries ;
   value exists_entry cg nt = List.exists (fun e -> nt = e.ae_name) (g cg).gram_entries ;
+  value exists_external cg nt = List.mem_assoc nt (g cg).gram_externals ;
 
   value gram_regexp cg id = List.assoc id (snd cg).gram_regexps ;
 
@@ -73,10 +74,10 @@ value convert_regexp_references cg =
   let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
   let migrate_a_psymbol dt = fun [
         {ap_symb=ASnterm loc nt [] None} as ps
-           when List.mem_assoc nt (CG.gram_regexp_asts cg) ->
+           when CG.exists_regexp_ast cg nt ->
                 {(ps) with ap_symb = ASregexp loc nt}
       | {ap_symb=ASnterm loc nt _ _}
-           when not (CG.exists_entry cg nt) ->
+           when not (CG.exists_entry cg nt || CG.exists_external cg nt) ->
                 raise_failwithf loc "S0ProcessRegexps: no nonterminal %s found in grammar" nt
       | ps -> fallback_migrate_a_psymbol dt ps
       ] in
@@ -96,7 +97,7 @@ value check cg =
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm loc nt _ _
-           when not (CG.exists_entry cg nt) ->
+           when not (CG.exists_entry cg nt || CG.exists_external cg nt) ->
                 raise_failwithf loc "CheckSyntax: no nonterminal %s defined in grammar" nt
       | ASregexp loc nt ->
          raise_failwithf loc "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
@@ -1677,12 +1678,12 @@ value disjoint loc ll =
 
 open Exparser ;
 
-value rec compile1_symbol g loc (fimap,fomap) ename s =
+value rec compile1_symbol cg loc (fimap,fomap) ename s =
   match s with [
       ASflag loc s -> do {
       let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
         assert (TS.mt <> tokens) ;
-        let s_body = compile1_symbol g loc (fimap, fomap) ename s in
+        let s_body = compile1_symbol cg loc (fimap, fomap) ename s in
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
         <:expr< parse_flag $s_body$ >>
       }
@@ -1693,7 +1694,7 @@ value rec compile1_symbol g loc (fimap,fomap) ename s =
         [([((SpTrm loc <:patt< ("", $str:kws$) >> <:vala<  None >>), SpoNoth)],
           None, <:expr< () >>)]))
 
-    | ASnterm loc nt actuals None ->
+    | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
        Expr.applist <:expr< $lid:nt$ >> actuals
 
     | AStok loc cls None ->
@@ -1707,21 +1708,25 @@ value rec compile1_symbol g loc (fimap,fomap) ename s =
  *)       
     ]
 
-and compile1_psymbol g loc (fimap,fomap) ename ps =
+and compile1_psymbol cg loc (fimap,fomap) ename ps =
   let patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
   match ps.ap_symb with [
       ASflag loc s -> do {
       let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
         assert (TS.mt <> tokens) ;
-        let s_body = compile1_symbol g loc (fimap, fomap) ename s in
+        let s_body = compile1_symbol cg loc (fimap, fomap) ename s in
         (SpNtr loc patt <:expr< parse_flag $s_body$ >>, SpoNoth)
        }
     | ASkeyw  loc kws ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
        ((SpTrm loc <:patt< ("", $str:kws$) >> <:vala<  None >>), SpoNoth)
 
-    | ASnterm loc nt actuals None ->
+    | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
        let e = Expr.applist <:expr< $lid:nt$ >> actuals in
+        (SpNtr loc patt e, SpoNoth)
+
+    | ASnterm loc nt [] None when CG.exists_external cg nt ->
+       let e = <:expr< Grammar.Entry.parse_token_stream $lid:nt$ >> in
         (SpNtr loc patt e, SpoNoth)
 
     | AStok loc cls None ->
@@ -1729,42 +1734,42 @@ and compile1_psymbol g loc (fimap,fomap) ename ps =
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
 
     | ASleft_assoc loc lhs restrhs e ->
-       let lhs = compile1_symbol g loc (fimap,fomap) ename lhs in
-       let restrhs = compile1_symbol g loc (fimap,fomap) ename restrhs in
+       let lhs = compile1_symbol cg loc (fimap,fomap) ename lhs in
+       let restrhs = compile1_symbol cg loc (fimap,fomap) ename restrhs in
        let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
         (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem None ->
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
        let e = <:expr< parse_list0 $elem$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem None ->
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
        let e = <:expr< parse_list1 $elem$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem (Some (sep, False)) ->
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list0_with_sep $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem (Some (sep, False)) ->
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list1_with_sep $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem (Some (sep, True)) ->
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem (Some (sep, True)) ->
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol g loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
        let e = <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
@@ -1775,21 +1780,21 @@ and compile1_psymbol g loc (fimap,fomap) ename ps =
          |> List.concat_map (fun k -> [k; "_"^k])
          |> List.map (fun k -> <:expr< $str:k$ >>)
          |> Ppxutil.convert_up_list_expr loc in
-       let elem = compile1_symbol g loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
        let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
        (SpNtr loc patt e, SpoNoth)
     ]
 ;
 
-value compile1_psymbols g loc (fimap,fomap) ename psl =
+value compile1_psymbols cg loc (fimap,fomap) ename psl =
   let rec crec = fun [
         [{ap_symb=ASregexp _ _} :: t] -> crec t
       | [] -> []
-      | [h ::t] -> [compile1_psymbol g loc (fimap,fomap) ename h :: crec t]
+      | [h ::t] -> [compile1_psymbol cg loc (fimap,fomap) ename h :: crec t]
       ] in crec psl
 ;
 
-value compile1_rule g (fimap,fomap) ename r =
+value compile1_rule cg (fimap,fomap) ename r =
   let loc = r.ar_loc in
 (*
   List.fold_right (fun ps body ->
@@ -1799,7 +1804,7 @@ value compile1_rule g (fimap,fomap) ename r =
     r.ar_psymbols
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
  *)
-  let spc_list = compile1_psymbols g loc (fimap,fomap) ename r.ar_psymbols in
+  let spc_list = compile1_psymbols cg loc (fimap,fomap) ename r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
   cparser loc (None, [(spc_list, None, action)])
 ;
@@ -1878,9 +1883,9 @@ value build_match_nest loc cg (fimap,fomap) ename fi_fo_rule_list =
   <:expr< match Stream.peek __strm__ with [ $list:branches$ ] >>
 ;
 
-value compile1a_branch g (fimap,fomap) ename i (fi, fo, r) =
+value compile1a_branch cg (fimap,fomap) ename i (fi, fo, r) =
   let loc = r.ar_loc in
-  let body = compile1_rule g (fimap,fomap) ename r in
+  let body = compile1_rule cg (fimap,fomap) ename r in
   (<:patt< $int:string_of_int i$ >>, <:vala< None >>, body)
 ;
 
@@ -2096,6 +2101,7 @@ let (fimap, fomap) = Follow.exec0 ~{tops=expl} el in
     | SPCL k -> <:expr< lexer.tok_using ("", $str:k$) >>
                    ])
   in
+  let token_actions = token_actions @ [ <:expr< () >> ] in
   let exported_entries =
     expl
   |> List.map (fun ename -> <:str_item< value $lid:ename$ = Grammar.Entry.of_parser gram $str:ename$ F. $lid:ename$ >>) in
