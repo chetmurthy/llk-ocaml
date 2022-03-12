@@ -141,6 +141,7 @@ module CompilingGrammar = struct
   type mut_data_t = {
       ctr : Ctr.t
     ; gram_regexps: mutable list (string * regexp)
+    ; gram_externals: mutable list (string * regexp)
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     } ;
@@ -149,22 +150,29 @@ module CompilingGrammar = struct
   value mk t = (t, {
                   ctr = Ctr.mk()
                 ; gram_regexps = []
+                ; gram_externals = []
                 ; firsts = SM.mt
                 ; follows = SM.mt
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
+
   value add_gram_regexp cg x =
     (snd cg).gram_regexps := [x :: (snd cg).gram_regexps] ;
   value gram_regexp_asts cg = (g cg).gram_regexp_asts ;
+  value gram_regexps cg = (snd cg).gram_regexps ;
+  value gram_regexp cg id = List.assoc id (snd cg).gram_regexps ;
+  value exists_regexp_ast cg nt = List.mem_assoc nt (g cg).gram_regexp_asts ;
+
+  value add_gram_external cg x =
+    (snd cg).gram_externals := [x :: (snd cg).gram_externals] ;
+  value gram_external_asts cg = (g cg).gram_external_asts ;
+  value gram_externals cg = (snd cg).gram_externals ;
+  value gram_external cg id = List.assoc id (snd cg).gram_externals ;
+  value exists_external_ast cg nt = List.mem_assoc nt (g cg).gram_external_asts ;
 
   value gram_entries cg = (g cg).gram_entries ;
   value exists_entry cg nt = List.exists (fun e -> nt = e.ae_name) (g cg).gram_entries ;
-  value exists_external cg nt = List.mem_assoc nt (g cg).gram_externals ;
-
-  value gram_regexp cg id = List.assoc id (snd cg).gram_regexps ;
-
-  value exists_regexp_ast cg nt = List.mem_assoc nt (g cg).gram_regexp_asts ;
 
   value firstmap cg = (snd cg).firsts ;
 
@@ -193,13 +201,19 @@ module S0ProcessRegexps = struct
 open Llk_regexps ;
 
 value process_regexps cg =
-  let norml = List.fold_left (fun env (id, astre) ->
+  let norm_res = List.fold_left (fun env (id, astre) ->
                   let re = normalize_astre env astre in
                   [(id,re)::env]
-                ) [] (CG.gram_regexp_asts cg) in do {
-  List.iter (CG.add_gram_regexp cg) norml ;
-  cg
-}
+                ) [] (CG.gram_regexp_asts cg) in
+  let norm_exts = List.fold_left (fun env (id, astre) ->
+                  let re = normalize_astre env astre in
+                  [(id,re)::env]
+                ) [] (CG.gram_external_asts cg) in
+  do {
+    List.iter (CG.add_gram_regexp cg) norm_res ;
+    List.iter (CG.add_gram_external cg) norm_exts ;
+    cg
+  }
 ;
 
 value convert_regexp_references cg =
@@ -210,7 +224,7 @@ value convert_regexp_references cg =
            when CG.exists_regexp_ast cg nt ->
                 {(ps) with ap_symb = ASregexp loc nt}
       | {ap_symb=ASnterm loc nt _ _}
-           when not (CG.exists_entry cg nt || CG.exists_external cg nt) ->
+           when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
                 raise_failwithf loc "S0ProcessRegexps: no nonterminal %s found in grammar" nt
       | ps -> fallback_migrate_a_psymbol dt ps
       ] in
@@ -230,7 +244,7 @@ value check cg =
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm loc nt _ _
-           when not (CG.exists_entry cg nt || CG.exists_external cg nt) ->
+           when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
                 raise_failwithf loc "CheckSyntax: no nonterminal %s defined in grammar" nt
       | ASregexp loc nt ->
          raise_failwithf loc "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
@@ -1753,7 +1767,7 @@ and compile1_psymbol cg loc ename ps =
        let e = Expr.applist <:expr< $lid:nt$ >> actuals in
         (SpNtr loc patt e, SpoNoth)
 
-    | ASnterm loc nt [] None when CG.exists_external cg nt ->
+    | ASnterm loc nt [] None when CG.exists_external_ast cg nt ->
        let e = <:expr< Grammar.Entry.parse_token_stream $lid:nt$ >> in
         (SpNtr loc patt e, SpoNoth)
 
@@ -1843,8 +1857,8 @@ value print_token_option = fun [
 ]
 ;
 
-value report_disjointness_error ?{and_raise=False} cg loc ename fi_fo_rule_list = do {
-  Fmt.(pf stderr "Failure of disjointness of FIRST-sets in entry %s\n" ename) ;
+value report_first_follow_error ?{and_raise=False} reason cg loc ename fi_fo_rule_list = do {
+  Fmt.(pf stderr "Failure FIRST/FOLLOW in entry %s: %s\n" ename reason) ;
   Fmt.(pf stderr "================================================================\n") ;
   fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
       Fmt.(pf stderr "First: %s\nFollow: %s\nRule: %s\n\n"
@@ -1930,12 +1944,18 @@ value compile1a_entry cg e =
   let ename = e.ae_name in
   let ff = CG.follow cg ename in
   let fi_fo_rule_list =
-    (List.hd e.ae_levels).al_rules.au_rules
-    |> List.map (compute_fifo loc cg ff) in do {
+    match (List.hd e.ae_levels).al_rules.au_rules
+          |> List.map (compute_fifo loc cg ff) with [
+      x -> x
+    | exception First.ExternalEntry eename -> do {
+        report_first_follow_error ~{and_raise=True} Fmt.(str "external entry %s encountered" eename) cg loc e.ae_name [];
+        raise_failwithf loc "compile1a_entry(%s): external entry %s found, FIRST/FOLLOW disallowed" e.ae_name eename
+      }
+      ] in do {
     if not (disjoint loc fi_fo_rule_list) then
-      report_disjointness_error ~{and_raise=True} cg loc e.ae_name fi_fo_rule_list
+      report_first_follow_error ~{and_raise=True} "disjointness test failed" cg loc e.ae_name fi_fo_rule_list
     else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
-      raise_failwith loc "compile1_entry: more than one branch is nullable"
+      raise_failwith loc "compile1a_entry: more than one branch is nullable"
     else () ;
     let match_nest = build_match_nest loc cg ename fi_fo_rule_list in
     let branches =
@@ -2103,19 +2123,19 @@ value compile1b_entry cg e =
 value compile1_entry cg e =
   match compile1a_entry cg e with [
       exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
-        Fmt.(pf stderr "compile1_entry: FIRST/FOLLOW strategy failed\n%!") ;
+        Fmt.(pf stderr "compile1_entry(%s): FIRST/FOLLOW strategy failed\n%!" e.ae_name) ;
         compile1b_entry cg e
       }
     | x -> x
     ]
 ;
 
-value exec (({gram_loc=loc; gram_exports=expl; gram_regexps=rl; gram_entries=el; gram_id=gid}, _) as cg)  =
+value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg)  =
 let _ = Follow.exec0 cg ~{tops=expl} el in
   let fdefs = List.map (compile1_entry cg) el in
   let token_patterns =
     all_tokens el @ (
-      rl
+      (CG.gram_regexps cg)
       |> List.map snd
       |> List.concat_map PatternRegexp.tokens
     )

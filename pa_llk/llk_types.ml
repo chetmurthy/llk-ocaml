@@ -86,8 +86,6 @@ and _top = {
   ; gram_exports: list string
   ; gram_external_asts: list (string * astre)
   ; gram_regexp_asts: list (string * astre)
-  ; gram_regexps: list (string * regexp)
-  ; gram_externals: list (string * regexp)
   ; gram_entries : list a_entry
   } [@@deriving (show,eq,ord) ;] ;
 

@@ -57,8 +57,6 @@ EXTEND
           ; gram_exports=expl
           ; gram_external_asts=extl
           ; gram_regexp_asts=rl
-          ; gram_regexps=[]
-          ; gram_externals=[]
           ; gram_entries=el
     } ] ]
   ;
