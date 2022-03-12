@@ -325,7 +325,7 @@ value top pc g =
   pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@]@ END" g.gram_id
     pr_regexp_asts g.gram_regexp_asts
     pr_exports g.gram_exports
-    pr_externals g.gram_externals
+    pr_externals g.gram_external_asts
     (vlist entry) g.gram_entries
 ;
 

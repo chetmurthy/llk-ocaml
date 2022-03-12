@@ -84,15 +84,16 @@ and _top = {
     gram_loc: loc
   ; gram_id: string
   ; gram_exports: list string
-  ; gram_externals: list (string * astre)
+  ; gram_external_asts: list (string * astre)
   ; gram_regexp_asts: list (string * astre)
   ; gram_regexps: list (string * regexp)
+  ; gram_externals: list (string * regexp)
   ; gram_entries : list a_entry
   } [@@deriving (show,eq,ord) ;] ;
 
 type top = _top ;
 value norm_top g = {(g) with gram_exports = List.sort_uniq String.compare g.gram_exports
-                           ; gram_externals = List.sort_uniq compare_named_astre g.gram_externals
+                           ; gram_external_asts = List.sort_uniq compare_named_astre g.gram_external_asts
                            ; gram_entries = List.sort compare_a_entry g.gram_entries } ;
 value show_top = show__top ;
 value eq_top x y = equal__top (x |> norm_top) (y |> norm_top) ;

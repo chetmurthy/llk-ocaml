@@ -16,6 +16,9 @@ open Llk_types ;
 open Print_gram ;
 
 
+type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ]
+;
+
 module Ctr = struct
   type t = ref int ;
   value mk () = ref 0 ;
@@ -26,18 +29,128 @@ module Ctr = struct
     Fmt.(str "%s__%02d" root n) ;
 end ;
 
+module type TOKENSET = sig
+(*
+  type t 'a = 'b ;
+ *)
+  type t 'a = list 'a ;
+
+  value mt : t 'a ;
+  value mk : list 'a -> t 'a ;
+  value add : t 'a -> 'a -> t 'a ;
+  value addl : t 'a -> list 'a -> t 'a ;
+  value mem : 'a -> t 'a -> bool ;
+  value export : t 'a -> list 'a ;
+  value union : t 'a -> t 'a -> t 'a ;
+  value disjoint : t 'a -> t 'a -> bool ;
+  value unionl : list (t 'a) -> t 'a ;
+  value except : 'a -> t 'a -> t 'a ;
+  value map : ('a -> 'b) -> t 'a -> t 'b ;
+  value print : ('a -> string) -> t 'a -> string ;
+end ;
+
+module TokenSet : TOKENSET = struct
+  type t 'a = list 'a ;
+  value mt = [] ;
+  value canon l = List.sort_uniq Stdlib.compare l ;
+  value add l x = [x::l] |> canon ;
+  value addl l l2 = l@l2 |> canon ;
+  value mk l = l |> canon ;
+  value mem x l = List.mem x l ;
+  value export l = l ;
+  value union = addl ;
+  value unionl l = l |> List.concat |> canon ;
+  value disjoint a b = [] = Std.intersect a b ;
+  value except x l = Std.except x l ;
+  value map f l = List.map f l |> canon ;
+  value print pf l = Printf.sprintf "[%s]" (String.concat " " (List.map pf l)) ;
+end ;
+module TS = TokenSet ;
+
+module type SETMAP = sig
+(*
+  type t 'a = 'c;
+  type set_t 'a = 'd ;
+ *)
+  type set_t 'a = TS.t 'a ;
+  type t 'a = list (string * set_t 'a) ;
+
+  value canon : t 'a -> t 'a ;
+  value mt : t 'a ;
+  value add : t 'a -> (string * 'a) -> t 'a ;
+  value lookup : string -> t 'a -> set_t 'a ;
+  value addset : t 'a -> (string * set_t 'a) -> t 'a ;
+  value export : t 'a -> list (string * list 'a) ;
+end ;
+
+module SetMap : (SETMAP with type set_t 'a = TS.t 'a) = struct
+  type set_t 'a = TS.t 'a ;
+  type t 'a = list (string * set_t 'a) ;
+
+  value canon m = m |> List.sort Stdlib.compare ;
+  value mt = [] ;
+  value addset m (nt, ts') =
+    match List.assoc nt m with [
+        ts ->
+        let m = List.remove_assoc nt m in
+        canon [(nt,TS.union ts ts') :: m]
+
+      | exception Not_found -> canon [(nt, ts')::m]
+      ]
+  ;
+  value lookup nt m =
+    match List.assoc nt m with [
+        l -> l
+      | exception Not_found -> TS.mt
+      ]
+  ;
+  value add m (nt, tok) = addset m (nt, TS.mk [tok]) ;
+  value export m = m |> List.map (fun (nt, s) -> (nt, TS.export s)) ;
+end ;
+module SM = SetMap ;
+
+module type MUTSETMAP = sig
+(*
+  type t 'a = 'c;
+  type set_t 'a = 'd ;
+ *)
+  type set_t 'a = TS.t 'a ;
+  type t 'a = ref (list (string * set_t 'a)) ;
+
+  value mk : unit -> t 'a ;
+  value add : t 'a -> (string * 'a) -> unit ;
+  value lookup : string -> t 'a -> set_t 'a ;
+  value addset : t 'a -> (string * set_t 'a) -> unit ;
+  value export : t 'a -> SM.t 'a ;
+end ;
+
+module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
+  type t 'a = ref (SM.t 'a) ;
+  type set_t 'a = SM.set_t 'a ;
+  value mk () = ref (SM.mt) ;
+  value add mm p =
+    mm.val := SM.add mm.val p ;
+  value lookup k mm = SM.lookup k mm.val ;
+  value addset mm pl =
+    mm.val := SM.addset mm.val pl ;
+  value export mm = mm.val ;
+end ;
+module MSM = MutSetMap ;
+
 module CompilingGrammar = struct
   type mut_data_t = {
       ctr : Ctr.t
     ; gram_regexps: mutable list (string * regexp)
-    ; last : unit
+    ; firsts : mutable SM.t (option token)
+    ; follows : mutable SM.t token
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
   value mk t = (t, {
                   ctr = Ctr.mk()
                 ; gram_regexps = []
-                ; last = ()
+                ; firsts = SM.mt
+                ; follows = SM.mt
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -52,6 +165,26 @@ module CompilingGrammar = struct
   value gram_regexp cg id = List.assoc id (snd cg).gram_regexps ;
 
   value exists_regexp_ast cg nt = List.mem_assoc nt (g cg).gram_regexp_asts ;
+
+  value firstmap cg = (snd cg).firsts ;
+
+  value first cg nt = do {
+    assert (exists_entry cg nt) ;
+    SM.lookup nt (snd cg).firsts
+  };
+
+  value add_first cg nt fi =
+    (snd cg).firsts := SM.addset (snd cg).firsts (nt, fi) ;
+
+  value followmap cg = (snd cg).follows ;
+
+  value follow cg nt = do {
+    assert (exists_entry cg nt) ;
+    SM.lookup nt (snd cg).follows
+  };
+
+  value add_follow cg nt fi =
+    (snd cg).follows := SM.addset (snd cg).follows (nt, fi) ;
 
 end ;
 module CG = CompilingGrammar ;
@@ -842,117 +975,6 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = List.map exec0 (CG.gr
 
 end ;
 
-type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ]
-;
-
-module type TOKENSET = sig
-(*
-  type t 'a = 'b ;
- *)
-  type t 'a = list 'a ;
-
-  value mt : t 'a ;
-  value mk : list 'a -> t 'a ;
-  value add : t 'a -> 'a -> t 'a ;
-  value addl : t 'a -> list 'a -> t 'a ;
-  value mem : 'a -> t 'a -> bool ;
-  value export : t 'a -> list 'a ;
-  value union : t 'a -> t 'a -> t 'a ;
-  value disjoint : t 'a -> t 'a -> bool ;
-  value unionl : list (t 'a) -> t 'a ;
-  value except : 'a -> t 'a -> t 'a ;
-  value map : ('a -> 'b) -> t 'a -> t 'b ;
-  value print : ('a -> string) -> t 'a -> string ;
-end ;
-
-module TokenSet : TOKENSET = struct
-  type t 'a = list 'a ;
-  value mt = [] ;
-  value canon l = List.sort_uniq Stdlib.compare l ;
-  value add l x = [x::l] |> canon ;
-  value addl l l2 = l@l2 |> canon ;
-  value mk l = l |> canon ;
-  value mem x l = List.mem x l ;
-  value export l = l ;
-  value union = addl ;
-  value unionl l = l |> List.concat |> canon ;
-  value disjoint a b = [] = Std.intersect a b ;
-  value except x l = Std.except x l ;
-  value map f l = List.map f l |> canon ;
-  value print pf l = Printf.sprintf "[%s]" (String.concat " " (List.map pf l)) ;
-end ;
-module TS = TokenSet ;
-
-module type SETMAP = sig
-(*
-  type t 'a = 'c;
-  type set_t 'a = 'd ;
- *)
-  type set_t 'a = TS.t 'a ;
-  type t 'a = list (string * set_t 'a) ;
-
-  value canon : t 'a -> t 'a ;
-  value mt : t 'a ;
-  value add : t 'a -> (string * 'a) -> t 'a ;
-  value lookup : string -> t 'a -> set_t 'a ;
-  value addset : t 'a -> (string * set_t 'a) -> t 'a ;
-  value export : t 'a -> list (string * list 'a) ;
-end ;
-
-module SetMap : (SETMAP with type set_t 'a = TS.t 'a) = struct
-  type set_t 'a = TS.t 'a ;
-  type t 'a = list (string * set_t 'a) ;
-
-  value canon m = m |> List.sort Stdlib.compare ;
-  value mt = [] ;
-  value addset m (nt, ts') =
-    match List.assoc nt m with [
-        ts ->
-        let m = List.remove_assoc nt m in
-        canon [(nt,TS.union ts ts') :: m]
-
-      | exception Not_found -> canon [(nt, ts')::m]
-      ]
-  ;
-  value lookup nt m =
-    match List.assoc nt m with [
-        l -> l
-      | exception Not_found -> TS.mt
-      ]
-  ;
-  value add m (nt, tok) = addset m (nt, TS.mk [tok]) ;
-  value export m = m |> List.map (fun (nt, s) -> (nt, TS.export s)) ;
-end ;
-module SM = SetMap ;
-
-module type MUTSETMAP = sig
-(*
-  type t 'a = 'c;
-  type set_t 'a = 'd ;
- *)
-  type set_t 'a = TS.t 'a ;
-  type t 'a = ref (list (string * set_t 'a)) ;
-
-  value mk : unit -> t 'a ;
-  value add : t 'a -> (string * 'a) -> unit ;
-  value lookup : string -> t 'a -> set_t 'a ;
-  value addset : t 'a -> (string * set_t 'a) -> unit ;
-  value export : t 'a -> SM.t 'a ;
-end ;
-
-module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
-  type t 'a = ref (SM.t 'a) ;
-  type set_t 'a = SM.set_t 'a ;
-  value mk () = ref (SM.mt) ;
-  value add mm p =
-    mm.val := SM.add mm.val p ;
-  value lookup k mm = SM.lookup k mm.val ;
-  value addset mm pl =
-    mm.val := SM.addset mm.val pl ;
-  value export mm = mm.val ;
-end ;
-module MSM = MutSetMap ;
-
 module Anti = struct
 
 (**
@@ -994,79 +1016,87 @@ end
 
 module First = struct
 
-value rec psymbols m = fun [
+exception ExternalEntry of string ;
+
+value rec psymbols cg = fun [
   [] -> TS.mk [None]
-| [{ap_symb=ASregexp _ _} :: t] -> psymbols m t
+| [{ap_symb=ASregexp _ _} :: t] -> psymbols cg t
 | [h::t] ->
-   let fh = psymbol m h in
+   let fh = psymbol cg h in
    if TS.mem None fh then
-     TS.(union (except None fh) (psymbols m t))
+     TS.(union (except None fh) (psymbols cg t))
    else fh
 ]
 
-and psymbol m ps = symbol m ps.ap_symb
+and psymbol cg ps = symbol cg ps.ap_symb
 
-and symbol m = fun [
-      ASflag _ s -> TS.(union (symbol m s) (mk[None]))
+and symbol cg = fun [
+      ASflag _ s -> TS.(union (symbol cg s) (mk[None]))
     | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
     | ASlist loc lml elem_s sepb_opt ->
-       let felem = symbol m elem_s in
+       let felem = symbol cg elem_s in
        if not (TS.mem None felem) then felem
        else
          TS.(union (except None felem) (
          match sepb_opt with [
              None -> mk [None]
            | Some (sep_s, _) ->
-              symbol m sep_s
+              symbol cg sep_s
        ]))
 
     | ASnext _ _ -> assert False
 
-    | ASnterm _ nt _ _ -> SM.lookup nt m
-    | ASopt _ s -> TS.(union (mk [None]) (symbol m s))
+    | ASnterm _ nt _ _ when CG.exists_entry cg nt -> CG.first cg nt
+    | ASnterm _ nt _ _  -> raise (ExternalEntry nt)
+
+    | ASopt _ s -> TS.(union (mk [None]) (symbol cg s))
 
   | ASleft_assoc _ s1 s2 _ ->
-     let fs1 = symbol m s1 in
+     let fs1 = symbol cg s1 in
      if not (TS.mem None fs1) then fs1
-     else TS.(union (except None fs1) (symbol m s2))
+     else TS.(union (except None fs1) (symbol cg s2))
 
-  | ASrules _ rl -> rules m rl
+  | ASrules _ rl -> rules cg rl
   | ASself _ _ -> assert False
   | AStok _ cls _ -> TS.mk[Some (CLS cls)]
   | ASvala loc s kinds ->
      let anti_kinds = Anti.infer_kinds loc s kinds in
-     TS.(union (symbol m s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
+     TS.(union (symbol cg s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
   | ASregexp loc _ as s ->
      raise_failwithf loc "First.symbol: internal error: unrecognized %a" pp_a_symbol s
 ]
 
-and rule m r = psymbols m r.ar_psymbols
+and rule cg r = psymbols cg r.ar_psymbols
 
-and rules m l =
+and rules cg l =
   let rules = l.au_rules in
-  TS.unionl (List.map (rule m) rules)
+  TS.unionl (List.map (rule cg) rules)
 ;
 
-value level m l = rules m l.al_rules ;
+value level cg l = rules cg l.al_rules ;
 
-value comp1_entry m e =
-  e.ae_levels
-  |> List.map (level m)
-  |> TS.unionl
-  |> (fun ts -> SM.addset m (e.ae_name, ts))
+value comp1_entry cg e =
+try
+  let fi =
+    e.ae_levels
+    |> List.map (level cg)
+    |> TS.unionl in
+  CG.add_first cg e.ae_name fi
+with ExternalEntry _ -> ()
 ;
 
-value comp1 el m = List.fold_left comp1_entry m el ;
+value comp1 el cg = List.iter (comp1_entry cg) el ;
 
-value rec comprec el m =
-  let m' = comp1 el m in
-  if m = m' then m else comprec el m'
+value rec comprec cg el = do {
+  let m0 = CG.firstmap cg in
+  comp1 el cg ;
+  let m1 = CG.firstmap cg in
+  if m0 = m1 then cg else comprec cg el
+}
 ;
 
-value compute_first el = comprec el SM.mt ;
-  
-value exec0 el = compute_first el ;
-value exec cg = SM.export (exec0 (CG.gram_entries cg)) ;
+value exec0 cg el = comprec cg el ;
+value exec cg = exec0 cg (CG.gram_entries cg) ;
 
 end ;
 
@@ -1117,19 +1147,19 @@ value fi2fo loc fi = fifo_concat loc ~{must=True} fi TS.mt ;
 value watch_follow (nt : string) (ff : TS.t token) = () ;
 
 
-value rec fifo_psymbols (fimap, mm) ff = fun [
+value rec fifo_psymbols cg ff = fun [
       [] -> ff
-    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols (fimap, mm) ff t
+    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg ff t
     | [h::t] ->
-       let ft = fifo_psymbols (fimap, mm) ff t in
-       fifo_psymbol (fimap, mm) ft h
+       let ft = fifo_psymbols cg ff t in
+       fifo_psymbol cg ft h
        
 ]
 
-and fifo_psymbol (fimap, mm) ff ps =
-  fifo_symbol (fimap, mm) ff ps.ap_symb
+and fifo_psymbol cg ff ps =
+  fifo_symbol cg ff ps.ap_symb
 
-(** [fifo_symbol (fimap, mm) ff]
+(** [fifo_symbol cg ff]
 
     fimap: the result of First.exec, the map from nonterminal to
    FIRST-set mm: mutable map of FOLLOW sets ff: full-follow for the
@@ -1145,14 +1175,14 @@ and fifo_psymbol (fimap, mm) ff ps =
 
  *)
 
-and fifo_symbol (fimap, mm) ff = fun [
+and fifo_symbol cg ff = fun [
       ASflag loc s | ASopt loc s ->
       (* the fifo of [FLAG s] is always the concat of the FIRST of s
          (minus eps) and the full-follow of [FLAG s], since [FLAG s]
          is nullable.
        *)
-      let _ = fifo_symbol (fimap, mm) ff s in
-      let fi_s = First.symbol fimap s in do {
+      let _ = fifo_symbol cg ff s in
+      let fi_s = First.symbol cg s in do {
         if nullable fi_s then
           raise_failwith loc "FLAG/OPT must not be nullable"
         else
@@ -1173,7 +1203,7 @@ and fifo_symbol (fimap, mm) ff = fun [
           0. call [ff] argument "full-follow"
         *)
 
-       let fi_s = First.symbol fimap s in
+       let fi_s = First.symbol cg s in
        if nullable fi_s then
          raise_failwithf loc "LIST element must not be nullable"
        else
@@ -1189,7 +1219,7 @@ and fifo_symbol (fimap, mm) ff = fun [
 
            let _ = 
              let ff = fifo_concat loc ~{must=True} fi_s ff in
-             fifo_symbol (fimap, mm) ff s in
+             fifo_symbol cg ff s in
 
            fifo_concat loc ~{if_nullable=True} fi_s ff
 
@@ -1202,18 +1232,18 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_1, Some (s2, False)) ->
-           let fi_s2 = First.symbol fimap s2 in
+           let fi_s2 = First.symbol cg s2 in
            if nullable fi_s2 then
              raise_failwithf loc "LIST separator must not be nullable"
            else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
-             fifo_symbol (fimap, mm) ff s in
+             fifo_symbol cg ff s in
 
            let _ =
              let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat loc fi_s2 ff)) in
-             fifo_symbol (fimap, mm) ff s2 in
+             fifo_symbol cg ff s2 in
 
            fifo_concat loc ~{if_nullable=True} fi_s (TS.union (fi2fo loc fi_s2) ff)
 
@@ -1227,18 +1257,18 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_1, Some (s2, True)) ->
-           let fi_s2 = First.symbol fimap s2 in
+           let fi_s2 = First.symbol cg s2 in
            if nullable fi_s2 then
              raise_failwithf loc "LIST separator must not be nullable"
            else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
-             fifo_symbol (fimap, mm) ff s in
+             fifo_symbol cg ff s in
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff) in
-             fifo_symbol (fimap, mm) ff s2 in
+             fifo_symbol cg ff s2 in
 
            fifo_concat loc ~{if_nullable=True} fi_s (TS.union (fi2fo loc fi_s2) ff)
 
@@ -1252,7 +1282,7 @@ and fifo_symbol (fimap, mm) ff = fun [
          | (LML_0, None) ->
            let _ = 
              let ff = fifo_concat loc ~{must=True} fi_s ff in
-             fifo_symbol (fimap, mm) ff s in
+             fifo_symbol cg ff s in
 
            fifo_concat loc ~{must=True} fi_s ff
 
@@ -1265,18 +1295,18 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, Some (s2, False)) ->
-           let fi_s2 = First.symbol fimap s2 in
+           let fi_s2 = First.symbol cg s2 in
            if nullable fi_s2 then
              raise_failwithf loc "LIST separator must not be nullable"
            else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
-             fifo_symbol (fimap, mm) ff s in
+             fifo_symbol cg ff s in
 
            let _ =
              let ff = (fifo_concat loc ~{if_nullable=True} fi_s (fifo_concat loc fi_s2 ff)) in
-             fifo_symbol (fimap, mm) ff s2 in
+             fifo_symbol cg ff s2 in
 
            TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff)
 
@@ -1289,28 +1319,28 @@ and fifo_symbol (fimap, mm) ff = fun [
           *)
 
          | (LML_0, Some (s2, True)) ->
-           let fi_s2 = First.symbol fimap s2 in
+           let fi_s2 = First.symbol cg s2 in
            if nullable fi_s2 then
              raise_failwithf loc "LIST separator must not be nullable"
            else
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s2 (fi2fo loc fi_s)) ff) in
-             fifo_symbol (fimap, mm) ff s in
+             fifo_symbol cg ff s in
 
            let _ =
              let ff = TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff) in
-             fifo_symbol (fimap, mm) ff s2 in
+             fifo_symbol cg ff s2 in
 
            TS.(union (fifo_concat loc ~{if_nullable=True} fi_s (fi2fo loc fi_s2)) ff)
 
          ]
 
   | ASnext loc _ | ASself loc _ -> raise_failwithf loc "fifo_symbol: internal error: NEXT should not occur here"
-  | ASnterm loc nt _ _ as s -> do {
+  | ASnterm loc nt _ _ as s when CG.exists_entry cg nt -> do {
         watch_follow nt ff ;
-        MSM.addset mm (nt, ff) ;
-        let fi_s = First.symbol fimap s in
+        CG.add_follow cg nt ff ;
+        let fi_s = First.symbol cg s in
         fifo_concat loc ~{if_nullable=True} fi_s ff
       }
 
@@ -1319,78 +1349,80 @@ and fifo_symbol (fimap, mm) ff = fun [
      2. compute [FIFO s1] with ff=[FIRST s2] union full-follow
      3. compute [FIFO s2] with ff=[FIRST s2].{is_nullable}.full-follow
    *)                               
-     let fi_s1 = First.symbol fimap s1 in
-     let fi_s2 = First.symbol fimap s2 in
+     let fi_s1 = First.symbol cg s1 in
+     let fi_s2 = First.symbol cg s2 in
 
      let _ =
        let ff = TS.(union (fi2fo loc fi_s2) ff) in
-       fifo_symbol (fimap, mm) ff s1 in
+       fifo_symbol cg ff s1 in
 
      let _ =
        let ff = TS.(union (fi2fo loc fi_s2) ff) in
-       fifo_symbol (fimap, mm) ff s2 in
+       fifo_symbol cg ff s2 in
 
      fifo_concat loc ~{if_nullable=True} fi_s1
        (fifo_concat loc ~{if_nullable=True} fi_s2 ff)
 
   | ASrules loc rs ->
-     fifo_rules (fimap, mm) ff rs
+     fifo_rules cg ff rs
 
   | AStok loc cls _ -> TS.mk [CLS cls]
 
   | ASvala loc s sl as s0 ->
-     let _ = fifo_symbol (fimap, mm) ff s in
+     let _ = fifo_symbol cg ff s in
 
-     let fi_vala = First.symbol fimap s0 in
+     let fi_vala = First.symbol cg s0 in
      fifo_concat loc ~{if_nullable=True} fi_vala ff
 
 ]
 
-and fifo_rule (fimap, mm) ff r =
-  fifo_psymbols (fimap, mm) ff r.ar_psymbols
+and fifo_rule cg ff r =
+  fifo_psymbols cg ff r.ar_psymbols
 
-and fifo_rules (fimap, mm) ff rs =
+and fifo_rules cg ff rs =
   let loc = rs.au_loc in
   let rl = rs.au_rules in
-  let fi_rs = rl |> List.map (First.rule fimap) |> TS.unionl in do {
+  let fi_rs = rl |> List.map (First.rule cg) |> TS.unionl in do {
     rl |> List.iter (fun r ->
-              ignore (fifo_rule (fimap, mm) ff r)) ;
+              ignore (fifo_rule cg ff r)) ;
     fifo_concat loc ~{if_nullable=True} fi_rs ff
   }
 
-and fifo_level (fimap, mm) ff lev =
-  fifo_rules  (fimap, mm) ff lev.al_rules
+and fifo_level cg ff lev =
+  fifo_rules  cg ff lev.al_rules
 ;
 
-value comp1_entry (fimap, mm) e =
+value comp1_entry cg e =
+try
   let ll = e.ae_levels in do {
   assert (1 = List.length ll) ;
-  let e_ff = MSM.lookup e.ae_name mm in
-  ignore (fifo_level (fimap, mm) e_ff (List.hd ll))
+  let e_ff = CG.follow cg e.ae_name in
+  ignore (fifo_level cg e_ff (List.hd ll))
 }
+with First.ExternalEntry _ -> ()
 ;
   
 
-value comp1 (fimap, mm) el =
-  List.iter (comp1_entry (fimap, mm)) el ;
+value comp1 cg el =
+  List.iter (comp1_entry cg) el ;
 
-value rec comprec el (fimap, mm) = do {
-  let m0 = MSM.export mm in
-  comp1 (fimap, mm) el ;
-  if m0 = MSM.export mm then m0 else comprec el (fimap, mm) ;
+value rec comprec el cg = do {
+  let m0 = CG.followmap cg in
+  comp1 cg el ;
+  let m1 = CG.followmap cg in
+  if m0 = m1 then cg else comprec el cg ;
 }
 ;
 
-value exec0 ~{tops} el =
-  let fimap = First.exec0 el in
-  let mm = MSM.mk () in do {
-    tops |> List.iter (fun t ->
-                MSM.(add mm (t, CLS "EOI")));
-    (fimap, comprec el (fimap, mm))
-  }
+value exec0 cg ~{tops} el = do {
+  ignore (First.exec0 cg el) ;
+  tops |> List.iter (fun t ->
+              CG.add_follow cg t [CLS "EOI"]) ;
+  comprec el cg
+}
 ;
 
-value exec ~{tops} cg = exec0 ~{tops=tops} (CG.gram_entries cg) ;
+value exec ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
 
 end ;
 
@@ -1660,8 +1692,8 @@ value all_tokens el =
   }
 ;
 
-value compute_fifo loc fimap ff r =
-  let fi = First.rule fimap r in
+value compute_fifo loc cg ff r =
+  let fi = First.rule cg r in
   (fi, ff, r)
 ;
 
@@ -1678,12 +1710,10 @@ value disjoint loc ll =
 
 open Exparser ;
 
-value rec compile1_symbol cg loc (fimap,fomap) ename s =
+value rec compile1_symbol cg loc ename s =
   match s with [
       ASflag loc s -> do {
-      let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
-        assert (TS.mt <> tokens) ;
-        let s_body = compile1_symbol cg loc (fimap, fomap) ename s in
+        let s_body = compile1_symbol cg loc ename s in
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
         <:expr< parse_flag $s_body$ >>
       }
@@ -1708,13 +1738,11 @@ value rec compile1_symbol cg loc (fimap,fomap) ename s =
  *)       
     ]
 
-and compile1_psymbol cg loc (fimap,fomap) ename ps =
+and compile1_psymbol cg loc ename ps =
   let patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
   match ps.ap_symb with [
       ASflag loc s -> do {
-      let tokens = Follow.fifo_concat loc (First.symbol fimap s) (TS.mk[]) in
-        assert (TS.mt <> tokens) ;
-        let s_body = compile1_symbol cg loc (fimap, fomap) ename s in
+        let s_body = compile1_symbol cg loc ename s in
         (SpNtr loc patt <:expr< parse_flag $s_body$ >>, SpoNoth)
        }
     | ASkeyw  loc kws ->
@@ -1734,42 +1762,42 @@ and compile1_psymbol cg loc (fimap,fomap) ename ps =
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
 
     | ASleft_assoc loc lhs restrhs e ->
-       let lhs = compile1_symbol cg loc (fimap,fomap) ename lhs in
-       let restrhs = compile1_symbol cg loc (fimap,fomap) ename restrhs in
+       let lhs = compile1_symbol cg loc ename lhs in
+       let restrhs = compile1_symbol cg loc ename restrhs in
        let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
         (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem None ->
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol cg loc ename elem in
        let e = <:expr< parse_list0 $elem$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem None ->
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol cg loc ename elem in
        let e = <:expr< parse_list1 $elem$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem (Some (sep, False)) ->
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
        let e = <:expr< parse_list0_with_sep $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem (Some (sep, False)) ->
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
        let e = <:expr< parse_list1_with_sep $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_0 elem (Some (sep, True)) ->
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
        let e = <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
     | ASlist loc LML_1 elem (Some (sep, True)) ->
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
-       let sep = compile1_symbol cg loc (fimap,fomap) ename sep in
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
        let e = <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >> in
        (SpNtr loc patt e, SpoNoth)
 
@@ -1780,21 +1808,21 @@ and compile1_psymbol cg loc (fimap,fomap) ename ps =
          |> List.concat_map (fun k -> [k; "_"^k])
          |> List.map (fun k -> <:expr< $str:k$ >>)
          |> Ppxutil.convert_up_list_expr loc in
-       let elem = compile1_symbol cg loc (fimap,fomap) ename elem in
+       let elem = compile1_symbol cg loc ename elem in
        let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
        (SpNtr loc patt e, SpoNoth)
     ]
 ;
 
-value compile1_psymbols cg loc (fimap,fomap) ename psl =
+value compile1_psymbols cg loc ename psl =
   let rec crec = fun [
         [{ap_symb=ASregexp _ _} :: t] -> crec t
       | [] -> []
-      | [h ::t] -> [compile1_psymbol cg loc (fimap,fomap) ename h :: crec t]
+      | [h ::t] -> [compile1_psymbol cg loc ename h :: crec t]
       ] in crec psl
 ;
 
-value compile1_rule cg (fimap,fomap) ename r =
+value compile1_rule cg ename r =
   let loc = r.ar_loc in
 (*
   List.fold_right (fun ps body ->
@@ -1804,7 +1832,7 @@ value compile1_rule cg (fimap,fomap) ename r =
     r.ar_psymbols
     (match r.ar_action with [ None -> <:expr< () >> | Some a -> a ])
  *)
-  let spc_list = compile1_psymbols cg loc (fimap,fomap) ename r.ar_psymbols in
+  let spc_list = compile1_psymbols cg loc ename r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
   cparser loc (None, [(spc_list, None, action)])
 ;
@@ -1855,7 +1883,7 @@ value tokens_to_match_branches loc i toks =
   in rest_branches @ anti_branches
 ;
 
-value match_nest_branches cg (fimap,fomap) ename i (fi, fo, r) =
+value match_nest_branches cg ename i (fi, fo, r) =
   let loc = r.ar_loc in
   let raw_tokens =
     TS.export (Follow.fifo_concat loc ~{if_nullable=True} fi fo) in
@@ -1866,10 +1894,10 @@ value match_nest_branches cg (fimap,fomap) ename i (fi, fo, r) =
   (tokens_to_match_branches loc i raw_tokens) @ nullable_branch
 ;
 
-value build_match_nest loc cg (fimap,fomap) ename fi_fo_rule_list =
+value build_match_nest loc cg ename fi_fo_rule_list =
   let branches =
     fi_fo_rule_list
-    |> List.mapi (match_nest_branches cg (fimap,fomap) ename)
+    |> List.mapi (match_nest_branches cg ename)
     |> List.concat in
   let (null_branches, normal_branches) =
     Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
@@ -1883,9 +1911,9 @@ value build_match_nest loc cg (fimap,fomap) ename fi_fo_rule_list =
   <:expr< match Stream.peek __strm__ with [ $list:branches$ ] >>
 ;
 
-value compile1a_branch cg (fimap,fomap) ename i (fi, fo, r) =
+value compile1a_branch cg ename i (fi, fo, r) =
   let loc = r.ar_loc in
-  let body = compile1_rule cg (fimap,fomap) ename r in
+  let body = compile1_rule cg ename r in
   (<:patt< $int:string_of_int i$ >>, <:vala< None >>, body)
 ;
 
@@ -1897,22 +1925,22 @@ value compile1a_branch cg (fimap,fomap) ename i (fi, fo, r) =
     4. If they are disjoint, but more than one FIRST set is nullable, again, can't compile the entry.
     5. compile a match, with each case_branch one of the rule-branches, and the pattern being the FFO set.
  *)
-value compile1a_entry cg (fimap, fomap) e =
+value compile1a_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
-  let ff = SM.lookup ename fomap in
+  let ff = CG.follow cg ename in
   let fi_fo_rule_list =
     (List.hd e.ae_levels).al_rules.au_rules
-    |> List.map (compute_fifo loc fimap ff) in do {
+    |> List.map (compute_fifo loc cg ff) in do {
     if not (disjoint loc fi_fo_rule_list) then
       report_disjointness_error ~{and_raise=True} cg loc e.ae_name fi_fo_rule_list
     else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1_entry: more than one branch is nullable"
     else () ;
-    let match_nest = build_match_nest loc cg (fimap,fomap) ename fi_fo_rule_list in
+    let match_nest = build_match_nest loc cg ename fi_fo_rule_list in
     let branches =
       fi_fo_rule_list
-    |> List.mapi (compile1a_branch cg (fimap,fomap) ename) in
+    |> List.mapi (compile1a_branch cg ename) in
     let rhs =
       match branches with [
         [(_,_,e)] -> e
@@ -2002,9 +2030,9 @@ value letrec_nest (init, initre, states) =
     let rec $list:bindl$ in $lid:(statename init)$ 0 >>
 ;
 
-value compile1b_branch cg (fimap,fomap) ename branchnum r =
+value compile1b_branch cg ename branchnum r =
   let loc = r.ar_loc in
-  let body = compile1_rule cg (fimap,fomap) ename r in
+  let body = compile1_rule cg ename r in
   (<:patt< Some (_, $int:string_of_int branchnum$ ) >>, <:vala< None >>, body)
 ;
 
@@ -2016,13 +2044,13 @@ value compile1b_branch cg (fimap,fomap) ename branchnum r =
     4. Instead, pull out the first ASregexp in each rule-branch (if any) and replace the FFO with that.
     5. construct the multi-way regexp with this hybrid set.
  *)
-value compile1b_entry cg (fimap, fomap) e =
+value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
-  let ff = SM.lookup ename fomap in
+  let ff = CG.follow cg ename in
   let fi_fo_rule_list =
     (List.hd e.ae_levels).al_rules.au_rules
-    |> List.map (compute_fifo loc fimap ff) in
+    |> List.map (compute_fifo loc cg ff) in
   let ffo_rule_list =
     fi_fo_rule_list
   |> List.map (fun (fi, ff, r) ->
@@ -2060,7 +2088,7 @@ value compile1b_entry cg (fimap, fomap) e =
   let branches = 
     ffo_regexp_rule_list
     |> List.map Std.third3
-    |> List.mapi (compile1b_branch cg (fimap, fomap) ename) in
+    |> List.mapi (compile1b_branch cg ename) in
   let branches =
     branches
     |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
@@ -2072,19 +2100,19 @@ value compile1b_entry cg (fimap, fomap) e =
   ;
 
 
-value compile1_entry cg (fimap, fomap) e =
-  match compile1a_entry cg (fimap, fomap) e with [
+value compile1_entry cg e =
+  match compile1a_entry cg e with [
       exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
         Fmt.(pf stderr "compile1_entry: FIRST/FOLLOW strategy failed\n%!") ;
-        compile1b_entry cg (fimap, fomap) e
+        compile1b_entry cg e
       }
     | x -> x
     ]
 ;
 
 value exec (({gram_loc=loc; gram_exports=expl; gram_regexps=rl; gram_entries=el; gram_id=gid}, _) as cg)  =
-let (fimap, fomap) = Follow.exec0 ~{tops=expl} el in
-  let fdefs = List.map (compile1_entry cg (fimap, fomap)) el in
+let _ = Follow.exec0 cg ~{tops=expl} el in
+  let fdefs = List.map (compile1_entry cg) el in
   let token_patterns =
     all_tokens el @ (
       rl
@@ -2184,7 +2212,6 @@ value follow ~{tops} s =
   s
   |> lambda_lift
   |> Follow.exec ~{tops=tops}
-  |> (fun (fimap, fomap) -> (SM.export fimap, SM.export fomap))
 ;
 
 value codegen s =

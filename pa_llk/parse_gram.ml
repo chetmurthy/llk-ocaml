@@ -52,7 +52,15 @@ EXTEND
         rl = [ l = regexps -> l | -> [] ];
         extl = [ l = externals -> l | -> [] ];
         el = LIST1 [ e = entry; ";" -> e ] ->
-          {gram_loc=loc; gram_id=gid; gram_exports=expl; gram_externals=extl; gram_regexp_asts=rl; gram_regexps=[]; gram_entries=el} ] ]
+          { gram_loc=loc
+          ; gram_id=gid
+          ; gram_exports=expl
+          ; gram_external_asts=extl
+          ; gram_regexp_asts=rl
+          ; gram_regexps=[]
+          ; gram_externals=[]
+          ; gram_entries=el
+    } ] ]
   ;
   exports:
     [ [ UIDENT "EXPORT"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
