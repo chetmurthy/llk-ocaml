@@ -860,8 +860,12 @@ value substitute_self e =
 ;
 
 value exec0 e =
-  if List.length e.ae_levels <=1 then ([], [substitute_self e])
-  else exec1 e ;
+  match e.ae_levels with [
+      [] -> ([], [{ (e) with ae_pos = None }])
+    | [l] -> ([], [substitute_self { (e) with ae_pos = None ; ae_levels = [{ (l) with al_label = None }]}])
+    | _ -> exec1 e
+    ]
+;
 
 value exec cg =
   let pl = List.map exec0 (CG.gram_entries cg) in
@@ -2106,6 +2110,13 @@ value compute_branch_regexp cg e i r =
   PSyn.(rex @@ PSyn.token (OUTPUT i))  
 ;
 
+value compute_entry_regexp cg e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let re_branches =
+    List.mapi (compute_branch_regexp cg e) rl in
+  PSyn.disjunction re_branches
+;
+
 (** user-provided regexps as fallback to FIRST/FOLLOW.
 
     1. do as above, computing FIRST/FOLLOW
@@ -2118,9 +2129,7 @@ value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let re_branches =
-    List.mapi (compute_branch_regexp cg e) rl in
-  let fullre = PSyn.disjunction re_branches in
+  let fullre = compute_entry_regexp cg e in
   let module C = Compile(struct value rex = fullre ; value extra = []; end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
   let predictor = letrec_nest exported_dfa in
