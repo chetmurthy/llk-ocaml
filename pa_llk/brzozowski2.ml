@@ -872,8 +872,9 @@ let failed_state e = last_outputs e = []
 
  *)
 let internal_error_state e =
+  let fo = first_outputs e in
   let lo = last_outputs e in
-  lo = []
+  lo = [] || List.length fo > 1
 
 (* A state may have successors if:
 

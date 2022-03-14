@@ -39,8 +39,8 @@ END ;
 
 [@@@llk
 {foo|
-GRAMMAR Types:
-EXPORT: type_binder_opt ctyp sig_item ;
+GRAMMAR Mod2:
+EXPORT: type_binder_opt ctyp sig_item sig_item_eoi ;
 REGEXPS:
   check_type_binder = 
         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
@@ -172,6 +172,7 @@ END;
 *)
       ] ]
       ;
+  sig_item_eoi: [ [ x = sig_item ; EOI -> x ] ] ;
 
   ctyp:
     [ "simple"
@@ -206,6 +207,10 @@ let tests = "simple" >::: [
         ; assert_equal 3 (pa Mod.sig_item "module type x =")
         ; assert_equal 4 (pa Mod.sig_item "module type x :=")
         ; assert_equal 5 (pa Mod.sig_item "module alias X =")
+      )
+    ; "Mod2" >:: (fun _ ->
+          assert_equal 1 (pa Mod2.sig_item_eoi "external a : 'a")
+        ; assert_equal 1 (pa Mod2.sig_item_eoi "external a : 'a 'b . 'a")
       )
 ]
 

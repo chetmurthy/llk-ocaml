@@ -16,6 +16,15 @@ open Llk_types ;
 open Print_gram ;
 
 
+module DebugCompile(S : sig value rexs : string ; end) = struct
+  open Print_gram ;
+  open Llk_regexps ;
+  value rexs = S.rexs ;
+  value rex = rexs |> RT.pa_regexp_ast |> normalize_astre [] ;
+  module C = Compile(struct value rex = rex ; value extra = []; end) ;
+end
+;
+
 type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ]
 ;
 
@@ -1999,7 +2008,7 @@ value statename i = Printf.sprintf "q%04d" i ;
 
 value edge_group_to_branches loc edges =
   let newst = snd (List.hd edges) in
-  let branch_body = <:expr< $lid:(statename newst)$ (ofs+1) >> in
+  let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
   let toks = List.map fst edges in
   let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
   let rest_branches =
@@ -2031,28 +2040,29 @@ value letrec_nest (init, initre, states) =
   let open PatternBaseToken in
   let loc = Ploc.dummy in
   let export_state (i, rex, final, edges) =
-    match final with [
-      Some (OUTPUT output) ->
-      (<:patt< $lid:(statename i)$ >>, <:expr< fun ofs -> Some (ofs, $int:string_of_int output$) >>, <:vala< [] >>)
-    | None ->
-       let branches =
-         let edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') edges in
-         edge_groups
-         |> List.concat_map (edge_group_to_branches loc) in
+    let rhs =
+      if edges = [] then <:expr< lastf >> else
+      let branches =
+        let edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') edges in
+        edge_groups
+        |> List.concat_map (edge_group_to_branches loc) in
       let branches = branches @ [
-          (<:patt< _ >>, <:vala< None >>, <:expr< None >>)
+          (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
         ] in
-      let rhs = <:expr< fun ofs ->
-                        match must_peek_nth (ofs+1) strm with [
+      <:expr< match must_peek_nth (ofs+1) strm with [
                             $list:branches$
                           ] >> in
-      (<:patt< $lid:(statename i)$ >>, rhs, <:vala< [] >>)
+    match final with [
+      Some (OUTPUT output) ->
+      (<:patt< $lid:(statename i)$ >>, <:expr< fun lastf ofs -> let lastf = Some (ofs, $int:string_of_int output$) in $rhs$ >>, <:vala< [] >>)
+    | None ->
+      (<:patt< $lid:(statename i)$ >>, <:expr< fun lastf ofs -> $rhs$ >>, <:vala< [] >>)
     ] in
   let bindl = List.map export_state states in
   <:expr< fun strm ->
     let open Llk_regexps in
     let open PatternBaseToken in
-    let rec $list:bindl$ in $lid:(statename init)$ 0 >>
+    let rec $list:bindl$ in $lid:(statename init)$ None 0 >>
 ;
 
 value compile1b_branch cg ename branchnum r =
@@ -2131,6 +2141,7 @@ value compile1b_entry cg e =
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   let fullre = compute_entry_regexp cg e in
+  let retxt = String.escaped (PSyn.print fullre) in
   let module C = Compile(struct value rex = fullre ; value extra = []; end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
   let predictor = letrec_nest exported_dfa in
@@ -2141,7 +2152,7 @@ value compile1b_entry cg e =
     branches
     |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
   let rhs =
-    <:expr< fun __strm__ -> match $predictor$ __strm__ with [
+    <:expr< fun __strm__ -> match ($predictor$ __strm__) [@llk.regexp $str:retxt$ ;] with [
                                 $list:branches$
                               ] >> in
   (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
