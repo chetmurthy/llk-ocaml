@@ -44,7 +44,7 @@ EXPORT: type_binder_opt ctyp sig_item ;
 REGEXPS:
   check_type_binder = 
         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
-         (tyvar tyvar * | ("list" | "_list")) "." ;
+         (tyvar tyvar * | ($list | $_list)) "." ;
 END;
 
 (*

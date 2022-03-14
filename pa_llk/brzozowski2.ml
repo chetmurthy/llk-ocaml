@@ -854,34 +854,33 @@ type dfa = {
 
 
 (* A state is final if:
-   1. last-outputs length=1
-   2. first-outputs = [] or = last-outputs
-   3. not nullable
+   1. first-outputs length=1
+
  *)
 let final_state e =
-  let lo = last_outputs e in
   let fo = first_outputs e in
-  if List.length lo = 1
-     && (fo = [] || fo = lo) then
-    Some (List.hd lo)
+  if List.length fo = 1 then
+    Some (List.hd fo)
   else None
 
 
 (* A state is failed if last-outputs=[] *)
 let failed_state e = last_outputs e = []
 
-(* A state is an internal error if nullable but has more than one last-output *)
+(** A state is an internal error if:
+    1. last_output=[]
+
+ *)
 let internal_error_state e =
   let lo = last_outputs e in
-  nullable e && List.length lo > 1
+  lo = []
 
 (* A state may have successors if:
 
-   neither [final] nor [failed] nor [internal_error]
+   neither [failed] nor [internal_error]
  *)
 let may_have_successors (e : regexp) : bool =
-  (None = final_state e)
-  && not (failed_state e)
+  not (failed_state e)
   && not (internal_error_state e)
 
 let watch_regexp (e : regexp) = e

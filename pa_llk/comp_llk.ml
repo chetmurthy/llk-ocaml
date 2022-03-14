@@ -1751,9 +1751,40 @@ value rec compile1_symbol cg loc ename s =
         [([((SpTrm loc <:patt< ($str:cls$, __x__) >> <:vala<  None >>), SpoNoth)],
           None, <:expr< __x__ >>)]))
 
+    | ASlist loc LML_0 elem None ->
+       let elem = compile1_symbol cg loc ename elem in
+       <:expr< parse_list0 $elem$ >>
+
+    | ASlist loc LML_1 elem None ->
+       let elem = compile1_symbol cg loc ename elem in
+       <:expr< parse_list1 $elem$ >>
+
+    | ASlist loc LML_0 elem (Some (sep, False)) ->
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
+       <:expr< parse_list0_with_sep $elem$ $sep$ >>
+
+    | ASlist loc LML_1 elem (Some (sep, False)) ->
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
+       <:expr< parse_list1_with_sep $elem$ $sep$ >>
+
+    | ASlist loc LML_0 elem (Some (sep, True)) ->
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
+       <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >>
+
+    | ASlist loc LML_1 elem (Some (sep, True)) ->
+       let elem = compile1_symbol cg loc ename elem in
+       let sep = compile1_symbol cg loc ename sep in
+       <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >>
+
+
 (*
     | ASleft_assoc loc lhs restrhs e ->
  *)       
+
+    | s -> raise_failwithf loc "compile1_symbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
     ]
 
 and compile1_psymbol cg loc ename ps =
@@ -1785,38 +1816,8 @@ and compile1_psymbol cg loc ename ps =
        let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
         (SpNtr loc patt e, SpoNoth)
 
-    | ASlist loc LML_0 elem None ->
-       let elem = compile1_symbol cg loc ename elem in
-       let e = <:expr< parse_list0 $elem$ >> in
-       (SpNtr loc patt e, SpoNoth)
-
-    | ASlist loc LML_1 elem None ->
-       let elem = compile1_symbol cg loc ename elem in
-       let e = <:expr< parse_list1 $elem$ >> in
-       (SpNtr loc patt e, SpoNoth)
-
-    | ASlist loc LML_0 elem (Some (sep, False)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
-       let e = <:expr< parse_list0_with_sep $elem$ $sep$ >> in
-       (SpNtr loc patt e, SpoNoth)
-
-    | ASlist loc LML_1 elem (Some (sep, False)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
-       let e = <:expr< parse_list1_with_sep $elem$ $sep$ >> in
-       (SpNtr loc patt e, SpoNoth)
-
-    | ASlist loc LML_0 elem (Some (sep, True)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
-       let e = <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >> in
-       (SpNtr loc patt e, SpoNoth)
-
-    | ASlist loc LML_1 elem (Some (sep, True)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
-       let e = <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >> in
+    | ASlist _ _ _ _ as s ->
+       let e = compile1_symbol cg loc ename s in
        (SpNtr loc patt e, SpoNoth)
 
     | ASvala loc elem kinds ->
