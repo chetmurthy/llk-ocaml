@@ -1989,7 +1989,7 @@ value compile1a_entry cg e =
          <:expr< fun __strm__ -> match $match_nest$ with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-    (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+    [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)]
   }
 ;
 
@@ -2145,6 +2145,7 @@ value compile1b_entry cg e =
   let module C = Compile(struct value rex = fullre ; value extra = []; end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
   let predictor = letrec_nest exported_dfa in
+  let predictor_name = ename^"_regexp" in
   let branches = 
     rl
     |> List.mapi (compile1b_branch cg ename) in
@@ -2152,10 +2153,12 @@ value compile1b_entry cg e =
     branches
     |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
   let rhs =
-    <:expr< fun __strm__ -> match ($predictor$ __strm__) [@llk.regexp $str:retxt$ ;] with [
+    <:expr< fun __strm__ -> match ($lid:predictor_name$ __strm__) [@llk.regexp $str:retxt$ ;] with [
                                 $list:branches$
                               ] >> in
-  (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+  [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+  ;(<:patt< $lid:predictor_name$ >>, predictor, <:vala< [] >>)
+  ]
   ;
 
 value compile1_entry cg e =
@@ -2170,7 +2173,7 @@ value compile1_entry cg e =
 
 value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg)  =
 let _ = Follow.exec0 cg ~{tops=expl} el in
-  let fdefs = List.map (compile1_entry cg) el in
+  let fdefs = List.concat_map (compile1_entry cg) el in
   let token_patterns =
     all_tokens el @ (
       (CG.gram_regexps cg)
