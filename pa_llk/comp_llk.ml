@@ -2056,6 +2056,56 @@ value compile1b_branch cg ename branchnum r =
   (<:patt< Some (_, $int:string_of_int branchnum$ ) >>, <:vala< None >>, body)
 ;
 
+value fifo_to_regexp cg e r =
+  let loc = e.ae_loc in
+  let ff = CG.follow cg e.ae_name in
+  let (fi, ff, r) = compute_fifo loc cg ff r in
+  let ffo = Follow.fifo_concat loc ~{if_nullable=True} fi ff in
+  ffo |> List.map PSyn.token
+  |> PSyn.disjunction
+;
+
+(** infer_regexp [stk] [r]
+
+    infers the regexp for rule [r], and if this requires recursing into
+    an entry already on [stk], will raise Failure
+ *)
+value infer_regexp loc cg e r =
+  match r.ar_psymbols with [
+      [ ({ap_symb=ASregexp _ rexname} as h) :: _ ] ->
+      (match CG.gram_regexp cg rexname with [
+           exception Not_found ->
+                     raise_failwithf loc "infer_regexp: undefined regexp %s" rexname
+                   | x -> x
+      ])
+
+     | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
+        CG.gram_external cg nt
+
+    | _ ->
+       fifo_to_regexp cg e r
+    ]
+;
+
+(** computes the regexp for branch [r] of the entry [e].
+
+    METHOD:
+
+    (1) first, try to infer the regexp for the branch
+
+    (2) if inference fails compute FIFO; if that succeeds, convert to regexp
+
+ *)
+value compute_branch_regexp cg e i r =
+  let loc = e.ae_loc in
+  let rex = match infer_regexp loc cg e r with [
+        x -> x
+      | exception Failure _ ->
+         fifo_to_regexp cg e r
+      ] in
+  PSyn.(rex @@ PSyn.token (OUTPUT i))  
+;
+
 (** user-provided regexps as fallback to FIRST/FOLLOW.
 
     1. do as above, computing FIRST/FOLLOW
@@ -2067,47 +2117,15 @@ value compile1b_branch cg ename branchnum r =
 value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
-  let ff = CG.follow cg ename in
-  let fi_fo_rule_list =
-    (List.hd e.ae_levels).al_rules.au_rules
-    |> List.map (compute_fifo loc cg ff) in
-  let ffo_rule_list =
-    fi_fo_rule_list
-  |> List.map (fun (fi, ff, r) ->
-         let ffo = Follow.fifo_concat loc ~{if_nullable=True} fi ff in
-         (ffo, r)
-       ) in
-  let ffo_regexp_rule_list =
-    ffo_rule_list
-  |> List.map (fun (ffo, r) ->
-        let regexp_opt = match r with [
-              {ar_psymbols=[{ap_symb=(ASregexp _ rexname)} :: _]} -> Some rexname
-            | _ -> None
-            ] in
-        (ffo, regexp_opt, r)
-      ) in
-  let fullre = 
-    ffo_regexp_rule_list
-    |> List.mapi (fun i -> fun [
-                       (ffo, None, _) ->
-                       ffo |> List.map PSyn.token
-                       |> PSyn.disjunction
-                       |> (fun r -> PSyn.(r @@ PSyn.token (OUTPUT i)))
-                     | (ffo, Some rexname, _) ->
-                        match CG.gram_regexp cg rexname with [
-                            exception Not_found ->
-                                      raise_failwithf loc "compile1b_entry: undefined regexp %s" rexname
-                          | x -> x
-                          ]
-                        |> (fun r -> PSyn.(r @@ PSyn.token (OUTPUT i)))
-      ])
-    |> PSyn.disjunction in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let re_branches =
+    List.mapi (compute_branch_regexp cg e) rl in
+  let fullre = PSyn.disjunction re_branches in
   let module C = Compile(struct value rex = fullre ; value extra = []; end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
   let predictor = letrec_nest exported_dfa in
   let branches = 
-    ffo_regexp_rule_list
-    |> List.map Std.third3
+    rl
     |> List.mapi (compile1b_branch cg ename) in
   let branches =
     branches
@@ -2118,7 +2136,6 @@ value compile1b_entry cg e =
                               ] >> in
   (<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   ;
-
 
 value compile1_entry cg e =
   match compile1a_entry cg e with [
