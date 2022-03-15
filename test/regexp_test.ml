@@ -66,17 +66,17 @@ GRAMMAR Mod3:
 EXPORT: top;
 
 REGEXPS:
-  check_uident_uident_coloneq = UIDENT UIDENT ":=" ;
-  check_uident_lident = UIDENT LIDENT ;
+  check_uident_uident_coloneq = UIDENT UIDENT ":=" LIDENT ;
+  check_uident_lident = UIDENT LIDENT LIDENT ;
 
 END;
   top: [ [ s = sub1 ; ";" -> s ] ] ;
   sub1:
-    [ [ check_uident_uident_coloneq; u=uident1 ; ":=" → (u, true)
-      | check_uident_lident ; l=lident2 → (l, false) ] ]
+    [ [ check_uident_uident_coloneq; u=uident1 ; ":=" ; l=LIDENT → (u, true, l)
+      | check_uident_lident ; l=lident2 ; l2 = LIDENT → (l, false, l2) ] ]
   ;
-  uident1: [ [ UIDENT ; u = UIDENT -> u ] ] ;
-  lident2: [ [ UIDENT ; u = LIDENT -> u ] ] ;
+  uident1: [ [ u=UIDENT ; v = UIDENT -> (u,v) ] ] ;
+  lident2: [ [ u=UIDENT ; v = LIDENT -> (u,v) ] ] ;
 
 
 END ;
@@ -110,8 +110,8 @@ let tests = "simple" >::: [
         ; assert_equal ("A", true) (pa Mod2.top "A := ;")
       )
     ; "Mod3" >:: (fun _ ->
-          assert_equal ("a", false) (pa Mod3.top "a;")
-        ; assert_equal ("A", true) (pa Mod3.top "A := ;")
+          assert_equal (("A","b"), false, "c") (pa Mod3.top "A b c;")
+        ; assert_equal (("A","B"), true, "d") (pa Mod3.top "A B := d;")
       )
 ]
 

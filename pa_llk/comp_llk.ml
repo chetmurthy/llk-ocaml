@@ -1936,7 +1936,7 @@ value build_match_nest loc cg ename fi_fo_rule_list =
          raise_failwithf loc "internal error in build_match_nest: more than one NULL branch for entry %s" ename
       ] in
   let branches = normal_branches @ null_branches in
-  <:expr< match Stream.peek __strm__ with [ $list:branches$ ] >>
+  <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >>
 ;
 
 value compile1a_branch cg ename i (fi, fo, r) =
@@ -1972,6 +1972,7 @@ value compile1a_entry cg e =
       raise_failwith loc "compile1a_entry: more than one branch is nullable"
     else () ;
     let match_nest = build_match_nest loc cg ename fi_fo_rule_list in
+    let matcher_name = ename^"_matcher" in
     let branches =
       fi_fo_rule_list
     |> List.mapi (compile1a_branch cg ename) in
@@ -1986,10 +1987,12 @@ value compile1a_entry cg e =
          let branches = branches @ [
                (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
              ] in
-         <:expr< fun __strm__ -> match $match_nest$ with [ $list:branches$ ] >> ]
+         <:expr< fun __strm__ -> match $lid:matcher_name$ __strm__ with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-    [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)]
+    [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+    ;(<:patt< $lid:matcher_name$ >>, match_nest, <:vala< [] >>)
+    ]
   }
 ;
 
