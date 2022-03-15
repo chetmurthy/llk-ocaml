@@ -282,7 +282,8 @@ and pr_re_star pc = fun [
 
 and pr_re_simple pc = fun [
       Special _ x -> pprintf pc "\"%s\"" x
-    | Class _ x -> pprintf pc "%s" x
+    | Class _ x None -> pprintf pc "%s" x
+    | Class _ x (Some s) -> pprintf pc "%s/\"%s\"" x s
     | Anti _ x -> pprintf pc "$%s" x
     | Output _ x -> pprintf pc "#%d" x
     | EPS _ -> pprintf pc "eps"

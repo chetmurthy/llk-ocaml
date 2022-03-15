@@ -166,7 +166,7 @@ EXTEND
       | x = UIDENT ->
           AStok loc x None
       | x = UIDENT; e = STRING ->
-          AStok loc x (Some e)
+          AStok loc x (Some (Scanf.unescaped e))
       | e = STRING ->
           ASkeyw loc e
 
@@ -214,7 +214,8 @@ EXTEND
 
   e0:
     [ [ x = STRING -> Special loc x
-      | x = UIDENT -> Class loc x
+      | x = UIDENT -> Class loc x None
+      | x = UIDENT ; "/" ; s = STRING -> Class loc x (Some s)
       | "$" ; x = LIDENT -> Anti loc x
       | "#" ; x = INT -> Output loc (int_of_string x)
       | "("; x = e6; ")" -> x

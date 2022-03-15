@@ -26,7 +26,7 @@ module DebugCompile(S : sig value rexs : string ; end) = struct
 end
 ;
 
-type token = Llk_regexps.PatternBaseToken.t == [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ]
+type token = Llk_regexps.PatternBaseToken.t == [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ]
 ;
 
 module Ctr = struct
@@ -1088,7 +1088,7 @@ and symbol cg = fun [
 
   | ASrules _ rl -> rules cg rl
   | ASself _ _ -> assert False
-  | AStok _ cls _ -> TS.mk[Some (CLS cls)]
+  | AStok _ cls tokopt -> TS.mk[Some (CLS cls tokopt)]
   | ASvala loc s kinds ->
      let anti_kinds = Anti.infer_kinds loc s kinds in
      TS.(union (symbol cg s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
@@ -1401,7 +1401,7 @@ and fifo_symbol cg ff = fun [
   | ASrules loc rs ->
      fifo_rules cg ff rs
 
-  | AStok loc cls _ -> TS.mk [CLS cls]
+  | AStok loc cls tokopt -> TS.mk [CLS cls tokopt]
 
   | ASvala loc s sl as s0 ->
      let _ = fifo_symbol cg ff s in
@@ -1453,7 +1453,7 @@ value rec comprec el cg = do {
 value exec0 cg ~{tops} el = do {
   ignore (First.exec0 cg el) ;
   tops |> List.iter (fun t ->
-              CG.add_follow cg t [CLS "EOI"]) ;
+              CG.add_follow cg t [CLS "EOI" None]) ;
   comprec el cg
 }
 ;
@@ -1711,8 +1711,7 @@ value all_tokens el =
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt s = do { match s with [
           ASkeyw _ s0 -> Std.push acc (SPCL s0)
-        | AStok _ s0 None -> Std.push acc (CLS s0)
-        | AStok loc s (Some _) -> raise_failwith loc "unupported"
+        | AStok _ s0 tokopt -> Std.push acc (CLS s0 tokopt)
         | ASvala _ s0 sl -> do {
             ignore (dt.migrate_a_symbol dt s0) ;
             List.iter (fun s2 -> Std.push acc (ANTI s2)) sl
@@ -1767,6 +1766,12 @@ value rec compile1_symbol cg loc ename s =
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
        Exparser.(cparser loc (None,
         [([((SpTrm loc <:patt< ($str:cls$, __x__) >> <:vala<  None >>), SpoNoth)],
+          None, <:expr< __x__ >>)]))
+
+    | AStok loc cls (Some tok) ->
+       (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
+       Exparser.(cparser loc (None,
+        [([((SpTrm loc <:patt< ($str:cls$, ($str:String.escaped tok$ as __x__)) >> <:vala<  None >>), SpoNoth)],
           None, <:expr< __x__ >>)]))
 
     | ASlist loc LML_0 elem None ->
@@ -1828,6 +1833,13 @@ and compile1_psymbol cg loc ename ps =
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
 
+    | AStok loc cls (Some tok) ->
+       (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
+       let patt = match patt with [
+             <:patt< _ >> -> <:patt< $str:String.escaped tok$ >>
+           | _ -> <:patt< ($str:String.escaped tok$ as $patt$) >> ] in
+       ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
+
     | ASleft_assoc loc lhs restrhs e ->
        let lhs = compile1_symbol cg loc ename lhs in
        let restrhs = compile1_symbol cg loc ename restrhs in
@@ -1848,6 +1860,8 @@ and compile1_psymbol cg loc ename ps =
        let elem = compile1_symbol cg loc ename elem in
        let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
        (SpNtr loc patt e, SpoNoth)
+
+    | s -> raise_failwithf (loc_of_a_symbol s) "compile1_psymbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
     ]
 ;
 
@@ -1899,12 +1913,20 @@ value report_first_follow_error ?{and_raise=False} reason cg loc ename fi_fo_rul
 
 value tokens_to_match_branches loc i toks =
   let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
+  let (specifics, rest) = Ppxutil.filter_split (fun [ CLS _ (Some _) -> True | _ -> False ]) rest in
   let rest_branches =
     rest
     |> List.map (fun [
-         CLS s -> (<:patt< Some ($str:s$, _) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+         CLS s None -> (<:patt< Some ($str:s$, _) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+       | CLS s (Some tok) -> assert False
        | SPCL s -> (<:patt< Some ("", $str:s$) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
-                   ]) in
+         ]) in
+  let specific_branches =
+    specifics
+    |> List.map (fun [
+         CLS s (Some tok) -> (<:patt< Some ($str:s$, $str:String.escaped tok$) >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)
+       | _ -> assert False
+         ]) in
   let anti_branches =
     if antis = [] then [] else
     let kinds = antis |> List.map (fun [ ANTI s -> s ]) in
@@ -1917,7 +1939,7 @@ value tokens_to_match_branches loc i toks =
                            | _ -> False
                            ] >> in
      [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, <:expr< $int:string_of_int i$ >>)]
-  in rest_branches @ anti_branches
+  in specific_branches @ rest_branches @ anti_branches
 ;
 
 value match_nest_branches cg ename i (fi, fo, r) =
@@ -2006,7 +2028,8 @@ value compile1a_entry cg e =
 ;
 
 value token_pattern loc = fun [
-        CLS s -> (<:patt< Some ($str:s$, _) >>, None)
+        CLS s None -> (<:patt< Some ($str:s$, _) >>, None)
+      | CLS s (Some tok) -> (<:patt< Some ($str:s$, $str:String.escaped tok$) >>, None)
       | SPCL s -> (<:patt< Some ("", $str:s$) >>, None)
       | ANTI s ->
         (<:patt< Some ("ANTIQUOT", x) >>,
@@ -2018,7 +2041,7 @@ value token_pattern loc = fun [
 
 value statename i = Printf.sprintf "q%04d" i ;
 
-value edge_group_to_branches loc edges =
+value edge_group_to_branches loc generic_is_final edges =
   let newst = snd (List.hd edges) in
   let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
   let toks = List.map fst edges in
@@ -2027,7 +2050,66 @@ value edge_group_to_branches loc edges =
     if [] = rest then [] else
       let patt =
         let rest = rest |> List.map (fun [
-                                         CLS s -> <:patt< Some ($str:s$, _) >>
+                                         CLS s None -> <:patt< Some ($str:s$, _) >>
+                                       | CLS s (Some tok) -> <:patt< Some ($str:s$, $str:String.escaped tok$) >>
+                                       | SPCL s -> <:patt< Some ("", $str:s$) >>
+                             ]) in
+        List.fold_left (fun p1 p2 -> <:patt< $p1$ | $p2$ >>) (List.hd rest) (List.tl rest) in
+      [(patt, <:vala< None >>, branch_body)] in
+
+  let antis_branches =
+    if [] = antis then [] else
+      let kinds = antis |> List.map (fun [ ANTI s -> s ]) in
+      let kinds_list_expr = 
+        kinds
+        |> List.map (fun s -> <:expr< $str:s$ >>)
+        |> Ppxutil.convert_up_list_expr loc in
+      let whene = <:expr< match Plexer.parse_antiquot x with [
+                              Some (k, _) -> List.mem k $kinds_list_expr$
+                            | _ -> False
+                            ] >> in
+      [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, branch_body)] in
+  rest_branches @ antis_branches
+;
+
+value edge_to_branch loc generic_is_final (cls,newst) =
+  let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
+  match cls with [
+      ANTI kind ->
+      let kinds_list_expr = 
+        kinds
+        |> List.map (fun s -> <:expr< $str:s$ >>)
+        |> Ppxutil.convert_up_list_expr loc in
+      let whene = <:expr< match Plexer.parse_antiquot x with [
+                              Some (k, _) -> List.mem k $kinds_list_expr$
+                            | _ -> False
+                            ] >> in
+      [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, branch_body)]
+
+    | CLS s None ->
+       let patt = <:patt< Some ($str:s$, _) >> in
+       [(patt, <:vala< None >>, branch_body)]
+
+    | CLS s (Some tok) ->
+       let patt = <:patt< Some ($str:s$, $str:String.escaped tok$) >> in
+       let branch_body =
+         match List.assoc s generic_is_final with [
+             OUTPUT outval -> 
+             <:expr< let lastf = Some (ofs, $int:string_of_int outval$) in $branch_body$ >>
+           | exception Not_found -> branch_body
+           ] in
+       [(patt, <:vala< None >>, branch_body)]
+
+
+
+  let toks = List.map fst edges in
+  let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
+  let rest_branches =
+    if [] = rest then [] else
+      let patt =
+        let rest = rest |> List.map (fun [
+                                         CLS s None -> <:patt< Some ($str:s$, _) >>
+                                       | CLS s (Some tok) -> <:patt< Some ($str:s$, $str:String.escaped tok$) >>
                                        | SPCL s -> <:patt< Some ("", $str:s$) >>
                              ]) in
         List.fold_left (fun p1 p2 -> <:patt< $p1$ | $p2$ >>) (List.hd rest) (List.tl rest) in
@@ -2051,13 +2133,23 @@ value edge_group_to_branches loc edges =
 value letrec_nest (init, initre, states) =
   let open PatternBaseToken in
   let loc = Ploc.dummy in
+  let find_state st =
+    try
+      List.find (fun (i, _, _, _) -> st = i) states
+    with Not_found -> failwithf "letrec_nest internal error: state %d not found" st in
+  let state_is_final st =
+    let (_, _, final, _) = find_state st in
+    None <> final in
   let export_state (i, rex, final, edges) =
     let rhs =
       if edges = [] then <:expr< lastf >> else
+        let generic_is_final =
+          edges
+        |> List.find_map (fun [ (CLS ty None, st) when state_is_final st -> Some (ty, st) | _ -> None ]) in
       let branches =
         let edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') edges in
         edge_groups
-        |> List.concat_map (edge_group_to_branches loc) in
+        |> List.concat_map (edge_group_to_branches loc generic_is_final) in
       let branches = branches @ [
           (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
         ] in
@@ -2192,13 +2284,13 @@ let _ = Follow.exec0 cg ~{tops=expl} el in
       |> List.map snd
       |> List.concat_map PatternRegexp.tokens
     )
-    |> List.filter (fun [ CLS _ | SPCL _ -> True | ANTI _ -> False])
+    |> List.filter (fun [ CLS _ _ | SPCL _ -> True | ANTI _ -> False])
     |> List.sort_uniq PatternBaseToken.compare
   in
   let token_actions =
     token_patterns
     |> List.map (fun [
-      CLS c -> <:expr< lexer.tok_using ($str:c$, "") >>
+      CLS c _ -> <:expr< lexer.tok_using ($str:c$, "") >>
     | SPCL k -> <:expr< lexer.tok_using ("", $str:k$) >>
                    ])
   in

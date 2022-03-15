@@ -167,6 +167,19 @@ END ;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Specific:
+EXPORT: top;
+
+  top: [ [ UIDENT "foo" -> "foo"
+         | u = UIDENT -> u
+         | UIDENT "bar" -> "bar"
+         ] ] ;
+END ;
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true

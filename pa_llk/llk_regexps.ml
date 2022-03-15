@@ -9,23 +9,17 @@ open Pa_ppx_utils ;
 open Ppxutil ;
 
 module PatternBaseToken = struct
-  type t = [ CLS of string | SPCL of string | ANTI of string | OUTPUT of int ] ;
+  type t = [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ] ;
   value hash = Hashtbl.hash;
   value print = fun [
       SPCL s -> Printf.sprintf "\"%s\"" (String.escaped s)
-    | CLS ty -> Printf.sprintf "%s" ty
+    | CLS ty None -> Printf.sprintf "%s" ty
+    | CLS ty (Some s) -> Printf.sprintf "%s \"%s\"" ty (String.escaped s)
     | ANTI s -> Printf.sprintf "$%s" s
     | OUTPUT n -> Printf.sprintf "#%d" n
     ]
   ;
-  value compare t1 t2 = match (t1, t2) with [
-    (CLS s1, CLS s2) -> String.compare s1 s2
-  | (SPCL s1, SPCL s2) -> String.compare s1 s2
-  | (ANTI s1, ANTI s2) -> String.compare s1 s2
-  | (OUTPUT s1, OUTPUT s2) -> Int.compare s1 s2
-  | (a, b) -> Int.compare Obj.(tag (repr a)) Obj.(tag (repr b))
-  ]
-  ;                            
+  value compare t1 t2 = Stdlib.compare t1 t2 ;                            
   value equal t1 t2 = 0 = compare t1 t2 ;
   value is_output = fun [ OUTPUT _ -> True | _ -> False ] ;
 end ;
@@ -42,7 +36,7 @@ module Compile(R : sig value rex : PatternRegexp.regexp ;
     include PatternBaseToken ;
     value foreach f = do {
       List.iter f toks ;
-      f (CLS "EOI")
+      f (CLS "EOI" None)
     }
     ;
   end ;
@@ -63,7 +57,7 @@ value convert_token =
       ("",s) -> Some (SPCL s)
     | ("ANTIQUOT", s) -> s |> Plexer.parse_antiquot |> option_map fst |> option_map (fun s -> ANTI s)
     | ("ANTIQUOT_LOC", s) -> s |> Plexer.parse_antiloc |> option_map snd3 |> option_map (fun s -> ANTI s)
-    | (s, _) -> Some (CLS s)
+    | (s, _) -> Some (CLS s None)
 ]
 ;
 
@@ -99,7 +93,7 @@ value equal_loc a b = True ;
 
 type astre = [
   Special of loc and string
-| Class of loc and string
+| Class of loc and string and option string
 | Anti of loc and string
 | Output of loc and int
 | DISJ of loc and list astre
@@ -118,7 +112,8 @@ value normalize_astre env x =
   let open PatternBaseToken in
   let rec convrec env = fun [
         Special _ x -> PSyn.token (SPCL (Scanf.unescaped x))
-      | Class _ x -> PSyn.token (CLS (Scanf.unescaped x))
+      | Class _ x None -> PSyn.token (CLS (Scanf.unescaped x) None)
+      | Class _ x (Some s) -> PSyn.token (CLS (Scanf.unescaped x) (Some (Scanf.unescaped s)))
       | Anti _ x -> PSyn.token (ANTI (Scanf.unescaped x))
       | Output _ x -> PSyn.token (OUTPUT x)
       | DISJ _ l -> PSyn.disjunction (List.map (convrec env) l)

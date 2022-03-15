@@ -83,6 +83,25 @@ END ;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Specific:
+EXPORT: top;
+REGEXPS:
+  check_u1 = UIDENT/"foo" UIDENT ;
+  check_u2 = UIDENT/"foo" LIDENT ;
+END;
+
+  top: [ [ check_u1 ; u1 ; l = LIDENT -> (1,l)
+         | u = UIDENT -> (2,u)
+         | check_u2 ; u2 ; u = UIDENT -> (3,u)
+         ] ] ;
+  u1: [ [ UIDENT "foo" -> () ] ];
+  u2: [ [ UIDENT "foo" -> () ] ];
+END ;
+|foo}
+] ;;
+
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2
