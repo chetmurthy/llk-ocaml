@@ -60,6 +60,29 @@ END ;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Mod3:
+EXPORT: top;
+
+REGEXPS:
+  check_uident_uident_coloneq = UIDENT UIDENT ":=" ;
+  check_uident_lident = UIDENT LIDENT ;
+
+END;
+  top: [ [ s = sub1 ; ";" -> s ] ] ;
+  sub1:
+    [ [ check_uident_uident_coloneq; u=uident1 ; ":=" → (u, true)
+      | check_uident_lident ; l=lident2 → (l, false) ] ]
+  ;
+  uident1: [ [ UIDENT ; u = UIDENT -> u ] ] ;
+  lident2: [ [ UIDENT ; u = LIDENT -> u ] ] ;
+
+
+END ;
+|foo}
+] ;;
+
 let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e
 
 open OUnit2
@@ -85,6 +108,10 @@ let tests = "simple" >::: [
     ; "Mod2" >:: (fun _ ->
           assert_equal ("A", false) (pa Mod2.top "A;")
         ; assert_equal ("A", true) (pa Mod2.top "A := ;")
+      )
+    ; "Mod3" >:: (fun _ ->
+          assert_equal ("a", false) (pa Mod3.top "a;")
+        ; assert_equal ("A", true) (pa Mod3.top "A := ;")
       )
 ]
 
