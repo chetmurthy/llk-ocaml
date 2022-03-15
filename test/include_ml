@@ -31,7 +31,7 @@ open Pa_ppx_utils.Std ;;
 open Pa_ppx_testutils.Papr_util ;;
 
 #require "pa_ppx.base";;
-Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
+Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
 
@@ -138,10 +138,10 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-
+(*
 #load "xx.cmo";;
 open Xx ;;
-(*
+
 #load "regexp_test.cmo";;
 open Regexp_test ;;
 

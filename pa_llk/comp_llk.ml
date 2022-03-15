@@ -12,6 +12,7 @@ open Ord_MLast ;
 open Pa_ppx_utils ;
 open Ppxutil ;
 
+open Llk_regexps ;
 open Llk_types ;
 open Print_gram ;
 
@@ -255,6 +256,8 @@ value check cg =
         ASnterm loc nt _ _
            when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
                 raise_failwithf loc "CheckSyntax: no nonterminal %s defined in grammar" nt
+      | ASnterm loc nt _ (Some _) when CG.exists_external_ast cg nt ->
+                raise_failwithf loc "CheckSyntax: external nonterminal %s has forbidden level marking" nt
       | ASregexp loc nt ->
          raise_failwithf loc "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
       | s -> fallback_migrate_a_symbol dt s
@@ -888,20 +891,20 @@ end ;
 
 module CheckNoLabelAssocLevel = struct
 
-value check_no_level el =
+value check_no_level cg el =
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
-        ASnterm loc nt _ (Some _) ->
-        raise_failwithf loc "CheckNoLabelAssocLevel: level marking found on nonterminal %s" nt
+        ASnterm loc nt _ (Some _) when CG.exists_external_ast cg nt ->
+        raise_failwithf loc "CheckNoLabelAssocLevel: level marking found on EXTERNAL nonterminal %s" nt
       | s -> fallback_migrate_a_symbol dt s
       ] in
   let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
   List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) el
 ;
 
-value exec (({gram_entries=el}, _) as x) = do {
-  check_no_level el ;
+value exec (({gram_entries=el}, _) as cg) = do {
+  check_no_level cg el ;
   el |> List.iter (fun e ->
     e.ae_levels |> List.iter (fun l -> do {
       match l.al_label with [
@@ -916,7 +919,7 @@ value exec (({gram_entries=el}, _) as x) = do {
         ]
     })
   ) ;
-  x
+  cg
 }
 ;
 
@@ -1371,6 +1374,11 @@ and fifo_symbol cg ff = fun [
         fifo_concat loc ~{if_nullable=True} fi_s ff
       }
 
+  | ASnterm loc nt _ _ as s when CG.exists_external_ast cg nt ->
+     let rex = CG.gram_external cg nt in
+     let module C = Compile(struct value rex = rex ; value extra = []; end) in
+     C.BEval.OutputDfa.first_tokens rex
+
   | ASleft_assoc loc s1 s2 _ ->
   (* 1. fifo is [FIRST s1].{is_nullable}.[FIRST s2].{is_nullable}.full-follow
      2. compute [FIFO s1] with ff=[FIRST s2] union full-follow
@@ -1401,6 +1409,7 @@ and fifo_symbol cg ff = fun [
      let fi_vala = First.symbol cg s0 in
      fifo_concat loc ~{if_nullable=True} fi_vala ff
 
+  | s -> raise_failwithf (loc_of_a_symbol s) "fifo_symbol: %s" (Pr.symbol Pprintf.empty_pc s)
 ]
 
 and fifo_rule cg ff r =

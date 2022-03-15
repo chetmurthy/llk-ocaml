@@ -96,3 +96,19 @@ value norm_top g = {(g) with gram_exports = List.sort_uniq String.compare g.gram
 value show_top = show__top ;
 value eq_top x y = equal__top (x |> norm_top) (y |> norm_top) ;
 value compare_top x y = compare__top (x |> norm_top) (y |> norm_top) ;
+
+value loc_of_a_symbol = fun [
+    ASflag loc _ -> loc
+  | ASkeyw loc _ -> loc
+  | ASlist loc _ _ _ -> loc
+  | ASnext loc _ -> loc
+  | ASnterm loc _ _ _ -> loc
+  | ASregexp loc _ -> loc
+  | ASopt loc _ -> loc
+  | ASleft_assoc loc _ _ _ -> loc
+  | ASrules loc _ -> loc
+  | ASself loc _ -> loc
+  | AStok loc _ _ -> loc
+  | ASvala loc _ _ -> loc
+  ]
+;
