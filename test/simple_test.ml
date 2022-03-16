@@ -284,7 +284,8 @@ let tests = "simple" >::: [
       ; assert_equal (1, 2., "c", "y") (pa LF.top {|1 2. "c" y|})
     )
     ; "LocTest" >:: (fun _ ->
-        assert_equal (Ploc.dummy, "U","V") (pa LocTest.top {|U, V|})
+      let loc = Ploc.make_loc "" 1 0 (0, 4) "" in
+        assert_equal ~cmp:(fun (_,a1,b1) (_,a2,b2) -> a1=a2 && b1=b2) (loc, "U","V") (pa LocTest.top {|U, V|})
     )
 ]
 

@@ -1921,7 +1921,12 @@ value compile1_rule cg ename r =
  *)
   let spc_list = compile1_psymbols cg loc ename r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
-  cparser loc (None, [(spc_list, None, action)])
+  let freelids = S5LambdaLift.free_lids_of_expr action in
+  if List.mem "loc" freelids then
+    let action = <:expr< let loc = Grammar.loc_of_token_interval bp ep in $action$ >> in
+    cparser loc (Some <:patt< bp >>, [(spc_list, Some <:patt< ep >>, action)])
+  else
+    cparser loc (None, [(spc_list, None, action)])
 ;
 
 value tokens_to_match_branches loc i toks =
