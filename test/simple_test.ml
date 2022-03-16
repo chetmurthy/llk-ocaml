@@ -180,6 +180,17 @@ END ;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR LocTest:
+EXPORT: top;
+
+  top: [ [ u = UIDENT ; "," ; v = UIDENT -> (loc, u,v)
+         ] ] ;
+END ;
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -271,6 +282,9 @@ let tests = "simple" >::: [
     ; "LF" >:: (fun _ ->
         assert_equal (1, 2., "c", "X") (pa LF.top {|1 2. "c" X|})
       ; assert_equal (1, 2., "c", "y") (pa LF.top {|1 2. "c" y|})
+    )
+    ; "LocTest" >:: (fun _ ->
+        assert_equal (Ploc.dummy, "U","V") (pa LocTest.top {|U, V|})
     )
 ]
 

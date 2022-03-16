@@ -1,11 +1,20 @@
 
 open Pcaml ;;
 
+open Llk_types ;;
+open Llk_regexps ;;
+
 [@@@llk
 {foo|
 GRAMMAR LLKGram:
 EXPORT: expr
     top grammar_body symbol rule rule_list level level_list symbol regexp;
+
+REGEXPS:
+  check_lident_equal = LIDENT "=" ;
+  check_lident_lbracket = LIDENT "[" ;
+  check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
+END;
 
 external expr : PREDICTION LIDENT ;
 external expr_LEVEL_simple : PREDICTION LIDENT ;
@@ -79,14 +88,16 @@ external patt : PREDICTION LIDENT ;
           {ar_loc = loc; ar_psymbols = psl; ar_action = None} ] ]
   ;
   psymbol:
-    [ [ p = LIDENT; "="; s = symbol ->
+    [ [ check_lident_equal; p = LIDENT; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some <:patt< $lid:p$ >>; ap_symb = s}
-      | i = LIDENT; 
+      | check_lident_lbracket; p = LIDENT; 
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
-          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm loc i args lev}
-      | p = pattern; "="; s = symbol ->
+          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm loc p args lev}
+      | check_pattern_equal ; p = paren_pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
+       | "_" ; "="; s = symbol ->
+          {ap_loc = loc; ap_patt = Some <:patt< _ >>; ap_symb = s}
       | s = symbol ->
           {ap_loc = loc; ap_patt = None; ap_symb = s} ] ]
   ;
@@ -102,26 +113,17 @@ external patt : PREDICTION LIDENT ;
          ASlist loc LML_1 s sep
       | UIDENT "OPT"; s = SELF ->
          ASopt loc s
-      | UIDENT "LEFT_ASSOC"; s1 = SELF ; s2 = SELF ; UIDENT "WITH" ; e=expr_LEVEL_simple ->
+      | UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc loc s1 s2 e
       | UIDENT "FLAG"; s = SELF ->
-          ASflag loc s ]
+          ASflag loc s
+      | s = NEXT -> s
+      ]
     | "vala"
-      [ UIDENT "V"; UIDENT "SELF";
-        args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
-        al = LIST0 STRING ->
-          let s = ASself loc args in
+      [ UIDENT "V"; s = NEXT; al = LIST0 STRING ->
           ASvala loc s al
-      | UIDENT "V"; UIDENT "NEXT";
-        args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
-        al = LIST0 STRING ->
-          let s = ASnext loc args in
-          ASvala loc s al
-      | UIDENT "V"; x = UIDENT; al = LIST0 STRING ->
-          let s = AStok loc x None in
-          ASvala loc s al
-      | UIDENT "V"; s = NEXT; al = LIST0 STRING ->
-          ASvala loc s al ]
+      | s = NEXT -> s
+      ]
     | "simple"
       [ UIDENT "SELF" ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ->
@@ -133,7 +135,7 @@ external patt : PREDICTION LIDENT ;
           ASrules loc {au_loc = loc; au_rules = rl}
       | x = UIDENT ->
           AStok loc x None
-      | x = UIDENT; e = STRING ->
+      | x = UIDENT; "/"; e = STRING ->
           AStok loc x (Some e)
       | e = STRING ->
           ASkeyw loc e
@@ -151,13 +153,12 @@ external patt : PREDICTION LIDENT ;
   pattern:
     [ [ i = LIDENT -> <:patt< $lid:i$ >>
       | "_" -> <:patt< _ >>
-      | "("; p = SELF; ")" -> <:patt< $p$ >>
-      | "("; p = SELF; ","; pl = patterns_comma; ")" ->
-          <:patt< ( $list:[p :: pl]$ ) >> ] ]
+      | p = paren_pattern -> p
+      ] ]
   ;
-  patterns_comma:
-    [ [ pl = SELF; ","; p = pattern -> pl @ [p] ]
-    | [ p = pattern -> [p] ] ]
+  paren_pattern:
+    [ [ "("; l = LIST1 pattern SEP "," ; ")" ->
+          <:patt< ( $list:l$ ) >> ] ]
   ;
 
   regexp_entry: [ [ n = LIDENT ; "=" ; r = regexp ; ";" -> (n,r) ] ] ;
@@ -181,13 +182,13 @@ external patt : PREDICTION LIDENT ;
   e1: [ [ x = e0; "*" -> STAR loc x | x = e0 -> x ] ] ;
 
   e0:
-    [ [ x = STRING -> Special loc x
-      | x = UIDENT -> Class loc x
-      | "$" ; x = LIDENT -> Anti loc x
-      | "#" ; x = INT -> Output loc (int_of_string x)
+    [ [ x = STRING -> Special(loc, x)
+      | x = UIDENT -> Class(loc, x)
+      | "$" ; x = LIDENT -> Anti(loc, x)
+      | "#" ; x = INT -> Output(loc, int_of_string x)
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
-      | x = LIDENT -> ID loc x
+      | x = LIDENT -> ID(loc, x)
       ]
     ]
   ;

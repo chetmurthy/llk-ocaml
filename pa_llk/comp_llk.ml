@@ -1743,6 +1743,29 @@ value disjoint loc ll =
   drec TS.mt ll
 ;
 
+value print_token_option = fun [
+    None -> "eps"
+|   Some t -> PatternBaseToken.print t
+]
+;
+
+value report_compilation_error ?{and_raise=False} reason cg loc ename fi_fo_rule_list = do {
+  Fmt.(pf stderr "Failure in entry %s: %s\n" ename reason) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
+      Fmt.(pf stderr "First: %s\nFollow: %s\nRule: %s\n\n"
+          (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+          (Pr.rule False Pprintf.empty_pc r)
+                       )) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
+  Fmt.(pf stderr "\n%!") ;
+  if and_raise then
+    raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
+  else ()
+}
+;
+
 open Exparser ;
 
 value rec compile1_symbol cg loc ename s =
@@ -1761,6 +1784,9 @@ value rec compile1_symbol cg loc ename s =
 
     | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
        Expr.applist <:expr< $lid:nt$ >> actuals
+
+    | ASnterm loc nt actuals None when CG.exists_external_ast cg nt ->
+       <:expr< Grammar.Entry.parse_token_stream $lid:nt$ >>
 
     | AStok loc cls None ->
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
@@ -1807,7 +1833,10 @@ value rec compile1_symbol cg loc ename s =
     | ASleft_assoc loc lhs restrhs e ->
  *)       
 
-    | s -> raise_failwithf loc "compile1_symbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
+    | s -> do {
+        report_compilation_error ~{and_raise=False} Fmt.(str "compiling entry %s encountered" ename) cg (loc_of_a_symbol s) ename [];
+        raise_failwithf loc "compile1_symbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
+      }
     ]
 
 and compile1_psymbol cg loc ename ps =
@@ -1816,6 +1845,10 @@ and compile1_psymbol cg loc ename ps =
       ASflag loc s -> do {
         let s_body = compile1_symbol cg loc ename s in
         (SpNtr loc patt <:expr< parse_flag $s_body$ >>, SpoNoth)
+       }
+    | ASopt loc s -> do {
+        let s_body = compile1_symbol cg loc ename s in
+        (SpNtr loc patt <:expr< parse_opt $s_body$ >>, SpoNoth)
        }
     | ASkeyw  loc kws ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
@@ -1861,7 +1894,10 @@ and compile1_psymbol cg loc ename ps =
        let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
        (SpNtr loc patt e, SpoNoth)
 
-    | s -> raise_failwithf (loc_of_a_symbol s) "compile1_psymbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
+    | s -> do {
+        report_compilation_error ~{and_raise=False} Fmt.(str "compiling entry %s encountered" ename) cg (loc_of_a_symbol s) ename [];
+        raise_failwithf (loc_of_a_symbol s) "compile1_psymbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
+      }
     ]
 ;
 
@@ -1886,29 +1922,6 @@ value compile1_rule cg ename r =
   let spc_list = compile1_psymbols cg loc ename r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
   cparser loc (None, [(spc_list, None, action)])
-;
-
-value print_token_option = fun [
-    None -> "eps"
-|   Some t -> PatternBaseToken.print t
-]
-;
-
-value report_first_follow_error ?{and_raise=False} reason cg loc ename fi_fo_rule_list = do {
-  Fmt.(pf stderr "Failure FIRST/FOLLOW in entry %s: %s\n" ename reason) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
-      Fmt.(pf stderr "First: %s\nFollow: %s\nRule: %s\n\n"
-          (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
-          (Pr.rule False Pprintf.empty_pc r)
-                       )) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
-  Fmt.(pf stderr "\n%!") ;
-  if and_raise then
-    raise_failwithf loc "compile1_entry: entry %s: FIFO sets were not disjoint" ename
-  else ()
-}
 ;
 
 value tokens_to_match_branches loc i toks =
@@ -1993,12 +2006,12 @@ value compile1a_entry cg e =
           |> List.map (compute_fifo loc cg ff) with [
       x -> x
     | exception First.ExternalEntry eename -> do {
-        report_first_follow_error ~{and_raise=True} Fmt.(str "external entry %s encountered" eename) cg loc e.ae_name [];
+        report_compilation_error ~{and_raise=True} Fmt.(str "external entry %s encountered" eename) cg loc e.ae_name [];
         raise_failwithf loc "compile1a_entry(%s): external entry %s found, FIRST/FOLLOW disallowed" e.ae_name eename
       }
       ] in do {
     if not (disjoint loc fi_fo_rule_list) then
-      report_first_follow_error ~{and_raise=True} "disjointness test failed" cg loc e.ae_name fi_fo_rule_list
+      report_compilation_error ~{and_raise=True} "FIRST/FOLLOW disjointness test failed" cg loc e.ae_name fi_fo_rule_list
     else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
       raise_failwith loc "compile1a_entry: more than one branch is nullable"
     else () ;
