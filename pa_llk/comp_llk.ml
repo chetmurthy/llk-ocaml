@@ -2099,21 +2099,21 @@ value nonanti_edge_to_branch loc generic_is_final (cls,newst) =
   match cls with [
     CLS s None ->
     let patt = <:patt< Some ($str:s$, _) >> in
-    [(patt, <:vala< None >>, branch_body)]
+    (patt, <:vala< None >>, branch_body)
 
   | CLS s (Some tok) ->
     let patt = <:patt< Some ($str:s$, $str:String.escaped tok$) >> in
     let branch_body =
       match List.assoc s generic_is_final with [
-        OUTPUT outval -> 
-        <:expr< let lastf = Some (ofs, $int:string_of_int outval$) in $branch_body$ >>
+          st -> 
+        <:expr< let lastf = Some (ofs, $int:string_of_int st$) in $branch_body$ >>
       | exception Not_found -> branch_body
     ] in
-    [(patt, <:vala< None >>, branch_body)]
+    (patt, <:vala< None >>, branch_body)
 
   | SPCL s ->
     let patt = <:patt< Some ("", $str:s$) >> in
-    [(patt, <:vala< None >>, branch_body)]
+    (patt, <:vala< None >>, branch_body)
 
   | ANTI _ -> assert False
   ]
@@ -2135,7 +2135,7 @@ value edges_to_branches loc states edges =
 
   let generic_is_final =
     tokgeneric_edges
-    |> List.find_map (fun [ (CLS ty None, st) when state_is_final st -> Some (ty, st) | _ -> None ]) in
+    |> List.filter_map (fun [ (CLS ty None, st) when state_is_final st -> Some (ty, st) | _ -> None ]) in
 
   let spcl_branches = List.map (nonanti_edge_to_branch loc generic_is_final) spcl_edges in
   let tokgeneric_branches = List.map (nonanti_edge_to_branch loc generic_is_final) tokgeneric_edges in
@@ -2146,7 +2146,7 @@ value edges_to_branches loc states edges =
   let anti_branches =
     anti_edge_groups |> List.concat_map (anti_edgegroup_to_branch loc) in
 
-  spcl_edges @ tokspecific_branches @ tokgeneric_branches @ anti_branches
+  spcl_branches @ tokspecific_branches @ tokgeneric_branches @ anti_branches
 ;
 
 value letrec_nest (init, initre, states) =
@@ -2165,10 +2165,13 @@ value letrec_nest (init, initre, states) =
         let generic_is_final =
           edges
         |> List.find_map (fun [ (CLS ty None, st) when state_is_final st -> Some (ty, st) | _ -> None ]) in
+(*
       let branches =
         let edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') edges in
         edge_groups
         |> List.concat_map (edge_group_to_branches loc generic_is_final) in
+ *)
+      let branches = edges_to_branches loc states edges in
       let branches = branches @ [
           (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
         ] in
