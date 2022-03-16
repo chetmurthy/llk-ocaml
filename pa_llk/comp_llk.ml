@@ -2072,48 +2072,12 @@ value edge_group_to_branches loc generic_is_final edges =
   rest_branches @ antis_branches
 ;
 
-value edge_to_branch loc generic_is_final (cls,newst) =
+
+value anti_edgegroup_to_branch loc edges =
+  let newst = snd (List.hd edges) in
   let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
-  match cls with [
-      ANTI kind ->
-      let kinds_list_expr = 
-        kinds
-        |> List.map (fun s -> <:expr< $str:s$ >>)
-        |> Ppxutil.convert_up_list_expr loc in
-      let whene = <:expr< match Plexer.parse_antiquot x with [
-                              Some (k, _) -> List.mem k $kinds_list_expr$
-                            | _ -> False
-                            ] >> in
-      [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, branch_body)]
-
-    | CLS s None ->
-       let patt = <:patt< Some ($str:s$, _) >> in
-       [(patt, <:vala< None >>, branch_body)]
-
-    | CLS s (Some tok) ->
-       let patt = <:patt< Some ($str:s$, $str:String.escaped tok$) >> in
-       let branch_body =
-         match List.assoc s generic_is_final with [
-             OUTPUT outval -> 
-             <:expr< let lastf = Some (ofs, $int:string_of_int outval$) in $branch_body$ >>
-           | exception Not_found -> branch_body
-           ] in
-       [(patt, <:vala< None >>, branch_body)]
-
-
-
   let toks = List.map fst edges in
   let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
-  let rest_branches =
-    if [] = rest then [] else
-      let patt =
-        let rest = rest |> List.map (fun [
-                                         CLS s None -> <:patt< Some ($str:s$, _) >>
-                                       | CLS s (Some tok) -> <:patt< Some ($str:s$, $str:String.escaped tok$) >>
-                                       | SPCL s -> <:patt< Some ("", $str:s$) >>
-                             ]) in
-        List.fold_left (fun p1 p2 -> <:patt< $p1$ | $p2$ >>) (List.hd rest) (List.tl rest) in
-      [(patt, <:vala< None >>, branch_body)] in
 
   let antis_branches =
     if [] = antis then [] else
@@ -2127,7 +2091,62 @@ value edge_to_branch loc generic_is_final (cls,newst) =
                             | _ -> False
                             ] >> in
       [(<:patt< Some ("ANTIQUOT", x) >>, <:vala< Some whene >>, branch_body)] in
-  rest_branches @ antis_branches
+  antis_branches
+;
+
+value nonanti_edge_to_branch loc generic_is_final (cls,newst) =
+  let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
+  match cls with [
+    CLS s None ->
+    let patt = <:patt< Some ($str:s$, _) >> in
+    [(patt, <:vala< None >>, branch_body)]
+
+  | CLS s (Some tok) ->
+    let patt = <:patt< Some ($str:s$, $str:String.escaped tok$) >> in
+    let branch_body =
+      match List.assoc s generic_is_final with [
+        OUTPUT outval -> 
+        <:expr< let lastf = Some (ofs, $int:string_of_int outval$) in $branch_body$ >>
+      | exception Not_found -> branch_body
+    ] in
+    [(patt, <:vala< None >>, branch_body)]
+
+  | SPCL s ->
+    let patt = <:patt< Some ("", $str:s$) >> in
+    [(patt, <:vala< None >>, branch_body)]
+
+  | ANTI _ -> assert False
+  ]
+;
+
+value edges_to_branches loc states edges =
+  let find_state st =
+    try
+      List.find (fun (i, _, _, _) -> st = i) states
+    with Not_found -> failwithf "edges_to_branches internal error: state %d not found" st in
+  let state_is_final st =
+    let (_, _, final, _) = find_state st in
+    None <> final in
+
+  let spcl_edges = List.filter (fun [ (SPCL _, _) -> True | _ -> False ]) edges in
+  let anti_edges = List.filter (fun [ (ANTI _, _) -> True | _ -> False ]) edges in
+  let tokgeneric_edges = List.filter (fun [ (CLS _ None, _) -> True | _ -> False ]) edges in
+  let tokspecific_edges = List.filter (fun [ (CLS _ (Some _), _) -> True | _ -> False ]) edges in
+
+  let generic_is_final =
+    tokgeneric_edges
+    |> List.find_map (fun [ (CLS ty None, st) when state_is_final st -> Some (ty, st) | _ -> None ]) in
+
+  let spcl_branches = List.map (nonanti_edge_to_branch loc generic_is_final) spcl_edges in
+  let tokgeneric_branches = List.map (nonanti_edge_to_branch loc generic_is_final) tokgeneric_edges in
+  let tokspecific_branches = List.map (nonanti_edge_to_branch loc generic_is_final) tokspecific_edges in
+
+  let anti_edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') anti_edges in
+
+  let anti_branches =
+    anti_edge_groups |> List.concat_map (anti_edgegroup_to_branch loc) in
+
+  spcl_edges @ tokspecific_branches @ tokgeneric_branches @ anti_branches
 ;
 
 value letrec_nest (init, initre, states) =
