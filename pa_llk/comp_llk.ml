@@ -2337,6 +2337,7 @@ let _ = Follow.exec0 cg ~{tops=expl} el in
   let token_actions = token_actions @ [ <:expr< () >> ] in
   let exported_entries =
     expl
+  |> List.filter (fun ename -> not (CG.exists_external_ast cg ename))
   |> List.map (fun ename -> <:str_item< value $lid:ename$ = Grammar.Entry.of_parser gram $str:ename$ F. $lid:ename$ >>) in
   <:str_item< module $uid:gid$ = struct
  value lexer = Plexer.gmake () ;

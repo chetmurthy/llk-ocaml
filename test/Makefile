@@ -7,7 +7,7 @@ OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 SYNTAX := camlp5o
 
-PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5,pa_llk_runtime,pa_ppx.runtime_fat,pa_ppx.testutils,str,camlp5.pa_o.link,pa_ppx.deriving_plugins.std
+PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5,pa_llk_runtime,pa_ppx.runtime_fat,pa_ppx.testutils,str,camlp5.pa_o.link,pa_ppx.deriving_plugins.std,pa_llk_compiler.link
 TESTS = simple_test regexp_test external_test infer_test self_test
 
 test:: $(TESTS)

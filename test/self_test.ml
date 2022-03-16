@@ -4,6 +4,8 @@ open Pcaml ;;
 open Llk_types ;;
 open Llk_regexps ;;
 
+let expr_LEVEL_simple = expr ;;
+
 [@@@llk
 {foo|
 GRAMMAR LLKGram:
@@ -93,7 +95,7 @@ external patt : PREDICTION LIDENT ;
       | check_lident_lbracket; p = LIDENT; 
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
-          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm loc p args lev}
+          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm (loc, p, args, lev)}
       | check_pattern_equal ; p = paren_pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
        | "_" ; "="; s = symbol ->
@@ -108,45 +110,45 @@ external patt : PREDICTION LIDENT ;
   symbol:
     [ "top" NONA
       [ UIDENT "LIST0"; s = SELF; sep = OPT sep_opt_sep ->
-         ASlist loc LML_0 s sep
+         ASlist (loc, LML_0, s, sep)
       | UIDENT "LIST1"; s = SELF; sep = OPT sep_opt_sep ->
-         ASlist loc LML_1 s sep
+         ASlist (loc, LML_1, s, sep)
       | UIDENT "OPT"; s = SELF ->
-         ASopt loc s
+         ASopt (loc, s)
       | UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr_LEVEL_simple ->
-         ASleft_assoc loc s1 s2 e
+         ASleft_assoc (loc, s1, s2, e)
       | UIDENT "FLAG"; s = SELF ->
-          ASflag loc s
+          ASflag (loc, s)
       | s = NEXT -> s
       ]
     | "vala"
       [ UIDENT "V"; s = NEXT; al = LIST0 STRING ->
-          ASvala loc s al
+          ASvala (loc, s, al)
       | s = NEXT -> s
       ]
     | "simple"
       [ UIDENT "SELF" ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ->
-          ASself loc args
+          ASself (loc, args)
       | UIDENT "NEXT" ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ]  ->
-          ASnext loc args
+          ASnext (loc, args)
       | "["; rl = LIST0 rule SEP "|"; "]" ->
-          ASrules loc {au_loc = loc; au_rules = rl}
+          ASrules (loc, {au_loc = loc; au_rules = rl})
       | x = UIDENT ->
-          AStok loc x None
+          AStok (loc, x, None)
       | x = UIDENT; "/"; e = STRING ->
-          AStok loc x (Some e)
+          AStok (loc, x, Some e)
       | e = STRING ->
-          ASkeyw loc e
+          ASkeyw (loc, e)
 
       | id = LIDENT ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
-        ASnterm loc id args lev
+        ASnterm (loc, id, args, lev)
 
       | UIDENT "PREDICT" ; id = LIDENT ->
-        ASregexp loc id
+        ASregexp (loc, id)
 
       | "("; s_t = SELF; ")" -> s_t ] ]
   ;
@@ -165,25 +167,26 @@ external patt : PREDICTION LIDENT ;
 
   regexp: [ [ x = e6 -> x ] ] ;
 
-  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e5 -> LETIN loc s re1 re2
+  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e5 -> LETIN (loc, s, re1, re2)
         | x = e5 -> x
         ] ] ;
 
-  e5: [ [ l = LIST1 e4 SEP "|" -> DISJ loc l ] ] ;
+  e5: [ [ l = LIST1 e4 SEP "|" -> DISJ (loc, l) ] ] ;
 
-  e4: [ [ l = LIST1 e3 SEP "&" -> CONJ loc l ] ] ;
+  e4: [ [ l = LIST1 e3 SEP "&" -> CONJ (loc, l) ] ] ;
 
-  e3: [ [ l = LIST1 e2 -> CONC loc l ] ] ;
+  e3: [ [ l = LIST1 e2 -> CONC (loc, l) ] ] ;
 
-  e2: [ [ "~"; x = e2' -> NEG loc x | x = e2' -> x ] ] ;
+  e2: [ [ "~"; x = e2' -> NEG (loc, x) | x = e2' -> x ] ] ;
  
-  e2': [ [ x = e1 ; "?" -> OPT loc x | x = e1 -> x ] ] ;
+  e2': [ [ x = e1 ; "?" -> OPT (loc, x) | x = e1 -> x ] ] ;
 
-  e1: [ [ x = e0; "*" -> STAR loc x | x = e0 -> x ] ] ;
+  e1: [ [ x = e0; "*" -> STAR (loc, x) | x = e0 -> x ] ] ;
 
   e0:
     [ [ x = STRING -> Special(loc, x)
-      | x = UIDENT -> Class(loc, x)
+      | x = UIDENT -> Class(loc, x, None)
+      | x = UIDENT ; "/" ; s = STRING -> Class(loc, x, Some s)
       | "$" ; x = LIDENT -> Anti(loc, x)
       | "#" ; x = INT -> Output(loc, int_of_string x)
       | "("; x = e6; ")" -> x
