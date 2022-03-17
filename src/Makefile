@@ -8,11 +8,14 @@ WD=$(shell pwd)
 RM=rm
 DESTDIR ?= $(WD)/$(TOP)/local-install
 LAUNCHMODE = "--bootstrap"
+EXTRAPACKAGES = "pa_llk_compiler,pa_llk_runtime"
 
 SYSDIRS= pa_llk runtime
 
 all:
-	set -e; for i in $(SYSDIRS); do cd $$i; $(MAKE) DESTDIR=$(DESTDIR) all; cd ..; done
+	set -e; for i in $(SYSDIRS); do cd $$i; \
+	$(MAKE) DESTDIR=$(DESTDIR) LAUNCHMODE=$(LAUNCHMODE) EXTRAPACKAGES=$(EXTRAPACKAGES) all; \
+	cd ..; done
 
 clean::
 	set -e; for i in $(SYSDIRS); do cd $$i; $(MAKE) clean; cd ..; done
