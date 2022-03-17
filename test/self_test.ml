@@ -3,6 +3,8 @@ open Pcaml ;;
 
 open Llk_types ;;
 open Llk_regexps ;;
+open Parse_gram ;;
+open Print_gram ;;
 
 let expr_LEVEL_simple = expr ;;
 
@@ -11,7 +13,7 @@ let expr_LEVEL_simple = expr ;;
 GRAMMAR LLKGram:
 EXTEND Pcaml.gram ;
 EXPORT: expr
-    top grammar_body symbol rule rule_list level level_list symbol regexp;
+    top entry grammar_body symbol rule rule_list level level_list symbol regexp;
 
 REGEXPS:
   check_lident_equal = LIDENT "=" ;
@@ -212,7 +214,8 @@ open OUnitTest
 let loc = Ploc.dummy
 let tests = "simple" >::: [
       "LLKGram" >:: (fun _ ->
-        ()
+        let txt = {| e: [ [ "a" -> () ] ] |} in
+        assert_equal ~cmp:equal_a_entry (pa Pa.entry txt) (pa LLKGram.entry txt)
       )
 ]
 

@@ -29,6 +29,7 @@ end
 
 open Pcaml;
 value top = ( Grammar.Entry.create gram "top" : Grammar.Entry.e top);
+value entry = Grammar.Entry.create gram "entry";
 value grammar_body = Grammar.Entry.create gram "grammar_body";
 value symbol = Grammar.Entry.create gram "symbol";
 value rule = Grammar.Entry.create gram "rule";
@@ -41,7 +42,7 @@ value regexp = Grammar.Entry.create gram "regexp";
 EXTEND
   GLOBAL:
     expr patt longident_lident
-    top grammar_body symbol rule rule_list level level_list symbol regexp
+    top entry grammar_body symbol rule rule_list level level_list symbol regexp
   ;
   top:
     [ [ "GRAMMAR"; e = grammar_body; "END" ; ";" ; EOI -> norm_top e ] ]
