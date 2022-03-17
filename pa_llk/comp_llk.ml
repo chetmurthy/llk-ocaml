@@ -2339,9 +2339,24 @@ let _ = Follow.exec0 cg ~{tops=expl} el in
     expl
   |> List.filter (fun ename -> not (CG.exists_external_ast cg ename))
   |> List.map (fun ename -> <:str_item< value $lid:ename$ = Grammar.Entry.of_parser gram $str:ename$ F. $lid:ename$ >>) in
+  let lexer_gram = match (CG.g cg).gram_extend with [
+        None -> <:str_item< declare
+                     value lexer = Plexer.gmake () ;
+                     value gram = Grammar.gcreate lexer ;
+                  end >>
+      | Some (Some li,lid) ->
+                <:str_item< declare
+                     value gram = $longid:Pcaml.unvala li$ . $_lid:lid$ ;
+                     value lexer = Grammar.glexer gram ;
+                  end >>
+      | Some (None,lid) -> <:str_item< declare
+                     value gram = $_lid:lid$ ;
+                     value lexer = Grammar.glexer gram ;
+                  end >>
+      ] in
+
   <:str_item< module $uid:gid$ = struct
- value lexer = Plexer.gmake () ;
- value gram = Grammar.gcreate lexer ;
+ $lexer_gram$ ;
  module F = struct
    open Pa_llk_runtime.Llk_runtime ;
    value rec $list:fdefs$ ;

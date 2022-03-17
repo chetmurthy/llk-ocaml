@@ -1,6 +1,24 @@
 open Pa_ppx_testutils
 open Testutil
 
+
+let lexer = Plexer.gmake ()
+let g0 = Grammar.gcreate lexer ;;
+[@@@llk
+{foo|
+GRAMMAR Extend:
+EXTEND g0 ;
+EXPORT: etop ;
+
+  e[x]: [ [ f = FLAG "foo" -> (f,x) ] ] ;
+  etop: [ [ x = e[1] -> x ] ] ;
+
+END;
+
+|foo}
+] ;;
+
+
 [@@@llk
 {foo|
 GRAMMAR G:

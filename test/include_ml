@@ -145,10 +145,10 @@ open Xx ;;
 (*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
+
 #load "simple_test.cmo";;
 open Simple_test ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
  *)

@@ -40,7 +40,7 @@ value regexp = Grammar.Entry.create gram "regexp";
 
 EXTEND
   GLOBAL:
-    expr
+    expr patt longident_lident
     top grammar_body symbol rule rule_list level level_list symbol regexp
   ;
   top:
@@ -48,11 +48,13 @@ EXTEND
   ;
   grammar_body:
     [ [ gid = UIDENT ; ":" ;
+        extend_opt = OPT [ UIDENT "EXTEND" ; id = longident_lident ; ";" -> id ] ;
         expl = [ l = exports -> l | -> [] ];
         rl = [ l = regexps -> l | -> [] ];
         extl = [ l = externals -> l | -> [] ];
         el = LIST1 [ e = entry; ";" -> e ] ->
           { gram_loc=loc
+          ; gram_extend = extend_opt
           ; gram_id=gid
           ; gram_exports=expl
           ; gram_external_asts=extl

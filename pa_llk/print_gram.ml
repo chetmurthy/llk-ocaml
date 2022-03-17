@@ -18,6 +18,7 @@ value flag_equilibrate_cases = Pcaml.flag_equilibrate_cases;
 
 value expr = Eprinter.apply_level pr_expr "assign";
 value patt = Eprinter.apply pr_patt;
+value longident = Eprinter.apply pr_longident;
 
 value comment pc loc = pprintf pc "%s" (Prtools.comm_bef pc.ind loc);
 value bar_before elem pc x = pprintf pc "| %p" elem x;
@@ -322,10 +323,23 @@ value pr_regexp_asts pc l =
   ]
 ;
 
+value longident_lident pc (lio, id) =
+  match lio with
+  [ None -> pprintf pc "%s" (Pcaml.unvala id)
+  | Some li -> pprintf pc "%p.%s" longident (Pcaml.unvala li) (Pcaml.unvala id)
+  ]
+;
+value pr_extend pc = fun [
+    None -> pprintf pc ""
+  | Some lili -> pprintf pc "EXTEND %p ;" longident_lident lili
+]
+;
+
 value top pc g =
-  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@]@ END" g.gram_id
-    pr_regexp_asts g.gram_regexp_asts
+  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@;%p@]@ END" g.gram_id
+    pr_extend g.gram_extend
     pr_exports g.gram_exports
+    pr_regexp_asts g.gram_regexp_asts
     pr_externals g.gram_external_asts
     (vlist entry) g.gram_entries
 ;

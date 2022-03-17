@@ -14,6 +14,7 @@ type expr = MLast.expr ;
 type patt = MLast.patt ;
 value equal_expr = Reloc.eq_expr ;
 value equal_patt = Reloc.eq_patt ;
+value equal_longid_lident = Reloc.eq_longid_lident ;
 
 value split_ext = ref False;
 
@@ -83,6 +84,7 @@ and named_astre = (string * astre)
 and _top = {
     gram_loc: loc
   ; gram_id: string
+  ; gram_extend: option longid_lident
   ; gram_exports: list string
   ; gram_external_asts: list (string * astre)
   ; gram_regexp_asts: list (string * astre)

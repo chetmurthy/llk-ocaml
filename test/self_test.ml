@@ -9,6 +9,7 @@ let expr_LEVEL_simple = expr ;;
 [@@@llk
 {foo|
 GRAMMAR LLKGram:
+EXTEND Pcaml.gram ;
 EXPORT: expr
     top grammar_body symbol rule rule_list level level_list symbol regexp;
 
@@ -21,17 +22,20 @@ END;
 external expr : PREDICTION LIDENT ;
 external expr_LEVEL_simple : PREDICTION LIDENT ;
 external patt : PREDICTION LIDENT ;
+external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $_lid ;
 
   top:
     [ [ "GRAMMAR"; e = grammar_body; "END" ; ";" ; EOI -> norm_top e ] ]
   ;
   grammar_body:
     [ [ gid = UIDENT ; ":" ;
+        extend_opt = OPT [ UIDENT "EXTEND" ; id = longident_lident ; ";" -> id ] ;
         expl = [ l = exports -> l | -> [] ];
         rl = [ l = regexps -> l | -> [] ];
         extl = [ l = externals -> l | -> [] ];
         el = LIST1 [ e = entry; ";" -> e ] ->
           { gram_loc=loc
+          ; gram_extend = extend_opt
           ; gram_id=gid
           ; gram_exports=expl
           ; gram_external_asts=extl
