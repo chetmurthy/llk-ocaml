@@ -2,7 +2,8 @@ WD=$(shell pwd)
 TOP=..
 include $(TOP)/config/Makefile
 
-LAUNCH=../tools/LAUNCH
+LAUNCHMODE ?= "--local"
+LAUNCH=env TOP=$(WD)/$(TOP) $(WD)/$(TOP)/tools/LAUNCH $(LAUNCHMODE)
 OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 SYNTAX := camlp5o

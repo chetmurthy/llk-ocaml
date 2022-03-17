@@ -7,7 +7,7 @@ include $(TOP)/config/Makefile
 WD=$(shell pwd)
 RM=rm
 DESTDIR ?= $(WD)/$(TOP)/local-install
-LAUNCHMODE = "--bootstrap"
+LAUNCHMODE = ""
 
 SYSDIRS= pa_llk runtime
 

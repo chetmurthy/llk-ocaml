@@ -7,15 +7,14 @@ include $(TOP)/config/Makefile
 WD=$(shell pwd)
 RM=rm
 
-all:
+all: bootstrap
 	$(MAKE) -C src all
 
 test: all
 	$(MAKE) -C test test
 
 bootstrap:
-	$(MAKE) -C src clean
-	$(MAKE) -C src DESTDIR=$(WD)/$(TOP)/bootstrap-install all
+	$(MAKE) -C bootstrap-src DESTDIR=$(WD)/$(TOP)/bootstrap-install all
 
 install: all META.pl
 	$(OCAMLFIND) remove pa_llk || true
@@ -33,6 +32,7 @@ META: META.pl
 	./META.pl > META
 
 clean::
+	$(MAKE) -C bootstrap-src clean
 	$(MAKE) -C src clean
 	$(MAKE) -C test clean
 	$(RM) -rf META bootstrap-install local-install

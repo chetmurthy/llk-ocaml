@@ -6,15 +6,32 @@ use String::ShellQuote ;
 use File::Basename;
 
 our $verbose = 0 ;
+our $mode ;
 
 {
+  while (@ARGV) {
+    if ($ARGV[0] eq '--bootstrap') {
+      shift @ARGV ;
+      $mode = "bootstrap" ;
+    }
+    elsif ($ARGV[0] eq '--local') {
+      shift @ARGV ;
+      $mode = "local" ;
+    }
+    else { last ; }
+  }
   my $wd = dirname(dirname($0)) ;
 
   my $top = $ENV{'TOP'} || $wd;
 
   my %newenv ;
-  $newenv{'PATH'} = "$top/local-install/bin:$ENV{'PATH'}" ;
-  $newenv{'OCAMLPATH'} = "$top/local-install/lib:" ;
+  if ($mode eq 'bootstrap') {
+    $newenv{'PATH'} = "$top/bootstrap-install/bin:$ENV{'PATH'}" ;
+    $newenv{'OCAMLPATH'} = "$top/bootstrap-install/lib:" ;
+  } elsif ($mode eq 'local') {
+    $newenv{'PATH'} = "$top/local-install/bin:$ENV{'PATH'}" ;
+    $newenv{'OCAMLPATH'} = "$top/local-install/lib:" ;
+  }
 
   local %ENV = (%ENV, %newenv) ;
 
