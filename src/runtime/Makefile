@@ -2,10 +2,10 @@
 # Copyright (c) INRIA 2007-2017
 
 WD=$(shell pwd)
-TOP=..
+TOP=../..
 include $(TOP)/config/Makefile
 
-DESTDIR=
+DESTDIR ?= $(WD)/$(TOP)/local-install
 RM=rm
 
 LAUNCH=env TOP=$(TOP) $(TOP)/tools/LAUNCH
@@ -25,7 +25,7 @@ CMTI = $(MLI:.mli=.cmti)
 OCAMLCFLAGS := $(OCAMLCFLAGS) -for-pack Pa_llk_runtime -linkall
 
 all: $(TARGET) $(TARGET:.cma=.cmxa)
-	$(MAKE) DESTDIR=$(WD)/$(TOP)/local-install/ install
+	$(MAKE) DESTDIR=$(DESTDIR) install
 
 doc: $(CMT) $(CMTI)
 

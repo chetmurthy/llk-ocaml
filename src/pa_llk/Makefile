@@ -2,10 +2,10 @@
 # Copyright (c) INRIA 2007-2017
 
 WD=$(shell pwd)
-TOP=..
+TOP = ../..
 include $(TOP)/config/Makefile
 
-DESTDIR=
+DESTDIR ?= $(WD)/$(TOP)/local-install
 RM=rm
 
 LAUNCH=
@@ -30,7 +30,7 @@ CMTI := $(MLI:.mli=.cmti)
 OCAMLCFLAGS := $(OCAMLCFLAGS) -linkall
 
 all: $(TARGET) $(TARGET:.cma=.cmxa) camlp5.pa_llk_compiler camlp5.pa_llk_compiler.opt
-	$(MAKE) DESTDIR=$(WD)/$(TOP)/local-install/ install
+	$(MAKE) DESTDIR=$(DESTDIR) install
 
 test:: all
 
@@ -52,7 +52,7 @@ install::
 	$(RM) -f META
 
 clean::
-	rm -rf META camlp5.pa_llk_compiler* local-install
+	rm -rf META camlp5.pa_llk_compiler*
 
 $(TARGET): $(CMO)
 	$(OCAMLFIND) ocamlc $(DEBUG) $(CMO) -a -o $(TARGET)

@@ -29,4 +29,4 @@ all: simple_test.exe regexp_test.exe external_test.exe infer_test.exe self_test.
 .PRECIOUS: %_test.cmo
 
 clean::
-	rm -f *.cm* *.ppo* *.exe
+	rm -rf *.cm* *.ppo* *.exe _build

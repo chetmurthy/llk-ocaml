@@ -5,27 +5,25 @@ TOP=.
 include $(TOP)/config/Makefile
 
 WD=$(shell pwd)
-DESTDIR=
 RM=rm
 
-SYSDIRS= pa_llk runtime
-
-TESTDIRS= test
-
-all: sys
-	set -e; for i in $(TESTDIRS); do cd $$i; $(MAKE) all; cd ..; done
-
-sys:
-	set -e; for i in $(SYSDIRS); do cd $$i; $(MAKE) all; cd ..; done
-
-doc: all
-	set -e; for i in $(SYSDIRS); do cd $$i; $(MAKE) doc; cd ..; done
-	rm -rf docs
-	tools/make-docs pa_llk docs
-	make -C doc html
+all:
+	$(MAKE) -C src all
 
 test: all
-	set -e; for i in $(TESTDIRS); do cd $$i; $(MAKE) test; cd ..; done
+	$(MAKE) -C test test
+
+bootstrap:
+	$(MAKE) -C src clean
+	$(MAKE) -C src DESTDIR=$(WD)/$(TOP)/bootstrap-install all
+
+install: all META.pl
+	$(OCAMLFIND) remove pa_llk || true
+	./META.pl > META
+	$(OCAMLFIND) install pa_llk META local-install/lib/*/*.*
+
+uninstall:
+	$(OCAMLFIND) remove pa_llk || true
 
 prereqs:
 	(perl -MIPC::System::Simple -e 1 > /dev/null 2>&1) || (echo "MUST install Perl module IPC::System::Simple" && exit -1)
@@ -34,17 +32,10 @@ prereqs:
 META: META.pl
 	./META.pl > META
 
-install: sys META.pl
-	$(OCAMLFIND) remove pa_llk || true
-	./META.pl > META
-	$(OCAMLFIND) install pa_llk META local-install/lib/*/*.*
-
-uninstall:
-	$(OCAMLFIND) remove pa_llk || true
-
 clean::
-	set -e; for i in $(SYSDIRS) $(TESTDIRS); do cd $$i; $(MAKE) clean; cd ..; done
-	rm -rf docs local-install $(BATCHTOP) META
+	$(MAKE) -C src clean
+	$(MAKE) -C test clean
+	$(RM) -rf META bootstrap-install local-install
 
 depend:
-	set -e; for i in $(SYSDIRS) $(TESTDIRS); do cd $$i; $(MAKE) depend; cd ..; done
+	$(MAKE) -C src depend
