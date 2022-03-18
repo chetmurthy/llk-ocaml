@@ -523,6 +523,7 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {ap_loc = loc; ap_patt = None; ap_symb = s})
                 __strm__
+          | _ -> raise Stream.Failure
         and psymbol_regexp strm =
           let open Llk_regexps in
           let open PatternBaseToken in
