@@ -190,9 +190,9 @@ END ;
 GRAMMAR Specific:
 EXPORT: top;
 
-  top: [ [ UIDENT "foo" -> "foo"
+  top: [ [ UIDENT/"foo" -> "foo"
          | u = UIDENT -> u
-         | UIDENT "bar" -> "bar"
+         | UIDENT/"bar" -> "bar"
          ] ] ;
 END ;
 |foo}

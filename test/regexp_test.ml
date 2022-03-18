@@ -96,8 +96,8 @@ END;
          | u = UIDENT -> (2,u)
          | check_u2 ; u2 ; u = UIDENT -> (3,u)
          ] ] ;
-  u1: [ [ UIDENT "foo" -> () ] ];
-  u2: [ [ UIDENT "foo" -> () ] ];
+  u1: [ [ UIDENT/"FOO" -> () ] ];
+  u2: [ [ UIDENT/"FOO" -> () ] ];
 END ;
 |foo}
 ] ;;

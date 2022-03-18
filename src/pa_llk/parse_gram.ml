@@ -137,26 +137,15 @@ EXTEND
          ASlist loc LML_1 s sep
       | UIDENT "OPT"; s = SELF ->
          ASopt loc s
-      | UIDENT "LEFT_ASSOC"; s1 = SELF ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
+      | UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
          ASleft_assoc loc s1 s2 e
       | UIDENT "FLAG"; s = SELF ->
           ASflag loc s ]
     | "vala"
-      [ UIDENT "V"; UIDENT "SELF";
-        args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
-        al = LIST0 STRING ->
-          let s = ASself loc args in
+      [ UIDENT "V"; s = NEXT; al = LIST0 STRING ->
           ASvala loc s al
-      | UIDENT "V"; UIDENT "NEXT";
-        args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
-        al = LIST0 STRING ->
-          let s = ASnext loc args in
-          ASvala loc s al
-      | UIDENT "V"; x = UIDENT; al = LIST0 STRING ->
-          let s = AStok loc x None in
-          ASvala loc s al
-      | UIDENT "V"; s = NEXT; al = LIST0 STRING ->
-          ASvala loc s al ]
+      | s = NEXT -> s
+      ]
     | "simple"
       [ UIDENT "SELF" ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ->
@@ -168,7 +157,7 @@ EXTEND
           ASrules loc {au_loc = loc; au_rules = rl}
       | x = UIDENT ->
           AStok loc x None
-      | x = UIDENT; e = STRING ->
+      | x = UIDENT; "/" ; e = STRING ->
           AStok loc x (Some (Scanf.unescaped e))
       | e = STRING ->
           ASkeyw loc e
