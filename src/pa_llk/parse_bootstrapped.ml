@@ -20,9 +20,9 @@ REGEXPS:
   check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
 END;
 
-external expr : PREDICTION LIDENT ;
-external expr_LEVEL_simple : PREDICTION LIDENT ;
-external patt : PREDICTION LIDENT ;
+external expr : PREDICTION LIDENT | "(" | "[" | "{" ;
+external expr_LEVEL_simple : PREDICTION LIDENT | "(" | "[" | "{" ;
+external patt : PREDICTION LIDENT | "(" | "[" | "{" ;
 external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $_lid ;
 
   bootstrapped_top:

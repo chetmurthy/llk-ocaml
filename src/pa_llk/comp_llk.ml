@@ -2296,6 +2296,9 @@ value compile1b_entry cg e =
   let branches =
     branches
     |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
+  let branches = branches @ [
+        (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
+      ] in
   let rhs =
     <:expr< fun __strm__ -> match ($lid:predictor_name$ __strm__) [@llk.regexp $str:retxt$ ;] with [
                                 $list:branches$
