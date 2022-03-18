@@ -21,6 +21,14 @@ install: all META.pl
 	./META.pl > META
 	$(OCAMLFIND) install pa_llk META local-install/lib/*/*.*
 
+new_sources:
+	$(RM) -rf bootstrap-src.new
+	mkdir bootstrap-src.new
+	tar --exclude="*.cm*" --exclude="*.opt" --exclude="*.o" --exclude="*.a" --exclude="*compiler" -C src -cf - pa_llk runtime | tar -C bootstrap-src.new -xBf -
+
+compare_sources: new_sources
+	diff -Bwiu --recursive  --exclude="*.cm*" --exclude="*.opt" --exclude="*.o" --exclude="*.a" --exclude="*compiler" bootstrap-src bootstrap-src.new
+
 uninstall:
 	$(OCAMLFIND) remove pa_llk || true
 
