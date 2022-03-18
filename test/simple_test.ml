@@ -4,7 +4,7 @@ open Testutil
 
 let lexer = Plexer.gmake ()
 let g0 = Grammar.gcreate lexer ;;
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Extend:
 EXTEND g0 ;
@@ -19,7 +19,7 @@ END;
 ] ;;
 
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR G:
 EXPORT: etop ;
@@ -32,7 +32,7 @@ END;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR H:
 EXPORT: etop;
@@ -44,7 +44,7 @@ END;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR I:
 EXPORT: e;
@@ -61,7 +61,7 @@ END;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Calc:
 EXPORT: e_top;
@@ -95,7 +95,7 @@ END;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Lists:
 EXPORT: id list0 list1 list0sep list1sep list0sep_opt list1sep_opt;
@@ -110,7 +110,7 @@ END;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR VALA:
 EXPORT: vala1 vala2;
@@ -121,7 +121,7 @@ END;
 ] ;;
 
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Longident:
 EXPORT: longident longident_eoi;
@@ -137,7 +137,7 @@ END ;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR VUID:
 EXPORT: uidopt;
@@ -147,7 +147,7 @@ END ;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR LF:
 EXPORT: top;
@@ -165,7 +165,7 @@ END ;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR LLift:
 EXPORT: top;
@@ -185,7 +185,7 @@ END ;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Specific:
 EXPORT: top;
@@ -198,7 +198,7 @@ END ;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR LocTest:
 EXPORT: top;
