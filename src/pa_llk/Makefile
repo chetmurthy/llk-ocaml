@@ -7,6 +7,7 @@ include $(TOP)/config/Makefile
 
 DESTDIR ?= $(WD)/$(TOP)/local-install
 RM=rm
+MV=mv
 
 LAUNCHMODE ?= "--local"
 PPLAUNCHMODE ?= "--bootstrap"
@@ -96,7 +97,8 @@ brzozowski2.cmx: brzozowski2.ml
 	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 parse_bootstrapped.ml.ppo.ml: parse_bootstrapped.ml
-	$(NOT_OCAMLFIND) preprocess $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate,camlp5.pr_o,$(PPPACKAGES) -syntax camlp5o $< > parse_bootstrapped.ml.ppo.ml
+	$(NOT_OCAMLFIND) preprocess $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate,camlp5.pr_o,$(PPPACKAGES) -syntax camlp5o $< > parse_bootstrapped.ml.ppo.ml.NEW && \
+	$(MV) parse_bootstrapped.ml.ppo.ml.NEW parse_bootstrapped.ml.ppo.ml
 
 parse_bootstrapped.cmo: parse_bootstrapped.ml.ppo.ml
 	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c parse_bootstrapped.ml.ppo.ml -o $@
