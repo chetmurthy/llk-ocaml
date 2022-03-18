@@ -6,22 +6,22 @@
 #require "rresult";;
 #require "pcre";;
 #require "bos";;
-
+(*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
-(*
+ *)
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
- *)
 
-#require "camlp5.pr_o";;
 (*
+#require "camlp5.pr_o";;
+
 #load "pr_o.cmo";;
  *)
-(*
+
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
- *)
+
 #require "camlp5.parser_quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -141,14 +141,13 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 (*
 #load "xx.cmo";;
 open Xx ;;
- *)
-(*
+
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
+ *)
 #load "simple_test.cmo";;
 open Simple_test ;;
-
+(*
 #load "external_test.cmo";;
 open External_test ;;
  *)

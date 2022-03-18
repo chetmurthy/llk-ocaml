@@ -89,10 +89,13 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           {au_loc = loc; au_rules = rules} ] ]
   ;
   rule:
-    [ [ psl = LIST0 psymbol SEP ";"; "->"; act = expr ->
+    [ [ psl = LIST1 psymbol SEP ";"; "->"; act = expr ->
           {ar_loc = loc; ar_psymbols = psl; ar_action = Some act}
-      | psl = LIST0 psymbol SEP ";" ->
-          {ar_loc = loc; ar_psymbols = psl; ar_action = None} ] ]
+      | "->"; act = expr ->
+          {ar_loc = loc; ar_psymbols = []; ar_action = Some act}
+      | psl = LIST1 psymbol SEP ";" ->
+          {ar_loc = loc; ar_psymbols = psl; ar_action = None}
+      ] ]
   ;
   psymbol:
     [ [ check_lident_equal; p = LIDENT; "="; s = symbol ->

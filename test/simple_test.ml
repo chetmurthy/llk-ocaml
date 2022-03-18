@@ -209,6 +209,23 @@ END ;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Bug1:
+EXPORT: rule;
+
+  rule:
+    [ [ psl = LIST0 psymbol SEP ";"; "->"; act = action ->
+        (psl, Some act)
+      | psl = LIST0 psymbol SEP ";" -> (psl, None) ] ]
+  ;
+  psymbol: [ [ i = LIDENT -> i ] ] ;
+  action: [ [ a = UIDENT -> a ] ] ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
