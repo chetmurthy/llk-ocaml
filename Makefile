@@ -15,6 +15,7 @@ test: all
 	$(MAKE) -C test test
 
 bootstrap:
+	$(RM) -rf $(WD)/$(TOP)/bootstrap-install
 	$(MAKE) -C bootstrap-src DESTDIR=$(WD)/$(TOP)/bootstrap-install all
 
 install: all META.pl
@@ -30,6 +31,10 @@ new_sources:
 
 compare_sources: new_sources
 	diff -Bwiu --recursive  --exclude="*.cm*" --exclude="*.opt" --exclude="*.o" --exclude="*.a" --exclude="*compiler" bootstrap-src bootstrap-src.new
+
+promote_sources: new_sources
+	$(RM) -rf bootstrap-src/{pa_llk,runtime}
+	tar -C bootstrap-src.new -cf - . | tar -C bootstrap-src -xf -
 
 uninstall:
 	$(OCAMLFIND) remove pa_llk || true

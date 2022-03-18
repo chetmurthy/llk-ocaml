@@ -9,7 +9,7 @@ DESTDIR ?= $(WD)/$(TOP)/local-install
 RM=rm
 
 LAUNCHMODE ?= "--bootstrap"
-LAUNCH=env TOP=$(TOP) $(TOP)/tools/LAUNCH
+LAUNCH=env TOP=$(WD)/$(TOP) $(WD)/$(TOP)/tools/LAUNCH $(LAUNCHMODE)
 OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 

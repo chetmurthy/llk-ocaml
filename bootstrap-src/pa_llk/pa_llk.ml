@@ -11,6 +11,8 @@ open Comp_llk ;
 value rewrite_str_item arg = fun [
   <:str_item:< [@@@llk $str:s$ ;] >> ->
   Top.codegen (Scanf.unescaped s)
+| <:str_item:< [@@@llk.bootstrapped $str:s$ ;] >> ->
+  Top.codegen ~{bootstrap=True} (Scanf.unescaped s)
   
 | _ -> assert False
 ]
@@ -20,7 +22,7 @@ value install () =
 let ef = EF.mk () in 
 let ef = EF.{ (ef) with
             str_item = extfun ef.str_item with [
-    <:str_item:< [@@@llk $_$ ;] >> as z ->
+    (<:str_item:< [@@@llk $_$ ;] >> | <:str_item:< [@@@llk.bootstrapped $_$ ;] >>) as z ->
     fun arg fallback ->
       Some (rewrite_str_item arg z)
   ] } in

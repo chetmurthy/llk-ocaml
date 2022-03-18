@@ -7,12 +7,15 @@ include $(TOP)/config/Makefile
 WD=$(shell pwd)
 RM=rm
 DESTDIR ?= $(WD)/$(TOP)/local-install
-LAUNCHMODE = ""
+LAUNCHMODE = "--bootstrap"
+EXTRAPACKAGES=,
 
-SYSDIRS= pa_llk runtime
+SYSDIRS= runtime pa_llk
 
 all:
-	set -e; for i in $(SYSDIRS); do cd $$i; $(MAKE) DESTDIR=$(DESTDIR) all; cd ..; done
+	set -e; for i in $(SYSDIRS); do cd $$i; \
+	$(MAKE) DESTDIR=$(DESTDIR) LAUNCHMODE=$(LAUNCHMODE) EXTRAPACKAGES=$(EXTRAPACKAGES) all; \
+	cd ..; done
 
 clean::
 	set -e; for i in $(SYSDIRS); do cd $$i; $(MAKE) clean; cd ..; done

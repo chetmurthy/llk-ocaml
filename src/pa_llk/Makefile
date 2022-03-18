@@ -9,20 +9,20 @@ DESTDIR ?= $(WD)/$(TOP)/local-install
 RM=rm
 
 LAUNCHMODE ?= "--bootstrap"
-EXTRAPACKAGES ?= "pa_llk_compiler,pa_llk_runtime"
+EXTRAPACKAGES ?= pa_llk_compiler,pa_llk_runtime
 LAUNCH=env TOP=$(WD)/$(TOP) $(WD)/$(TOP)/tools/LAUNCH $(LAUNCHMODE)
 OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 MKCAMLP5=$(LAUNCH) mkcamlp5
 SYNTAX := camlp5r
 
-PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std,$(EXTRAPACKAGES)
+PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std,pa_llk_runtime,$(EXTRAPACKAGES)
 TARGET := pa_llk_compiler.cma
 OML := brzozowski2.ml ord_MLast.ml llk_migrate.ml parse_bootstrapped.ml
 OMLI := ord_MLast.mli
 RML := llk_regexps.ml llk_types.ml parse_gram.ml print_gram.ml comp_llk.ml pa_llk.ml
 RMLI := 
-ML := brzozowski2.ml ord_MLast.ml llk_regexps.ml llk_types.ml llk_migrate.ml parse_gram.ml parse_bootstrapped.ml print_gram.ml comp_llk.ml pa_llk.ml
+ML := brzozowski2.ml ord_MLast.ml llk_regexps.ml llk_types.ml llk_migrate.ml parse_gram.ml print_gram.ml parse_bootstrapped.ml comp_llk.ml pa_llk.ml
 CMO := $(ML:.ml=.cmo)
 CMI := $(ML:.ml=.cmi)
 CMX := $(ML:.ml=.cmx)
