@@ -1063,16 +1063,16 @@ and psymbol cg ps = symbol cg ps.ap_symb
 and symbol cg = fun [
       ASflag _ s -> TS.(union (symbol cg s) (mk[None]))
     | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
-    | ASlist loc lml elem_s sepb_opt ->
+    | (ASlist loc lml elem_s sepb_opt) as s ->
        let felem = symbol cg elem_s in
-       if not (TS.mem None felem) then felem
-       else
-         TS.(union (except None felem) (
-         match sepb_opt with [
-             None -> mk [None]
-           | Some (sep_s, _) ->
-              symbol cg sep_s
-       ]))
+       if TS.mem None felem then
+         raise_failwithf loc "First.symbol: LIST element MUST NOT be nullable: %s" (Pr.symbol Pprintf.empty_pc s)
+       else 
+         match (lml, sepb_opt) with [
+             (LML_1, None) -> felem
+           | (LML_1, _) -> felem
+           | (LML_0, _) -> TS.(union felem (mk [None]))
+           ]
 
     | ASnext _ _ -> assert False
 

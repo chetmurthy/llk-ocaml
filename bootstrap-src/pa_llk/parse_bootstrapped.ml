@@ -641,29 +641,42 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("UIDENT", "REGEXPS") -> 0
           | _ -> raise Stream.Failure
-        and rule =
-          parser
-            [< psl =
-                 parse_list0_with_sep psymbol (parser [< '"", ";" >] -> ());
-               a = rule__11 psl >] ->
-              a
+        and rule __strm__ =
+          match rule_matcher __strm__ with
+            0 ->
+              (parser bp
+                 [< '"", "->";
+                    act = Grammar.Entry.parse_token_stream expr >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ar_loc = loc; ar_psymbols = []; ar_action = Some act})
+                __strm__
+          | 1 ->
+              (parser
+                 [< psl =
+                      parse_list1_with_sep psymbol
+                        (parser [< '"", ";" >] -> ());
+                    a = rule__11 psl >] ->
+                   a)
+                __strm__
+          | _ -> raise Stream.Failure
         and rule_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "FLAG") -> 0
-          | Some ("UIDENT", "LEFT_ASSOC") -> 0
-          | Some ("UIDENT", "LIST0") -> 0
-          | Some ("UIDENT", "LIST1") -> 0
-          | Some ("UIDENT", "NEXT") -> 0
-          | Some ("UIDENT", "OPT") -> 0
-          | Some ("UIDENT", "PREDICT") -> 0
-          | Some ("UIDENT", "SELF") -> 0
-          | Some ("UIDENT", "V") -> 0
-          | Some ("LIDENT", _) -> 0
-          | Some ("STRING", _) -> 0
-          | Some ("UIDENT", _) -> 0
-          | Some ("", "(") -> 0
-          | Some ("", "[") -> 0
-          | Some ("", "_") -> 0
+            Some ("", "->") -> 0
+          | Some ("UIDENT", "FLAG") -> 1
+          | Some ("UIDENT", "LEFT_ASSOC") -> 1
+          | Some ("UIDENT", "LIST0") -> 1
+          | Some ("UIDENT", "LIST1") -> 1
+          | Some ("UIDENT", "NEXT") -> 1
+          | Some ("UIDENT", "OPT") -> 1
+          | Some ("UIDENT", "PREDICT") -> 1
+          | Some ("UIDENT", "SELF") -> 1
+          | Some ("UIDENT", "V") -> 1
+          | Some ("LIDENT", _) -> 1
+          | Some ("STRING", _) -> 1
+          | Some ("UIDENT", _) -> 1
+          | Some ("", "(") -> 1
+          | Some ("", "[") -> 1
+          | Some ("", "_") -> 1
           | _ -> raise Stream.Failure
         and rule__11 psl __strm__ =
           match rule__11_matcher __strm__ with
@@ -725,6 +738,7 @@ module LLKGram =
           | Some ("STRING", _) -> 1
           | Some ("UIDENT", _) -> 1
           | Some ("", "(") -> 1
+          | Some ("", "->") -> 1
           | Some ("", "[") -> 1
           | Some ("", "_") -> 1
           | _ -> raise Stream.Failure
