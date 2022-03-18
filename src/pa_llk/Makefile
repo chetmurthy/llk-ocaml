@@ -9,6 +9,7 @@ DESTDIR ?= $(WD)/$(TOP)/local-install
 RM=rm
 
 LAUNCHMODE ?= "--bootstrap"
+EXTRAPACKAGES ?= "pa_llk_compiler,pa_llk_runtime"
 LAUNCH=env TOP=$(WD)/$(TOP) $(WD)/$(TOP)/tools/LAUNCH $(LAUNCHMODE)
 OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
@@ -17,18 +18,16 @@ SYNTAX := camlp5r
 
 PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std,$(EXTRAPACKAGES)
 TARGET := pa_llk_compiler.cma
-OML := brzozowski2.ml ord_MLast.ml llk_migrate.ml
+OML := brzozowski2.ml ord_MLast.ml llk_migrate.ml parse_bootstrapped.ml
 OMLI := ord_MLast.mli
 RML := llk_regexps.ml llk_types.ml parse_gram.ml print_gram.ml comp_llk.ml pa_llk.ml
 RMLI := 
-ML := brzozowski2.ml ord_MLast.ml llk_regexps.ml llk_types.ml llk_migrate.ml parse_gram.ml print_gram.ml comp_llk.ml pa_llk.ml
+ML := brzozowski2.ml ord_MLast.ml llk_regexps.ml llk_types.ml llk_migrate.ml parse_gram.ml parse_bootstrapped.ml print_gram.ml comp_llk.ml pa_llk.ml
 CMO := $(ML:.ml=.cmo)
 CMI := $(ML:.ml=.cmi)
 CMX := $(ML:.ml=.cmx)
 CMT := $(ML:.ml=.cmt)
 CMTI := $(MLI:.mli=.cmti)
-
-OCAMLCFLAGS := $(OCAMLCFLAGS) -linkall
 
 all: $(TARGET) $(TARGET:.cma=.cmxa) camlp5.pa_llk_compiler camlp5.pa_llk_compiler.opt
 	$(MAKE) DESTDIR=$(DESTDIR) install
@@ -68,31 +67,41 @@ IMPORT_OCAMLFLAGS = 	-ppopt -pa_import-package -ppopt $(PACKAGES) \
 	-ppopt -pa_import-I -ppopt . \
 
 ord_MLast.cmo: ord_MLast.ml
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
 
 ord_MLast.cmi: ord_MLast.mli
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
 
 ord_MLast.cmx: ord_MLast.ml
-	$(OCAMLFIND) ocamlopt $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import -syntax camlp5o -c $<
 
 llk_migrate.cmo: llk_migrate.ml
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 llk_migrate.cmi: llk_migrate.mli
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 llk_migrate.cmx: llk_migrate.ml
-	$(OCAMLFIND) ocamlopt $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 brzozowski2.cmo: brzozowski2.ml
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 brzozowski2.cmi: brzozowski2.mli
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 brzozowski2.cmx: brzozowski2.ml
-	$(OCAMLFIND) ocamlopt $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+
+parse_bootstrapped.cmo: parse_bootstrapped.ml
+	$(NOT_OCAMLFIND) preprocess $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate,camlp5.pr_o -syntax camlp5o $< > parse_bootstrapped.ml.ppo.ml
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+
+parse_bootstrapped.cmi: parse_bootstrapped.mli
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
+
+parse_bootstrapped.cmx: parse_bootstrapped.ml
+	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c $<
 
 EXTERNAL := $(shell $(OCAMLFIND) query -predicates byte -format '%m' $(PACKAGES) | grep local-install)
 $(CMO) $(CMI) $(CMX): $(EXTERNAL)

@@ -6,6 +6,7 @@ include $(TOP)/config/Makefile
 
 WD=$(shell pwd)
 RM=rm
+CP=cp
 
 all: bootstrap
 	$(MAKE) -C src all
@@ -24,7 +25,8 @@ install: all META.pl
 new_sources:
 	$(RM) -rf bootstrap-src.new
 	mkdir bootstrap-src.new
-	tar --exclude="*.cm*" --exclude="*.opt" --exclude="*.o" --exclude="*.a" --exclude="*compiler" -C src -cf - pa_llk runtime | tar -C bootstrap-src.new -xBf -
+	tar --exclude=parse_bootstrapped.ml --exclude="*.ppo.ml" --exclude="*.cm*" --exclude="*.opt" --exclude="*.o" --exclude="*.a" --exclude="*compiler" -C src -cf - pa_llk runtime | tar -C bootstrap-src.new -xBf -
+	$(CP) src/pa_llk/parse_bootstrapped.ml.ppo.ml bootstrap-src.new/pa_llk/parse_bootstrapped.ml
 
 compare_sources: new_sources
 	diff -Bwiu --recursive  --exclude="*.cm*" --exclude="*.opt" --exclude="*.o" --exclude="*.a" --exclude="*compiler" bootstrap-src bootstrap-src.new

@@ -2373,71 +2373,72 @@ open Parse_gram ;
 
 value read_file = RT.read_file ;
 
-value parse s =
+value parse ?{bootstrap=False} s =
+  let pa = if bootstrap then Parse_bootstrapped.pa else RT.pa in
   s
-  |> RT.pa
+|> pa
 ;
 
-value normre s =
+value normre ?{bootstrap=False} s =
   s
-  |> parse |> CG.mk
+  |> parse ~{bootstrap=bootstrap} |> CG.mk
   |> S0ProcessRegexps.exec
   |> CheckSyntax.exec
   |> CheckLexical.exec
 ;
 
-value coalesce s =
+value coalesce ?{bootstrap=False} s =
   s
-  |> normre
+  |> normre ~{bootstrap=bootstrap}
   |> S1Coalesce.exec
 ;
 
-value precedence s =
+value precedence ?{bootstrap=False} s =
   s
-  |> coalesce
+  |> coalesce ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> S2Precedence.exec
 ;
 
-value empty_entry_elim s =
+value empty_entry_elim ?{bootstrap=False} s =
   s
-  |> precedence
+  |> precedence ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
   |> S3EmptyEntryElim.exec
 ;
 
-value left_factorize s =
+value left_factorize ?{bootstrap=False} s =
   s
-  |> empty_entry_elim
+  |> empty_entry_elim ~{bootstrap=bootstrap}
   |> S4LeftFactorize.exec
 ;
 
-value lambda_lift s =
+value lambda_lift ?{bootstrap=False} s =
   s
-  |> left_factorize
+  |> left_factorize ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> S5LambdaLift.exec
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
 
-value first s =
+value first ?{bootstrap=False} s =
   s
-  |> lambda_lift
+  |> lambda_lift ~{bootstrap=bootstrap}
   |> First.exec
 ;
 
-value follow ~{tops} s =
+value follow ?{bootstrap=False} ~{tops} s =
   s
-  |> lambda_lift
+  |> lambda_lift ~{bootstrap=bootstrap}
   |> Follow.exec ~{tops=tops}
 ;
 
-value codegen s =
+value codegen ?{bootstrap=False} s =
   s
-  |> lambda_lift
+  |> lambda_lift ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> Codegen.exec
 ;

@@ -10,7 +10,7 @@ MKCAMLP5=mkcamlp5
 CAMLP5R=camlp5r -I $(CAMLP5LIB)
 INCLUDES=
 DEBUG:=$(DEBUG) -g
-OCAMLCFLAGS=$(DEBUG) $(WARNERR) $(INCLUDES)
+OCAMLCFLAGS=$(WARNERR) $(INCLUDES)
 PACKAGES=bos,fmt,unix,compiler-libs.common,camlp5,camlp5.extfun,camlp5.extend,camlp5.pprintf
 PACKAGES := $(PACKAGES),camlp5.parser_quotations
 #PACKAGES := $(PACKAGES),camlp5.quotations
@@ -21,22 +21,22 @@ export PERL5LIB := $(TOP):$(PERL5LIB)
 top: all
 
 .mli.cmi:
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
 
 .ml.cmo:
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
 
 .ml.cmx:
-	$(OCAMLFIND) ocamlopt $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
+	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -c $<
 
 .ml.cmt:
 	@mkdir -p .cmt
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx_dock -syntax $(SYNTAX) -bin-annot -c $< -o .cmt/$*.cmo
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx_dock -syntax $(SYNTAX) -bin-annot -c $< -o .cmt/$*.cmo
 	cp .cmt/$*.cmt $*.cmt
 
 .mli.cmti:
 	@mkdir -p .cmt
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx_dock -syntax $(SYNTAX) -bin-annot -c $< -o .cmt/$*.cmi
+	$(OCAMLFIND) ocamlc $(DEBUG) $(OCAMLCFLAGS) -package $(PACKAGES),pa_ppx_dock -syntax $(SYNTAX) -bin-annot -c $< -o .cmt/$*.cmi
 	cp .cmt/$*.cmti $*.cmti
 
 .SUFFIXES: .cmo .cmi .ml .mli .cmx .cma .cmxa .cmt .cmti .byte .opt
