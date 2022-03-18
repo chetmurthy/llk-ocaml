@@ -1,7 +1,7 @@
 
 open Pcaml ;;
 
-[@@@llk.bootstrapped
+[@@@llk
 {foo|
 GRAMMAR Mod:
 EXPORT: expr1;
