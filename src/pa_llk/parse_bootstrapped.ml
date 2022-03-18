@@ -8,7 +8,7 @@ open Print_gram ;;
 
 let expr_LEVEL_simple = expr ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR LLKGram:
 EXTEND Pcaml.gram ;
