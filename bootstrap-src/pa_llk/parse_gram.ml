@@ -49,7 +49,7 @@ EXTEND
   ;
   grammar_body:
     [ [ gid = UIDENT ; ":" ;
-        extend_opt = OPT [ UIDENT "EXTEND" ; id = longident_lident ; ";" -> id ] ;
+        extend_opt = OPT [ "EXTEND" ; id = longident_lident ; ";" -> id ] ;
         expl = [ l = exports -> l | -> [] ];
         rl = [ l = regexps -> l | -> [] ];
         extl = [ l = externals -> l | -> [] ];
