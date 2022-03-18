@@ -8,14 +8,19 @@ WD=$(shell pwd)
 RM=rm
 CP=cp
 
-all: bootstrap
+all: bootstrap-install
 	$(MAKE) -C src all
+
+world:
+	$(RM) -rf $(WD)/$(TOP)/bootstrap-install
+	$(RM) -rf $(WD)/$(TOP)/local-install
+	$(MAKE) bootstrap
+	$(MAKE) all
 
 test: all
 	$(MAKE) -C test test
 
 bootstrap:
-	$(RM) -rf $(WD)/$(TOP)/bootstrap-install
 	$(MAKE) -C bootstrap-src DESTDIR=$(WD)/$(TOP)/bootstrap-install all
 
 install: all META.pl
