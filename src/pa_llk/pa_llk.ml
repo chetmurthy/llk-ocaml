@@ -10,9 +10,9 @@ open Comp_llk ;
 
 value rewrite_str_item arg = fun [
   <:str_item:< [@@@llk.fallback $str:s$ ;] >> ->
-  Top.codegen (Scanf.unescaped s)
+  Top.codegen loc (Scanf.unescaped s)
 | <:str_item:< [@@@llk $str:s$ ;] >> ->
-  Top.codegen ~{bootstrap=True} (Scanf.unescaped s)
+  Top.codegen loc ~{bootstrap=True} (Scanf.unescaped s)
   
 | _ -> assert False
 ]
