@@ -355,13 +355,13 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__04 =
           parser
-            [< '"UIDENT", "EXTEND";
+            [< '"", "EXTEND";
                id = Grammar.Entry.parse_token_stream longident_lident;
                '"", ";" >] ->
               id
         and grammar_body__04_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "EXTEND") -> 0
+            Some ("", "EXTEND") -> 0
           | _ -> raise Stream.Failure
         and grammar_body__05 __strm__ =
           match grammar_body__05_matcher __strm__ with
@@ -1055,7 +1055,6 @@ module LLKGram =
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
-      lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("", "#");
       lexer.tok_using ("", "$");
       lexer.tok_using ("", "&");
@@ -1070,6 +1069,7 @@ module LLKGram =
       lexer.tok_using ("", "=");
       lexer.tok_using ("", "?");
       lexer.tok_using ("", "END");
+      lexer.tok_using ("", "EXTEND");
       lexer.tok_using ("", "GRAMMAR");
       lexer.tok_using ("", "[");
       lexer.tok_using ("", "]");
