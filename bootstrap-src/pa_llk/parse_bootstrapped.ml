@@ -999,7 +999,7 @@ module LLKGram =
               (parser bp
                  [< '"", "/"; '"STRING", e >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
-                   AStok (loc, x, Some e))
+                   AStok (loc, x, Some (Scanf.unescaped e)))
                 __strm__
           | 1 ->
               (parser bp
