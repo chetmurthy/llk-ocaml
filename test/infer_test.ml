@@ -1,5 +1,5 @@
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Mod:
 EXPORT: ident functor_parameter uidopt module_declaration mod_decl_binding
@@ -37,7 +37,7 @@ END ;
 |foo}
 ] ;;
 
-[@@@llk
+[@@@llk.bootstrapped
 {foo|
 GRAMMAR Mod2:
 EXPORT: type_binder_opt ctyp sig_item sig_item_eoi ;
