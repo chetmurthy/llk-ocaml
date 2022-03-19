@@ -2420,7 +2420,16 @@ value compile1b_entry cg e =
 value compile1_entry cg e =
   match compile1a_entry cg e with [
       exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
-        Fmt.(pf stderr "compile1_entry(%s): FIRST/FOLLOW strategy failed\n%!" e.ae_name) ;
+        let locs =
+          (List.hd e.ae_levels).al_rules.au_rules
+          |> List.map (fun [
+                           {ar_psymbols=[] ; ar_loc=loc} -> loc
+                         | {ar_psymbols=[ {ap_loc=loc} :: _]} -> loc
+               ]) in
+        Fmt.(pf stderr "compile1_entry(%s): FIRST/FOLLOW strategy failed\n%!%a"
+               e.ae_name
+               (list ~{sep=const string "\n"} string) (locs |> List.map Ploc.string_of_location)
+        ) ;
         compile1b_entry cg e
       }
     | x -> x

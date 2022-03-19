@@ -44,6 +44,93 @@ REGEXPS:
 
   check_sig_item = "exception" | "type" (check_type_decl | check_type_extension) | "[%%" | "[@@@" | "declare" | "external" | "include" | "module" | "open" | "value" | $_signature | $signature ;
   check_ctyp = "'" | LIDENT | UIDENT | GIDENT | "!" | "_" | $lid | $_lid | $uid | $_uid | "[" | "{" | "(" | "type" | "#" | QUESTIONIDENTCOLON | TILDEIDENTCOLON | ".." | "<" | "[%" | $"?:" | $"_?:" | $_type | $"_~:" | $"type" | $"~:" ;
+
+  check_arrow = "->" ;
+  check_eps = eps ;
+
+  check_infix_operator0 = 
+      INFIXOP0 
+    | "!=" 
+    | "<>" 
+    | "=" 
+    | "<" 
+    | ">" 
+    | "||" 
+    | "or" 
+    | "&" 
+    | "&&" 
+    ;
+  check_infix_operator1 =
+      INFIXOP1 
+    | "@" 
+    | "^" 
+    ;
+  check_additive_operator2 =
+      "+" 
+    | "+=" 
+    | "-" 
+    | "+." 
+    | "-." 
+    ;
+  check_infix_operator2 =
+      INFIXOP2 
+    | check_additive_operator2
+    ;
+  check_infix_operator3 =
+      INFIXOP3
+    | "lor" 
+    | "lxor" 
+    | "mod" 
+    | "land" 
+    | "*" 
+    | "/" 
+    | "%" 
+    ;
+  check_infix_operator4 =
+      INFIXOP4 
+    | "asr" 
+    | "lsl" 
+    | "lsr" 
+    | "**" 
+    ;
+  check_prefix_operator =
+      PREFIXOP 
+    | "!" 
+    ;
+  check_infix_operator =
+      check_infix_operator0 
+    | check_infix_operator1 
+    | check_infix_operator2 
+    | check_infix_operator3 
+    | check_infix_operator4 
+    | ":=" 
+    ;
+  check_operator =
+      check_prefix_operator 
+    | check_infix_operator 
+    | HASHOP 
+    | LETOP 
+    | ANDOP 
+    | "::" 
+    | DOTOP "(" ")" 
+    | DOTOP "(" ")" "<-" 
+    | DOTOP "(" ";" ".." ")" 
+    | DOTOP "(" ";" ".." ")" "<-" 
+
+    | DOTOP "{" "}" 
+    | DOTOP "{" "}" "<-" 
+    | DOTOP "{" ";" ".." "}" 
+    | DOTOP "{" ";" ".." "}" "<-" 
+
+    | DOTOP "[" "]" 
+    | DOTOP "[" "]" "<-" 
+    | DOTOP "[" ";" ".." "]" 
+    | DOTOP "[" ";" ".." "]" "<-" 
+    ;
+  check_operator_rparen =
+      check_operator ")"
+  ;
+
 END;
 
   infix_operator0: [ [
@@ -547,7 +634,7 @@ END;
     | "." LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
-      | e1 = SELF; "."; "("; op = operator_rparen ->
+      | e1 = SELF; "."; "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             Ploc.raise loc (Failure ".(::) (dot paren colon colon paren) cannot appear except after longident")
           else
@@ -612,13 +699,12 @@ END;
             <:expr< $lid:op$ >>
       | "("; e = SELF; ":"; t = ctyp; ")" → <:expr< ($e$ : $t$) >>
       | "("; e = SELF; ","; el = LIST1 expr SEP ","; ")" → mktupexp loc e el
-      | "("; e = SELF; ")" → <:expr< $e$ >>
-      | "("; el = V (LIST1 expr SEP ","); ")" → <:expr< ($_list:el$) >> ] ]
+      | "("; e = SELF; ")" → <:expr< $e$ >> ] ]
   ;
   expr_longident:
     [
       [ li = longident -> <:expr< $longid:li$ >>
-      | li = longident ; "." ; "("; op = operator_rparen ->
+      | li = longident ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
@@ -901,8 +987,10 @@ END;
           <:ctyp< ! $_list:pl$ . $t$ >>
       | "type"; pl = V (LIST1 LIDENT); "."; t = SELF →
           <:ctyp< type $_list:pl$ . $t$ >> ]
-    | "arrow" RIGHTA
-      [ t1 = SELF; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >> ]
+    | "arrow" NONA
+      [ t1 = NEXT; check_arrow ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
+      | t1 = NEXT ; check_eps -> t1
+      ]
     | "apply" LEFTA
       [ t1 = SELF; t2 = SELF → <:ctyp< $t1$ $t2$ >> ]
     | "simple"
@@ -915,7 +1003,6 @@ END;
       | "(" ; "module"; mt = module_type ; ")" → <:ctyp< ( module $mt$ ) >>
       | "("; t = SELF; "*"; tl = LIST1 ctyp SEP "*"; ")" → mktuptyp loc t tl
       | "("; t = SELF; ")" → <:ctyp< $t$ >>
-      | "("; tl = V (LIST1 ctyp SEP "*"); ")" → <:ctyp< ( $_list:tl$ ) >>
       | "["; cdl = V (LIST1 constructor_declaration SEP "|"); "]" →
           <:ctyp< [ $_list:cdl$ ] >>
       | "["; "|"; "]" →
