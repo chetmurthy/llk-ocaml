@@ -40,10 +40,10 @@ test:: all
 doc: $(CMT) $(CMTI)
 
 camlp5.pa_llk_compiler: $(TARGET)
-	$(MKCAMLP5) -verbose -package fmt,bos,camlp5.pa_r,camlp5.pr_r,pa_ppx.base,pa_llk_runtime $(TARGET) -o $@
+	$(MKCAMLP5) -verbose -package fmt,bos,str,camlp5.pa_r,camlp5.pr_r,pa_ppx.base,pa_llk_runtime $(TARGET) -o $@
 
 camlp5.pa_llk_compiler.opt: $(TARGET:.cma=.cmxa)
-	$(MKCAMLP5).opt -verbose -package fmt,bos,camlp5.pa_r,camlp5.pr_r,pa_ppx.base,pa_llk_runtime $(TARGET:.cma=.cmxa) -o $@
+	$(MKCAMLP5).opt -verbose -package fmt,bos,str,camlp5.pa_r,camlp5.pr_r,pa_ppx.base,pa_llk_runtime $(TARGET:.cma=.cmxa) -o $@
 
 META: META.pl
 	./META.pl > META

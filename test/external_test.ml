@@ -6,11 +6,6 @@ open Pcaml ;;
 GRAMMAR Mod:
 EXPORT: expr1;
 
-REGEXPS:
-  check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
-  check_module_decl_binding = "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") ;
-END;
-
 external expr : PREDICTION LIDENT ;
 
 expr1 : [ [ e = expr -> Some e | -> None ] ] ;

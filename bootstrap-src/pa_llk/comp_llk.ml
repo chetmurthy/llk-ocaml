@@ -16,6 +16,13 @@ open Llk_regexps ;
 open Llk_types ;
 open Print_gram ;
 
+value entry_name e = e.ae_name ;
+value entry_labels e =
+  e.ae_levels
+  |> List.filter_map (fun [ {al_label=Some l} -> Some l | _ -> None ]) ;
+
+value entry_position e = e.ae_pos ;
+value entry_location e = e.ae_loc ;
 
 module DebugCompile(S : sig value rexs : string ; end) = struct
   open Print_gram ;
@@ -276,8 +283,87 @@ value check cg =
   List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg)
 ;
 
+value mentions cg =
+  let entries = ref [] in
+  let regexps = ref [] in
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASnterm _ nt _ _ as s -> do { Std.push entries nt ; s }
+      | ASregexp _ nt as s -> do { Std.push regexps nt ; s }
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with
+             Llk_migrate.migrate_a_symbol = migrate_a_symbol
+           } in do {
+    List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg) ;
+    (entries.val, regexps.val)
+  }
+;
+
+value free_names_of_regexp init re =
+  let open Llk_migrate in
+  let regexps = ref init in
+  let dt = Llk_migrate.make_dt [] in
+  let fallback_migrate_astre = dt.migrate_astre in
+  let migrate_astre dt = fun [
+        ID _ id as re when not (List.mem id dt.aux) -> do { Std.push regexps id ; re }
+      | LETIN _ id re1 re2 as re -> do {
+          dt.migrate_astre dt re1 ;
+          dt.migrate_astre {(dt) with aux = [id :: dt.aux]} re2 ;
+          re
+        }
+      | re -> fallback_migrate_astre dt re
+      ] in
+  let dt = { (dt) with
+             Llk_migrate.migrate_astre = migrate_astre
+           } in do {
+    ignore (dt.migrate_astre dt re) ;
+    List.sort_uniq String.compare regexps.val
+  }
+;
+
+value regexp_mentions cg = do {
+    let acc = ref [] in
+    (CG.gram_regexp_asts cg)
+    |> List.iter (fun (id, re) -> do {
+                    acc.val := acc.val @ (free_names_of_regexp [] re)
+         }) ;
+    List.sort_uniq String.compare acc.val
+  }
+;
+
+value check_names cg = do {
+  let exported = (CG.g cg).gram_exports in
+  let defined = (CG.gram_entries cg) |> List.map entry_name in
+  let externals = (CG.gram_externals cg) |> List.map fst in
+  let regexps = (CG.gram_regexp_asts cg) |> List.map fst in
+  let multiply_defined = Std.intersect defined externals in
+  if [] <> multiply_defined then
+    Fmt.(failwithf "Entries are both external and defined: %a" (list ~{sep=sp} string) multiply_defined)
+  else () ;
+  let regexp_and_entry = Std.(intersect regexps (union defined externals)) in
+  if [] <> regexp_and_entry then
+    Fmt.(failwithf "Entries are both regexp and external/defined: %a" (list ~{sep=sp} string) regexp_and_entry)
+  else () ;
+  let missing = Std.(subtract exported (union defined externals)) in
+  if [] <> missing then
+    Fmt.(failwithf "Undefined exported entries: %a" (list ~{sep=sp} string) missing)
+  else () ;
+  let (mentioned_entries, mentioned_regexps) = mentions cg in
+  let regexp_mentioned_regexps = regexp_mentions cg in
+  let unused = Std.(subtract
+                      (union regexps (union defined externals))
+                      (union exported (union mentioned_entries (union mentioned_regexps regexp_mentioned_regexps)))) in
+  if [] <> unused then
+    Fmt.(failwithf "Unused entries/regexps: %a" (list ~{sep=sp} string) unused)
+  else () 
+  }
+;
+
 value exec x = do {
   check x ;
+  check_names x ;
   x
 }
 ;
@@ -379,13 +465,6 @@ module S1Coalesce = struct
 
   value is_position_marked e = isSome e.ae_pos ;
 
-  value entry_labels e =
-    e.ae_levels
-    |> List.filter_map (fun [ {al_label=Some l} -> Some l | _ -> None ]) ;
-
-  value entry_position e = e.ae_pos ;
-  value entry_location e = e.ae_loc ;
-
   (** tsort entries by position, label.
 
       nodes: (entry, position option)
@@ -397,7 +476,6 @@ module S1Coalesce = struct
       edges for LEVEL, LIKE, AFTER, BEFORE, but NOT for FIRST, LAST
    *)
 
-  value entry_name e = e.ae_name ;
   value entry2node e = (entry_name e, entry_position e) ;
 
   value merge_levels l1 l2 =
@@ -2333,6 +2411,7 @@ value compile1b_entry cg e =
     <:expr< fun __strm__ -> match ($lid:predictor_name$ __strm__) [@llk.regexp $str:retxt$ ;] with [
                                 $list:branches$
                               ] >> in
+  let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
   [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
   ;(<:patt< $lid:predictor_name$ >>, predictor, <:vala< [] >>)
   ]

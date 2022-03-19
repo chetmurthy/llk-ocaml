@@ -8,15 +8,6 @@ EXPORT: ident functor_parameter uidopt module_declaration mod_decl_binding
 REGEXPS:
   check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
   check_module_decl_binding = "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") ;
-  check_type_decl =
-         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
-         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
-         let type_parameters = ($list | $_list | type_parameter* ) in
-         ($flag | $_flag |
-          ("rec"|"nonrec") |
-          ($list | $_list) |
-          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":="))
-  ;
 END;
 sig_item: [ [
        "module"; check_module_decl_binding ; rf = V (FLAG "rec"); d = mod_decl_binding → 1

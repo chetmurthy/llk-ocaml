@@ -64,7 +64,7 @@ END;
 [@@@llk
 {foo|
 GRAMMAR Calc:
-EXPORT: e_top;
+EXPORT: e_top e_star;
   e_top: [ [ x = e -> x ] ] ;
 
   e_star: [ [ x = e LEVEL "*" -> x ] ] ;
