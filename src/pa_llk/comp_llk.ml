@@ -384,6 +384,7 @@ module S1Coalesce = struct
     |> List.filter_map (fun [ {al_label=Some l} -> Some l | _ -> None ]) ;
 
   value entry_position e = e.ae_pos ;
+  value entry_location e = e.ae_loc ;
 
   (** tsort entries by position, label.
 
@@ -465,9 +466,14 @@ module S1Coalesce = struct
              |> entry_labels
              |> List.map (fun lab -> (lab, entry2node e))
            ) in do {
-    if 1 <> List.length (el |> List.map entry_position |> List.find_all ((=) None)) then
-      failwith Fmt.(str "construct_graph: exactly one entry named %s MUST be position-free" ename)
-    else () ;
+    match el |> List.map entry_position |> List.find_all ((=) None) with [
+        [] -> failwith Fmt.(str "construct_graph: NO entry named %s is position-free" ename)
+      | [_] -> ()
+      | l -> failwith Fmt.(str "construct_graph: exactly one entry named %s MUST be position-free:\n%a"
+                           ename
+                        (list ~{sep=const string "\n"} string) (el |> List.map entry_location |> List.map Ploc.string_of_location)
+           )
+      ] ;
     if not (distinct (el |> List.concat_map entry_labels)) then
       failwith Fmt.(str "construct_graph: entry %s does not have distinct labels" ename)
     else () ;
@@ -715,7 +721,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
             let rules =
               l.al_rules.au_rules
               |> Subst.rules Subst.[
-                     (SELF, next)
+                     (SELF, cur)
                     ;(NEXT, next)
                     ;(NT ename None, next)
                    ] in
@@ -743,12 +749,11 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
              match last_symbol with [
                  ASnterm _ name _ None when name = ename -> ()
                | ASself _ _ -> ()
-               | _ -> failwith Fmt.(str "rewrite1: entry %s RIGHTA level has last psymbol non-recursive"
-                                      ename)
+               | s -> raise_failwithf (loc_of_a_symbol s) "rewrite1: entry %s RIGHTA level has last psymbol non-recursive" ename
                ] ;
              let rl = rewrite_righta loc (ename,eargs) ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
-                         ;(SELF, next)
+                         ;(SELF, cur)
                          ;(NT ename None, next)
                         ] rl in
              {
@@ -782,7 +787,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
                ] ;
              let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
-                         ;(SELF, next)
+                         ;(SELF, cur)
                          ;(NT ename None, next)
                         ] rl in
              {

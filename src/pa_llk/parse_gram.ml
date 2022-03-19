@@ -188,7 +188,7 @@ EXTEND
 
   regexp: [ [ x = e6 -> x ] ] ;
 
-  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e5 -> LETIN loc s re1 re2
+  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e6 -> LETIN loc s re1 re2
         | x = e5 -> x
         ] ] ;
 

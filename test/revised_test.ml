@@ -7,12 +7,41 @@ GRAMMAR Revised:
     type_decl type_extension extension_constructor
     constructor_declaration label_declaration match_case ipatt
     with_constr poly_variant attribute_body alg_attribute alg_attributes
-    check_type_decl check_type_extension check_dot_uid
     operator_rparen
-    check_type_binder
     ext_attributes
     interf implem use_file top_phrase
     ;
+REGEXPS:
+  check_additive_rparen = ("+" | "-" | "+." | "-." | "+=") ")" ;
+  check_type_binder =
+         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
+         (tyvar tyvar * | ($list | $_list)) "."
+  ;
+  check_type_decl =
+         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
+         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
+         let type_parameters = ($list | $_list | type_parameter* ) in
+         ($flag | $_flag |
+          ("rec"|"nonrec") |
+          ($list | $_list) |
+          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":="))
+  ;
+  check_type_extension =
+         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
+         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-")* (tyvar | "_") in
+         let type_parameters = ($list | $_list | type_parameter* ) in
+         UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=")
+  ;
+  check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
+  check_let_exception = "let" "exception" ;
+  check_lbracket = "[" ;
+  check_lbrace = "{" ;
+  check_lbracketbar = "[|" ;
+  check_dot_uid =  "." (UIDENT | $uid | $_uid) ;
+  check_lident_colon = LIDENT ":" ;
+  check_colon = ":" ;
+  check_lparen_type = "(" "type" ;
+END;
 
   infix_operator0: [ [
       x = INFIXOP0 -> x
@@ -265,8 +294,8 @@ GRAMMAR Revised:
   mod_fun_binding:
     [ RIGHTA
       [ arg = V functor_parameter "functor_parameter" "fp"; mb = SELF →
-          <:module_expr< functor $_fp:arg$ → $mb$ >>
-      | ":"; mt = module_type; "="; me = module_expr →
+          <:module_expr< functor $_fp:arg$ → $mb$ >> ]
+    | [ ":"; mt = module_type; "="; me = module_expr →
           <:module_expr< ( $me$ : $mt$ ) >>
       | "="; me = module_expr → <:module_expr< $me$ >> ] ]
   ;
@@ -362,10 +391,10 @@ GRAMMAR Revised:
   ;
   module_declaration:
     [ RIGHTA
-      [ ":"; mt = module_type → <:module_type< $mt$ >>
-      | arg = V functor_parameter "functor_parameter" "fp" ; mt = SELF →
+      [ arg = V functor_parameter "functor_parameter" "fp" ; mt = SELF →
           <:module_type< functor $_fp:arg$ → $mt$ >>
- ] ]
+      ]
+    | [ ":"; mt = module_type → <:module_type< $mt$ >> ] ]
   ;
   with_constr:
     [ [ "type"; i = V longident_lident "lilongid"; tpl = V (LIST0 type_parameter);
@@ -396,7 +425,7 @@ GRAMMAR Revised:
   ext_opt: [ [ ext = OPT [ "%" ; id = attribute_id -> id ] -> ext ] ] ;
   ext_attributes: [ [ e = ext_opt ; l = alg_attributes_no_anti -> (e, l) ] ] ;
   expr:
-    [ "top" RIGHTA
+    [ "top" NONA
       [ check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ;
         "of" ; tyl = V (LIST1 ctyp_below_alg_attribute) ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ of $_list:tyl$ $_algattrs:alg_attrs$ in $x$ >>
@@ -404,17 +433,17 @@ GRAMMAR Revised:
         "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >>
 
-      | check_let_not_exception ; "let"; ext = ext_opt ; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and"); "in";
+      | "let"; ext = ext_opt ; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and"); "in";
         x = SELF →
           expr_to_inline <:expr< let $_flag:r$ $_list:l$ in $x$ >> ext []
 
       | letop = LETOP ; b = letop_binding ; l = LIST0 andop_binding; "in";
-        x = expr LEVEL "top" ->
+        x = SELF ->
           build_letop_binder loc letop b l x
 
-      | check_let_not_exception ; "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in"; e = SELF →
+      | "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in"; e = SELF →
           expr_to_inline <:expr< let module $_uidopt:m$ = $mb$ in $e$ >> ext attrs
-      | check_let_not_exception ; "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; e = SELF →
+      | "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; e = SELF →
           expr_to_inline <:expr< let open $_!:ovf$ $m$ in $e$ >> ext attrs
       | "fun"; (ext,attrs) = ext_attributes; l = closed_case_list →
           expr_to_inline <:expr< fun [ $_list:l$ ] >> ext attrs
@@ -436,12 +465,14 @@ GRAMMAR Revised:
         e2 = SELF; "do"; "{"; seq = V sequence "list"; "}" →
           expr_to_inline <:expr< for $i$ = $e1$ $_to:df$ $e2$ do { $_list:seq$ } >> ext attrs
       | "while"; (ext,attrs) = ext_attributes; e = SELF; "do"; "{"; seq = V sequence "list"; "}" →
-          expr_to_inline <:expr< while $e$ do { $_list:seq$ } >> ext attrs ]
+          expr_to_inline <:expr< while $e$ do { $_list:seq$ } >> ext attrs
+      | e = NEXT -> e
+      ]
     | "where"
       [ e = SELF; "where"; (ext,attrs) = ext_attributes; rf = V (FLAG "rec"); lb = let_binding →
           expr_to_inline <:expr< let $_flag:rf$ $list:[lb]$ in $e$ >> ext attrs ]
-    | ":=" NONA
-      [ e1 = SELF; ":="; e2 = SELF; dummy → <:expr< $e1$ := $e2$ >> ]
+    | ":=" RIGHTA
+      [ e1 = SELF; ":="; e2 = SELF → <:expr< $e1$ := $e2$ >> ]
     | "||" RIGHTA
       [ e1 = SELF; "||"; e2 = SELF → <:expr< $e1$ || $e2$ >> ]
     | "&&" RIGHTA
@@ -506,11 +537,14 @@ GRAMMAR Revised:
          ]
       ]
     | "apply" LEFTA
-      [ e1 = SELF; e2 = SELF → <:expr< $e1$ $e2$ >>
-      | "assert"; (ext,attrs) = ext_attributes; e = SELF →
+      [ e1 = SELF; e2 = SELF → <:expr< $e1$ $e2$ >> ]
+    | "lazy" NONA
+      [ "assert"; (ext,attrs) = ext_attributes; e = SELF →
           expr_to_inline <:expr< assert $e$ >> ext attrs
-      | "lazy"; (ext,attrs) = ext_attributes; e = SELF → 
-          expr_to_inline <:expr< lazy $e$ >> ext attrs ]
+      | "lazy"; (ext,attrs) = ext_attributes; e = NEXT → 
+          expr_to_inline <:expr< lazy $e$ >> ext attrs
+      | e = NEXT -> e
+      ]
     | "." LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
@@ -608,9 +642,6 @@ GRAMMAR Revised:
     [ [ "::"; e = expr → Some e
       | → None ] ]
   ;
-  dummy:
-    [ [ → () ] ]
-  ;
   sequence:
     [ RIGHTA
       [ "let"; rf = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and");
@@ -621,8 +652,8 @@ GRAMMAR Revised:
           [expr_to_inline <:expr< let module $_uidopt:m$ = $mb$ in $mksequence loc el$ >> ext attrs]
       | "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; el = SELF →
           [expr_to_inline <:expr< let open $_!:ovf$ $m$ in $mksequence loc el$ >> ext attrs]
-      | e = expr; ";"; el = SELF → [e :: el]
-      | e = expr; ";" → [e]
+      | e = expr; ";"; el = SELF → [e :: el] ]
+    | [ e = expr; ";" → [e]
       | e = expr → [e] ] ]
   ;
   let_binding:
@@ -632,7 +663,7 @@ GRAMMAR Revised:
           | _ -> (p,e)
           ] in
           (p, e, attrs)
-      | p = ipatt; check_not_colon ; e = fun_binding ; attrs = item_attributes →
+      | p = ipatt ; e = fun_binding ; attrs = item_attributes →
           (p, e, attrs)
       ] ]
   ;
@@ -641,8 +672,8 @@ GRAMMAR Revised:
   ;
   fun_binding:
     [ RIGHTA
-      [ p = ipatt; e = SELF → <:expr< fun $p$ → $e$ >>
-      | "="; e = expr → <:expr< $e$ >>
+      [ p = ipatt; e = SELF → <:expr< fun $p$ → $e$ >> ]
+    | [ "="; e = expr → <:expr< $e$ >>
       | ":"; t = ctyp; "="; e = expr → <:expr< ($e$ : $t$) >> ] ]
   ;
   match_case:
@@ -662,8 +693,8 @@ GRAMMAR Revised:
   ;
   fun_def:
     [ RIGHTA
-      [ p = ipatt; e = SELF → <:expr< fun $p$ → $e$ >>
-      | "->"; e = expr → e ] ]
+      [ p = ipatt; e = SELF → <:expr< fun $p$ → $e$ >> ]
+    | [ "->"; e = expr → e ] ]
   ;
   patt_ident: [
     [ s = V LIDENT → <:patt< $_lid:s$ >>
@@ -695,11 +726,12 @@ GRAMMAR Revised:
     | NONA
       [ p1 = SELF; ".."; p2 = SELF → <:patt< $p1$ .. $p2$ >> ]
     | LEFTA
-      [ p1 = SELF; p2 = SELF → <:patt< $p1$ $p2$ >>
-      | "lazy"; (ext,attrs) = ext_attributes; p = SELF → 
-          patt_to_inline loc <:patt< lazy $p$ >> ext attrs ]
+      [ p1 = SELF; p2 = SELF → <:patt< $p1$ $p2$ >> ]
     | "simple"
-      [ p = patt_ident -> p
+      [ 
+        "lazy"; (ext,attrs) = ext_attributes; p = SELF → 
+          patt_to_inline loc <:patt< lazy $p$ >> ext attrs
+      | p = patt_ident -> p
       | e = alg_extension -> <:patt< [% $_extension:e$ ] >>
       | s = V INT → <:patt< $_int:s$ >>
       | s = V INT_l → <:patt< $_int32:s$ >>
@@ -833,19 +865,20 @@ GRAMMAR Revised:
   ;
   longident:
     [ LEFTA
-      [ me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
-      | i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
+      [ me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
+    | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
   extended_longident:
     [ LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
       | me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
-      | i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
+      ]
+    | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
   ctyp_ident:
-    [ LEFTA
+    [
       [ me1 = extended_longident ; "." ; i = V LIDENT "lid" → 
           <:ctyp< $longid:me1$ . $_lid:i$ >>
       | i = V LIDENT "lid" → 
@@ -864,7 +897,7 @@ GRAMMAR Revised:
     | "below_alg_attribute" [ t = NEXT -> t ]
     | "as" LEFTA
       [ t1 = SELF; "as"; t2 = SELF → <:ctyp< $t1$ as $t2$ >> ]
-    | LEFTA
+    | RIGHTA
       [ "!"; pl = V (LIST1 typevar); "."; t = SELF →
           <:ctyp< ! $_list:pl$ . $t$ >>
       | "type"; pl = V (LIST1 LIDENT); "."; t = SELF →
@@ -873,10 +906,9 @@ GRAMMAR Revised:
       [ t1 = SELF; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >> ]
     | "apply" LEFTA
       [ t1 = SELF; t2 = SELF → <:ctyp< $t1$ $t2$ >> ]
-    | LEFTA
-      [ t = ctyp_ident → t ]
     | "simple"
-      [ "'"; i = V ident "" → <:ctyp< '$_:i$ >>
+      [ t = ctyp_ident → t
+      | "'"; i = V ident "" → <:ctyp< '$_:i$ >>
       | i = GIDENT → <:ctyp< '$greek_ascii_equiv i$ >>
       | ".." -> <:ctyp< .. >>
       | "_" → <:ctyp< _ >>
@@ -941,14 +973,14 @@ GRAMMAR Revised:
       ] ]
   ;
   (* Objects and Classes *)
-  str_item:
+  str_item: AFTER "top"
     [ [ "class"; cd = V (LIST1 class_declaration SEP "and") →
           <:str_item< class $_list:cd$ >>
       | "class"; "type";
         ctd = V (LIST1 class_type_declaration SEP "and") →
           <:str_item< class type $_list:ctd$ >> ] ]
   ;
-  sig_item:
+  sig_item: AFTER "top"
     [ [ "class"; cd = V (LIST1 class_description SEP "and") →
           <:sig_item< class $_list:cd$ >>
       | "class"; "type"; ctd = V (LIST1 class_type_declaration SEP "and") →
@@ -1016,7 +1048,7 @@ GRAMMAR Revised:
       ] ]
   ;
   class_structure:
-    [ [ cf = V (LIST0 [ cf = class_str_item; ";" → cf ]) → cf ] ]
+    [ [ cf = V (LIST0 [ ci = class_str_item; ";" → ci ]) → cf ] ]
   ;
   class_self_patt:
     [ [ "("; p = patt; ")" → p
@@ -1076,7 +1108,7 @@ GRAMMAR Revised:
       ]
 
     | [ "object"; cst = V (OPT class_self_type);
-        csf = V (LIST0 [ csf = class_sig_item; ";" → csf ]); "end" →
+        csf = V (LIST0 [ csi = class_sig_item; ";" → csi ]); "end" →
           <:class_type< object $_opt:cst$ $_list:csf$ end >>
       | ct = SELF; "["; tl = V (LIST1 ctyp SEP ","); "]" →
           <:class_type< $ct$ [ $_list:tl$ ] >> ]
@@ -1122,13 +1154,15 @@ GRAMMAR Revised:
           {MLast.ciLoc = loc; MLast.ciVir = vf; MLast.ciPrm = ctp;
            MLast.ciNam = n; MLast.ciExp = cs; MLast.ciAttributes = attrs} ] ]
   ;
-  expr: LEVEL "apply"
-    [ LEFTA
+  expr: AFTER "apply"
+    [ NONA
       [ "new"; (ext,attrs) = ext_attributes; cli = V longident_lident "lilongid" → 
           expr_to_inline <:expr< new $_lilongid:cli$ >> ext attrs
       | "object"; (ext,attrs) = ext_attributes; cspo = V (OPT class_self_patt); cf = class_structure;
         "end" →
-          expr_to_inline <:expr< object $_opt:cspo$ $_list:cf$ end >> ext attrs ] ]
+          expr_to_inline <:expr< object $_opt:cspo$ $_list:cf$ end >> ext attrs
+      | e = NEXT -> e
+      ] ]
   ;
   expr: LEVEL "."
     [ [ e = SELF; "#"; lab = V lident "lid" "" →
@@ -1155,7 +1189,7 @@ GRAMMAR Revised:
   field:
     [ [ check_lident_colon ; lab = LIDENT; ":"; t = ctyp_below_alg_attribute; alg_attrs = alg_attributes →
         (Some (mkident lab), t, alg_attrs)
-      | check_not_lident_colon ; t = ctyp_below_alg_attribute; alg_attrs = alg_attributes ->
+      | t = ctyp_below_alg_attribute; alg_attrs = alg_attributes ->
         (None, t, alg_attrs)
       ] ]
   ;
@@ -1217,13 +1251,13 @@ GRAMMAR Revised:
           p ] ]
   ;
   patt_tcon_opt_eq_patt:
-    [ [ p = patt_tcon; po = V (OPT [ "="; p = patt → p ]) → (p, po) ] ]
+    [ [ p = patt_tcon; po = V (OPT [ "="; p' = patt → p' ]) → (p, po) ] ]
   ;
   patt_tcon:
     [ [ p = patt → p
       | p = patt; ":"; t = ctyp → <:patt< ($p$ : $t$) >> ] ]
   ;
-  ipatt:
+  ipatt: AFTER "simple"
     [ [ "~"; "{"; lppo = V (LIST1 ipatt_tcon_opt_eq_patt SEP ";"); "}" →
           <:patt< ~{$_list:lppo$} >>
       | "?"; "{"; p = ipatt_tcon; eo = V (OPT [ "="; e = expr → e ]); "}" →
@@ -1240,7 +1274,7 @@ GRAMMAR Revised:
           p ] ]
   ;
   ipatt_tcon_opt_eq_patt:
-    [ [ p = ipatt_tcon; po = V (OPT [ "="; p = patt → p ]) → (p, po) ] ]
+    [ [ p = ipatt_tcon; po = V (OPT [ "="; p' = patt → p' ]) → (p, po) ] ]
   ;
   ipatt_tcon:
     [ [ p = ipatt → p
@@ -1292,8 +1326,6 @@ GRAMMAR Revised:
   expr: LEVEL "simple"
     [ [ "`"; s = V ident "" → <:expr< ` $_:s$ >> ] ]
   ;
-  (* -- cut 1 begin -- *)
-  expr: [[]];
 
   interf:
     [ [ "#"; n = V LIDENT; dp = OPT expr; ";" →
