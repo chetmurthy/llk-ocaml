@@ -9,19 +9,24 @@ open Pa_ppx_utils ;
 open Ppxutil ;
 
 module PatternBaseToken = struct
+  value lident_re = Str.regexp "^[a-z_][a-zA-Z0-9_]*$" ;
+  value is_lident s = Str.string_match lident_re s 0 ;
+
   type t = [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ] ;
   value hash = Hashtbl.hash;
   value print = fun [
       SPCL s -> Printf.sprintf "\"%s\"" (String.escaped s)
     | CLS ty None -> Printf.sprintf "%s" ty
     | CLS ty (Some s) -> Printf.sprintf "%s \"%s\"" ty (String.escaped s)
-    | ANTI s -> Printf.sprintf "$%s" s
+    | ANTI s when is_lident s -> Printf.sprintf "$%s" s
+    | ANTI s  -> Printf.sprintf "$\"%s\"" (String.escaped s)
     | OUTPUT n -> Printf.sprintf "#%d" n
     ]
   ;
   value compare t1 t2 = Stdlib.compare t1 t2 ;                            
   value equal t1 t2 = 0 = compare t1 t2 ;
   value is_output = fun [ OUTPUT _ -> True | _ -> False ] ;
+
 end ;
 module PatternRegexp = Regexp(PatternBaseToken) ;
 module PSyn = RESyntax(PatternBaseToken)(PatternRegexp) ;

@@ -196,6 +196,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | x = UIDENT -> Class(loc, x, None)
       | x = UIDENT ; "/" ; s = STRING -> Class(loc, x, Some s)
       | "$" ; x = LIDENT -> Anti(loc, x)
+      | "$" ; x = STRING -> Anti(loc, Scanf.unescaped x)
       | "#" ; x = INT -> Output(loc, int_of_string x)
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc

@@ -19,7 +19,7 @@ NOT_OCAMLFIND=$(PPLAUNCH) not-ocamlfind
 MKCAMLP5=$(LAUNCH) mkcamlp5
 SYNTAX := camlp5r
 
-PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std,pa_llk_runtime
+PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std,pa_llk_runtime,str
 TARGET := pa_llk_compiler.cma
 OML := brzozowski2.ml ord_MLast.ml llk_migrate.ml parse_bootstrapped.ml
 OMLI := ord_MLast.mli

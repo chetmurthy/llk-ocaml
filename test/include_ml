@@ -6,6 +6,8 @@
 #require "rresult";;
 #require "pcre";;
 #require "bos";;
+#require "str";;
+
 (*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
@@ -13,13 +15,13 @@ Pcaml.inter_phrases := Some ";;\n";;
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
 
-(*
-#require "camlp5.pr_o";;
- *)
 
+#require "camlp5.pr_o";;
+
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
-
+ *)
 #require "camlp5.parser_quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -98,7 +100,6 @@ let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" (Pr.rule true Pprintf.empty_pc e)
 #install_printer pp_a_rule ;;
 
 (* ================================================================ *)
-#require "str";;
 
 (*
 let ast1 = RT.pa_regexp_ast {| "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") #4|} ;;

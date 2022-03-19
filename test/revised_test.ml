@@ -41,6 +41,9 @@ REGEXPS:
   check_lident_colon = LIDENT ":" ;
   check_colon = ":" ;
   check_lparen_type = "(" "type" ;
+
+  check_sig_item = "exception" | "type" (check_type_decl | check_type_extension) | "[%%" | "[@@@" | "declare" | "external" | "include" | "module" | "open" | "value" | $_signature | $signature ;
+  check_ctyp = "'" | LIDENT | UIDENT | GIDENT | "!" | "_" | $lid | $_lid | $uid | $_uid | "[" | "{" | "(" | "type" | "#" | QUESTIONIDENTCOLON | TILDEIDENTCOLON | ".." | "<" | "[%" | $"?:" | $"_?:" | $_type | $"_~:" | $"type" | $"~:" ;
 END;
 
   infix_operator0: [ [
@@ -159,9 +162,9 @@ END;
       <:attribute_body< $_attrid:id$ $_structure:st$ >>
     | id = V attribute_id "attrid" ->
       <:attribute_body< $_attrid:id$ >>
-    | id = V attribute_id "attrid" ; ":" ; si = attribute_signature -> 
+    | id = V attribute_id "attrid" ; ":" ; check_sig_item ; si = attribute_signature -> 
       <:attribute_body< $_attrid:id$ : $_signature:si$ >>
-    | id = V attribute_id "attrid" ; ":" ; ty = V ctyp "type" -> 
+    | id = V attribute_id "attrid" ; ":" ; check_ctyp ; ty = V ctyp "type" -> 
       <:attribute_body< $_attrid:id$ : $_type:ty$ >>
     | id = V attribute_id "attrid" ; "?" ;  p = V patt "patt" -> 
       <:attribute_body< $_attrid:id$ ? $_patt:p$ >>
@@ -300,7 +303,7 @@ END;
       | "="; me = module_expr → <:module_expr< $me$ >> ] ]
   ;
   module_type:
-    [ [ "functor"; arg = V functor_parameter "functor_parameter" "fp" ; "->";
+    [ RIGHTA [ "functor"; arg = V functor_parameter "functor_parameter" "fp" ; "->";
         mt = SELF →
           <:module_type< functor $_fp:arg$ → $mt$ >>
       ]
@@ -377,10 +380,6 @@ END;
         let t = match Pcaml.unvala ls with [ [] -> t | _ -> <:ctyp< ! $_list:ls$ . $t$ >> ] in
           <:sig_item< value $lid:i$ : $t$ $_itemattrs:attrs$ >>
 
-      | "#"; n = V LIDENT "lid" ""; dp = V (OPT expr) →
-          <:sig_item< # $_lid:n$ $_opt:dp$ >>
-      | "#"; s = V STRING; sil = V (LIST0 [ si = sig_item → (si, loc) ]) →
-          <:sig_item< # $_str:s$ $_list:sil$ >>
       | attr = floating_attribute -> <:sig_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:sig_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
@@ -844,18 +843,18 @@ END;
     [ [ "constraint"; t1 = ctyp; "="; t2 = ctyp → (t1, t2) ] ]
   ;
   type_parameter:
-    [ [ "+"; p = V simple_type_parameter -> (p, (Some True, False))
-      | "+"; "!" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "-"; p = V simple_type_parameter -> (p, (Some False, False))
-      | "-"; "!" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | "!" ; p = V simple_type_parameter -> (p, (None, True))
-      | "!" ; "+" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "!" ; "-" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | "!+" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "+!" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "!-" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | "-!" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | p = V simple_type_parameter -> (p, (None, False))
+    [ [ "+"; p = V simple_type_parameter "" -> (p, (Some True, False))
+      | "+"; "!" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "-"; p = V simple_type_parameter "" -> (p, (Some False, False))
+      | "-"; "!" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | "!" ; p = V simple_type_parameter "" -> (p, (None, True))
+      | "!" ; "+" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "!" ; "-" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | "!+" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "+!" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "!-" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | "-!" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | p = V simple_type_parameter "" -> (p, (None, False))
       ] ]
   ;
   simple_type_parameter:
@@ -978,13 +977,17 @@ END;
           <:str_item< class $_list:cd$ >>
       | "class"; "type";
         ctd = V (LIST1 class_type_declaration SEP "and") →
-          <:str_item< class type $_list:ctd$ >> ] ]
+          <:str_item< class type $_list:ctd$ >>
+      | x = NEXT -> x
+      ] ]
   ;
   sig_item: AFTER "top"
     [ [ "class"; cd = V (LIST1 class_description SEP "and") →
           <:sig_item< class $_list:cd$ >>
       | "class"; "type"; ctd = V (LIST1 class_type_declaration SEP "and") →
-          <:sig_item< class type $_list:ctd$ >> ] ]
+          <:sig_item< class type $_list:ctd$ >>
+      | x = NEXT -> x
+      ] ]
   ;
   class_declaration:
     [ [ vf = V (FLAG "virtual"); i = V LIDENT; ctp = class_type_parameters;
@@ -1107,11 +1110,11 @@ END;
         <:class_type< $ct$ [@ $_attribute:attr$ ] >>
       ]
 
+    | LEFTA [ ct = SELF; "["; tl = V (LIST1 ctyp SEP ","); "]" →
+          <:class_type< $ct$ [ $_list:tl$ ] >> ]
     | [ "object"; cst = V (OPT class_self_type);
         csf = V (LIST0 [ csi = class_sig_item; ";" → csi ]); "end" →
-          <:class_type< object $_opt:cst$ $_list:csf$ end >>
-      | ct = SELF; "["; tl = V (LIST1 ctyp SEP ","); "]" →
-          <:class_type< $ct$ [ $_list:tl$ ] >> ]
+          <:class_type< object $_opt:cst$ $_list:csf$ end >> ]
     | "simple"
       [ li = extended_longident; "."; i = V LIDENT → <:class_type< $longid:li$ . $_lid:i$ >>
       | i = V LIDENT → <:class_type< $_lid:i$ >>
@@ -1207,7 +1210,9 @@ END;
   ctyp: AFTER "arrow"
     [ NONA
       [ i = V TILDEIDENTCOLON; t = SELF → <:ctyp< ~$_:i$: $t$ >>
-      | i = V QUESTIONIDENTCOLON; t = SELF → <:ctyp< ?$_:i$: $t$ >> ] ]
+      | i = V QUESTIONIDENTCOLON; t = SELF → <:ctyp< ?$_:i$: $t$ >>
+      | x = NEXT -> x
+      ] ]
   ;
   ctyp: LEVEL "simple"
     [ [ "["; "="; rfl = poly_variant_list; "]" →
@@ -1271,7 +1276,9 @@ END;
           <:patt< ~{$_lid:i$} >>
       | p = patt_option_label →
           let _ = warning_deprecated_since_6_00 loc in
-          p ] ]
+          p
+      | x = NEXT -> x
+      ] ]
   ;
   ipatt_tcon_opt_eq_patt:
     [ [ p = ipatt_tcon; po = V (OPT [ "="; p' = patt → p' ]) → (p, po) ] ]
@@ -1318,7 +1325,9 @@ END;
           <:expr< ?{$_lid:i$ = $e$} >>
       | i = V QUESTIONIDENT →
           let _ = warning_deprecated_since_6_00 loc in
-          <:expr< ?{$_lid:i$} >> ] ]
+          <:expr< ?{$_lid:i$} >>
+      | x = NEXT -> x
+      ] ]
   ;
   ipatt_tcon_fun_binding:
     [ [ p = ipatt_tcon; eo = V (OPT fun_binding) → (p, eo) ] ]
