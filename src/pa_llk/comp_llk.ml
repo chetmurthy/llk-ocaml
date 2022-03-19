@@ -723,7 +723,6 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
               |> Subst.rules Subst.[
                      (SELF, cur)
                     ;(NEXT, next)
-                    ;(NT ename None, next)
                    ] in
             {
               (l) with

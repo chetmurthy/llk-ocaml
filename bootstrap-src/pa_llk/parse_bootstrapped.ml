@@ -266,7 +266,7 @@ module LLKGram =
             0 ->
               (parser bp
                  [< '"", "let"; '"LIDENT", s; '"", "="; re1 = e5; '"", "in";
-                    re2 = e5 >] ep ->
+                    re2 = e6 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    LETIN (loc, s, re1, re2))
                 __strm__
@@ -836,7 +836,7 @@ module LLKGram =
           match symbol__0002_matcher __strm__ with
             0 ->
               (parser bp
-                 [< '"UIDENT", "V"; s = symbol__0003;
+                 [< '"UIDENT", "V"; s = symbol__0002;
                     al =
                       parse_list0
                         (parser [< '"STRING", __x__ >] -> __x__) >] ep ->

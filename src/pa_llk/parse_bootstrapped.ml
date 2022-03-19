@@ -117,20 +117,20 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   ;
   symbol:
     [ "top" NONA
-      [ UIDENT/"LIST0"; s = SELF; sep = OPT sep_opt_sep ->
+      [ UIDENT/"LIST0"; s = NEXT; sep = OPT sep_opt_sep ->
          ASlist (loc, LML_0, s, sep)
-      | UIDENT/"LIST1"; s = SELF; sep = OPT sep_opt_sep ->
+      | UIDENT/"LIST1"; s = NEXT; sep = OPT sep_opt_sep ->
          ASlist (loc, LML_1, s, sep)
-      | UIDENT/"OPT"; s = SELF ->
+      | UIDENT/"OPT"; s = NEXT ->
          ASopt (loc, s)
-      | UIDENT/"LEFT_ASSOC"; s1 = SELF ; UIDENT/"ACCUMULATE" ; s2 = SELF ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
+      | UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc (loc, s1, s2, e)
-      | UIDENT/"FLAG"; s = SELF ->
+      | UIDENT/"FLAG"; s = NEXT ->
           ASflag (loc, s)
       | s = NEXT -> s
       ]
     | "vala"
-      [ UIDENT/"V"; s = NEXT; al = LIST0 STRING ->
+      [ UIDENT/"V"; s = SELF; al = LIST0 STRING ->
           ASvala (loc, s, al)
       | s = NEXT -> s
       ]
@@ -158,7 +158,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | UIDENT/"PREDICT" ; id = LIDENT ->
         ASregexp (loc, id)
 
-      | "("; s_t = SELF; ")" -> s_t ] ]
+      | "("; s_t = NEXT; ")" -> s_t ] ]
   ;
   pattern:
     [ [ i = LIDENT -> <:patt< $lid:i$ >>
