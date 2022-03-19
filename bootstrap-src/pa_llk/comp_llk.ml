@@ -642,6 +642,12 @@ value rewrite_righta loc (ename,eformals) ~{cur} ~{next} rho rl =
         (SELF, cur)
        ;(NT ename None, cur)
     ] in
+  let lid_guess =
+    match List.hd rl with [
+        {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASself _ _} :: _]} -> v
+      | {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASnterm _ nt _ None} :: _]} when ename = nt -> v
+      | _ -> "x"
+      ] in
   let rl =
     rl
     |> List.map (fun r ->
@@ -654,9 +660,9 @@ value rewrite_righta loc (ename,eformals) ~{cur} ~{next} rho rl =
          ) in
   let last_rule = {ar_loc = loc;
                    ar_psymbols = [{ap_loc = loc;
-                                   ap_patt = Some <:patt< x >> ;
+                                   ap_patt = Some <:patt< $lid:lid_guess$ >> ;
                                    ap_symb = ASnterm loc next (formals2actuals eformals) None}];
-                   ar_action = Some <:expr< x >> } in
+                   ar_action = Some <:expr< $lid:lid_guess$ >> } in
   rl @ [last_rule]
 ;
 
@@ -752,7 +758,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
                ] ;
              let rl = rewrite_righta loc (ename,eargs) ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
-                         ;(SELF, cur)
+                         ;(SELF, next)
                          ;(NT ename None, next)
                         ] rl in
              {
@@ -786,7 +792,7 @@ value rewrite1 e (ename, eargs) ~{cur} ~{next} dict l = do {
                ] ;
              let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
-                         ;(SELF, cur)
+                         ;(SELF, next)
                          ;(NT ename None, next)
                         ] rl in
              {
@@ -1039,9 +1045,14 @@ value infer_kinds loc s kinds =
       | AStok loc "INT_L" _ -> ["int64"]
       | AStok loc "INT_n" _ -> ["nativeint"]
       | AStok loc "LIDENT" _ -> ["lid"]
+      | AStok loc "GIDENT" _ -> ["gid"]
       | AStok loc "STRING" _ -> ["str"]
       | AStok loc "UIDENT" _ -> ["uid"]
-      | _ -> raise_failwith loc "cannot infer antiquotation kind"
+      | AStok loc "QUESTIONIDENT" _ -> ["?"]
+      | AStok loc "QUESTIONIDENTCOLON" _ -> ["?:"]
+      | AStok loc "TILDEIDENT" _ -> ["~"]
+      | AStok loc "TILDEIDENTCOLON" _ -> ["~:"]
+      | _ -> raise_failwithf loc "cannot infer antiquotation kind for symbol %s" (Pr.symbol Pprintf.empty_pc s)
       ]
 ;
 
@@ -1762,6 +1773,16 @@ value report_compilation_error ?{and_raise=False} reason cg loc ename fi_fo_rule
           (Pr.rule False Pprintf.empty_pc r)
                        )) ;
   Fmt.(pf stderr "================================================================\n") ;
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->
+         let fi = CG.first cg e.ae_name in
+         let fo = CG.follow cg e.ae_name in
+         Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
+             (Pr.entry Pprintf.empty_pc e)
+             (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+         )
+       ) ;
+  Fmt.(pf stderr "================================================================\n") ;
   prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
   Fmt.(pf stderr "\n%!") ;
   if and_raise then
@@ -1779,6 +1800,11 @@ value rec compile1_symbol cg loc ename s =
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
         <:expr< parse_flag $s_body$ >>
       }
+
+    | ASopt loc s -> do {
+        let s_body = compile1_symbol cg loc ename s in
+        <:expr< parse_opt $s_body$ >>
+       }
 
     | ASkeyw  loc kws ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
