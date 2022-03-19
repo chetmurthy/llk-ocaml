@@ -82,6 +82,7 @@ end
 end
 
 [%%import: Llk_types.a_symbol
+  [@add [%%import: Llk_regexps.astre]]
   [@with Ord_MLast.patt := patt]
   [@with Ord_MLast.expr := expr]
 ]
@@ -102,6 +103,13 @@ end
           ; a_rules
           ; a_psymbol
           ; a_symbol
+          ]
+        }
+      ; {
+          srcmod = Llk_regexps
+        ; dstmod = Llk_regexps
+        ; types = [
+            astre
           ]
         }
       ]
@@ -141,4 +149,3 @@ end
       }
     }
 ]
-

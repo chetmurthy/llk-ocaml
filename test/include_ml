@@ -31,7 +31,7 @@ open Pa_ppx_utils.Std ;;
 open Pa_ppx_testutils.Papr_util ;;
 
 #require "pa_ppx.base";;
-Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
+Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
 
