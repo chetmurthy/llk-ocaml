@@ -3,21 +3,24 @@ open Asttools;
 open Pcaml;
 open Mlsyntax.Revised;
 
-Pcaml.syntax_name.val := "Revised";
-Pcaml.no_constructors_arity.val := False;
+value with_value r newv f arg = do {
+    let oldv = r.val in
+    r.val := newv ;
+    let rv = f arg in
+    r.val := oldv ;
+    rv
+  }
+;
 
-value lexer = Plexer.gmake () ;
-value gram = Grammar.gcreate lexer ;
-do {
-  let odfa = Plexer.dollar_for_antiquotation.val in
-  let osrs = Plexer.simplest_raw_strings.val in
-  Plexer.dollar_for_antiquotation.val := False;
-  Plexer.simplest_raw_strings.val := False;
-  Plexer.utf8_lexing.val := True;
-  Grammar.Unsafe.gram_reinit gram (Plexer.gmake ());
-  Plexer.dollar_for_antiquotation.val := odfa;
-  Plexer.simplest_raw_strings.val := osrs ;
-};
+value gram =
+ with_value Plexer.dollar_for_antiquotation False
+   (with_value Plexer.simplest_raw_strings False
+      (with_value Plexer.utf8_lexing True
+         (fun () -> Grammar.gcreate (Plexer.gmake()))
+      )
+   )
+   ()
+;
 
 value mksequence2 loc =
   fun

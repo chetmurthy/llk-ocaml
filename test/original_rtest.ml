@@ -6,18 +6,24 @@ open Asttools;
 open Pcaml;
 open Mlsyntax.Original;
 
-value lexer = Plexer.gmake () ;
-value gram = Grammar.gcreate lexer ;
-do {
-  let odfa = Plexer.dollar_for_antiquotation.val in
-  let osrs = Plexer.simplest_raw_strings.val in
-  Plexer.dollar_for_antiquotation.val := False;
-  Plexer.simplest_raw_strings.val := True;
-  Plexer.utf8_lexing.val := True;
-  Grammar.Unsafe.gram_reinit gram (Plexer.gmake ());
-  Plexer.dollar_for_antiquotation.val := odfa;
-  Plexer.simplest_raw_strings.val := osrs ;
-};
+value with_value r newv f arg = do {
+    let oldv = r.val in
+    r.val := newv ;
+    let rv = f arg in
+    r.val := oldv ;
+    rv
+  }
+;
+
+value gram =
+ with_value Plexer.dollar_for_antiquotation False
+   (with_value Plexer.simplest_raw_strings True
+      (with_value Plexer.utf8_lexing True
+         (fun () -> Grammar.gcreate (Plexer.gmake()))
+      )
+   )
+   ()
+;
 
 value error loc msg = Ploc.raise loc (Failure msg);
 
