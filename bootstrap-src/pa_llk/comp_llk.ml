@@ -1965,9 +1965,12 @@ and compile1_psymbol cg loc ename ps =
         let s_body = compile1_symbol cg loc ename s in
         (SpNtr loc patt <:expr< parse_opt $s_body$ >>, SpoNoth)
        }
-    | ASkeyw  loc kws ->
+    | ASkeyw  loc kws when ps.ap_patt = None ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
        ((SpTrm loc <:patt< ("", $str:kws$) >> <:vala<  None >>), SpoNoth)
+    | ASkeyw  loc kws when ps.ap_patt <> None ->
+       (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
+       ((SpTrm loc <:patt< ("", ($str:kws$ as $patt$)) >> <:vala<  None >>), SpoNoth)
 
     | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
        let e = Expr.applist <:expr< $lid:nt$ >> actuals in
