@@ -226,6 +226,30 @@ END;
 |foo}
 ] ;;
 
+type ('a, 'b) choice =
+   Left of 'a
+  | Right of 'b
+;;
+
+[@@@llk
+{foo|
+GRAMMAR Seq:
+EXPORT: e;
+
+  e:
+    [
+      [ "let" ; s = STRING ; "in" ; l = SELF -> (Right s) :: l
+      | n = INT ; ";" ; l = SELF -> (Left n) :: l
+      | n = INT ; ";" -> [ Left n ]
+      | n = INT -> [ Left n ]
+      ]
+    ]
+  ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -321,6 +345,13 @@ let tests = "simple" >::: [
     ; "LocTest" >:: (fun _ ->
       let loc = Ploc.make_loc "" 1 0 (0, 4) "" in
         assert_equal ~cmp:(fun (_,a1,b1) (_,a2,b2) -> a1=a2 && b1=b2) (loc, "U","V") (pa LocTest.top {|U, V|})
+    )
+    ; "Seq" >:: (fun _ ->
+        assert_equal [Left "0"] (pa Seq.e {|0|})
+      ; assert_equal [Left "0"] (pa Seq.e {|0 ;|})
+      ; assert_equal [Left "0"; Left "1"] (pa Seq.e {|0 ; 1 ;|})
+      ; assert_equal [Right "foo" ; Left "0"; Left "1"] (pa Seq.e {|let "foo" in 0 ; 1 ;|})
+      ; assert_equal [Left "2" ; Right "foo" ; Left "0"; Left "1"] (pa Seq.e {|2 ; let "foo" in 0 ; 1 ;|})
     )
 ]
 

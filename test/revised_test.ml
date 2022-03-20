@@ -130,7 +130,9 @@ REGEXPS:
   check_operator_rparen =
       check_operator ")"
   ;
-
+  check_hash_v_lident = "#" (LIDENT | $lid | $_lid) ;
+  check_hash_lident = "#" LIDENT ;
+  check_question_lbrace = "?" "{" ;
 END;
 
   infix_operator0: [ [
@@ -366,8 +368,6 @@ END;
       | "value"; ext = ext_opt; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and") ->
           str_item_to_inline loc <:str_item< value $_flag:r$ $_list:l$ >> ext
 
-      | "#"; n = V LIDENT "lid" ""; dp = V (OPT expr) →
-          <:str_item< # $_lid:n$ $_opt:dp$ >>
       | "#"; s = V STRING; sil = V (LIST0 [ si = str_item → (si, loc) ]) →
           <:str_item< # $_str:s$ $_list:sil$ >>
       | e = expr ; attrs = item_attributes → <:str_item< $exp:e$ $_itemattrs:attrs$ >>
@@ -394,8 +394,10 @@ END;
         mt = SELF →
           <:module_type< functor $_fp:arg$ → $mt$ >>
       ]
-    | "->" RIGHTA [ mt1=SELF ; "->" ; mt2=SELF ->
+    | "->" NONA
+       [ mt1=NEXT ; "->" ; mt2=SELF ->
          <:module_type< $mt1$ → $mt2$ >>
+       | mt1=NEXT ; check_eps -> mt1
        ]
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
@@ -728,7 +730,7 @@ END;
       | → None ] ]
   ;
   sequence:
-    [ RIGHTA
+    [
       [ "let"; rf = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and");
         "in"; el = SELF →
           [<:expr< let $_flag:rf$ $_list:l$ in $mksequence loc el$ >>]
@@ -737,9 +739,11 @@ END;
           [expr_to_inline <:expr< let module $_uidopt:m$ = $mb$ in $mksequence loc el$ >> ext attrs]
       | "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; el = SELF →
           [expr_to_inline <:expr< let open $_!:ovf$ $m$ in $mksequence loc el$ >> ext attrs]
-      | e = expr; ";"; el = SELF → [e :: el] ]
-    | [ e = expr; ";" → [e]
-      | e = expr → [e] ] ]
+      | check_eps ; e = expr; ";"; el = SELF → [e :: el]
+      | check_eps ; e = expr; ";" → [e]
+      | check_eps ; e = expr → [e]
+      ]
+    ]
   ;
   let_binding:
     [ [ p = ipatt; check_colon ; e = fun_binding ; attrs = item_attributes →
@@ -748,7 +752,7 @@ END;
           | _ -> (p,e)
           ] in
           (p, e, attrs)
-      | p = ipatt ; e = fun_binding ; attrs = item_attributes →
+      | p = ipatt ; check_eps ; e = fun_binding ; attrs = item_attributes →
           (p, e, attrs)
       ] ]
   ;
@@ -851,7 +855,6 @@ END;
       | p = patt; "as"; p2 = patt → <:patt< ($p$ as $p2$) >>
       | p = patt; ","; pl = LIST1 patt SEP "," → mktuppat loc p pl
       | p = patt → <:patt< $p$ >>
-      | pl = V (LIST1 patt SEP ",") → <:patt< ($_list:pl$) >>
       | "type"; s = V LIDENT → <:patt< (type $_lid:s$) >>
       | "module"; s = V uidopt "uidopt"; ":"; mt = module_type →
           <:patt< (module $_uidopt:s$ : $mt$) >>
@@ -896,7 +899,6 @@ END;
       | p = ipatt; "as"; p2 = ipatt → <:patt< ($p$ as $p2$) >>
       | p = ipatt; ","; pl = LIST1 ipatt SEP "," → mktuppat loc p pl
       | p = ipatt → <:patt< $p$ >>
-      | pl = V (LIST1 ipatt SEP ",") → <:patt< ( $_list:pl$) >>
       | "type"; s = V LIDENT → <:patt< (type $_lid:s$) >>
       | "module"; s  = V uidopt "uidopt"; ":"; mt = module_type →
           <:patt< (module $_uidopt:s$ : $mt$) >>
@@ -1330,7 +1332,7 @@ END;
       | "#"; lili = V extended_longident_lident "lilongid" → <:patt< # $_lilongid:lili$ >>
       | "~"; "{"; lppo = V (LIST1 patt_tcon_opt_eq_patt SEP ";"); "}" →
           <:patt< ~{$_list:lppo$} >>
-      | "?"; "{"; p = patt_tcon; eo = V (OPT [ "="; e = expr → e ]); "}" →
+      | check_question_lbrace ; "?"; "{"; p = patt_tcon; eo = V (OPT [ "="; e = expr → e ]); "}" →
           <:patt< ?{$p$ $_opt:eo$ } >>
       | i = V TILDEIDENTCOLON; p = SELF →
           let _ = warning_deprecated_since_6_00 loc in
@@ -1352,7 +1354,7 @@ END;
   ipatt: AFTER "simple"
     [ [ "~"; "{"; lppo = V (LIST1 ipatt_tcon_opt_eq_patt SEP ";"); "}" →
           <:patt< ~{$_list:lppo$} >>
-      | "?"; "{"; p = ipatt_tcon; eo = V (OPT [ "="; e = expr → e ]); "}" →
+      | check_question_lbrace ; "?"; "{"; p = ipatt_tcon; eo = V (OPT [ "="; e = expr → e ]); "}" →
           <:patt< ?{$p$ $_opt:eo$ } >>
 
       | i = V TILDEIDENTCOLON; p = SELF →
@@ -1371,7 +1373,7 @@ END;
     [ [ p = ipatt_tcon; po = V (OPT [ "="; p' = patt → p' ]) → (p, po) ] ]
   ;
   ipatt_tcon:
-    [ [ p = ipatt → p
+    [ [ p = ipatt ; check_eps → p
       | p = ipatt; ":"; t = ctyp → <:patt< ($p$ : $t$) >> ] ]
   ;
   patt_option_label:
@@ -1435,7 +1437,7 @@ END;
     [ [ si = sig_item; ";" → (si, loc) ] ]
   ;
   implem:
-    [ [ "#"; n = V LIDENT; dp = OPT expr; ";" →
+    [ [ check_hash_v_lident ; "#"; n = V LIDENT; dp = OPT expr; ";" →
           ([(<:str_item< # $_lid:n$ $opt:dp$ >>, loc)], None)
       | si = str_item_semi; (sil, stopped) = SELF →
           ([si :: sil], stopped)
@@ -1450,13 +1452,13 @@ END;
       | EOI → None ] ]
   ;
   use_file:
-    [ [ "#"; n = LIDENT; dp = OPT expr; ";" →
+    [ [ check_hash_lident ; "#"; n = LIDENT; dp = OPT expr; ";" →
           ([<:str_item< # $lid:n$ $opt:dp$ >>], True)
       | si = str_item; ";"; (sil, stopped) = SELF → ([si :: sil], stopped)
       | EOI → ([], False) ] ]
   ;
   phrase:
-    [ [ "#"; n = LIDENT; dp = OPT expr; ";" →
+    [ [ check_hash_lident ; "#"; n = LIDENT; dp = OPT expr; ";" →
           <:str_item< # $lid:n$ $opt:dp$ >>
       | sti = str_item; ";" → sti ] ]
   ;

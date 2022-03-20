@@ -962,7 +962,14 @@ value substitute_self e =
 value exec0 e =
   match e.ae_levels with [
       [] -> ([], [{ (e) with ae_pos = None }])
-    | [l] -> ([], [substitute_self { (e) with ae_pos = None ; ae_levels = [{ (l) with al_label = None }]}])
+    | [l] ->
+       (match l.al_assoc with [
+            Some a ->
+            raise_failwithf l.al_loc "S2Precedence(%s): associativity marking on single-level entry: %s"
+              e.ae_name (Pr.assoc Pprintf.empty_pc a)
+          | None ->
+             ([], [substitute_self { (e) with ae_pos = None ; ae_levels = [{ (l) with al_label = None }]}])
+       ])
     | _ -> exec1 e
     ]
 ;
