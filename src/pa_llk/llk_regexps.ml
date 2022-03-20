@@ -39,10 +39,9 @@ module Compile(R : sig value rex : PatternRegexp.regexp ;
                |> List.sort_uniq compare ;
   module PatternToken = struct
     include PatternBaseToken ;
-    value foreach f = do {
-      List.iter f toks ;
-      f (CLS "EOI" None)
-    }
+    value foreach f =
+      let toks = List.sort_uniq compare [ (CLS "EOI" None) :: toks ] in
+      List.iter f toks
     ;
   end ;
   module BEval = Eval(PatternToken)(PatternRegexp) ;

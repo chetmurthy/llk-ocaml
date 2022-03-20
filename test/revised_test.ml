@@ -1,6 +1,162 @@
+
+open Asttools;
+open Pcaml;
+open Mlsyntax.Revised;
+
+Pcaml.syntax_name.val := "Revised";
+Pcaml.no_constructors_arity.val := False;
+
+value lexer = Plexer.gmake () ;
+value gram = Grammar.gcreate lexer ;
+do {
+  let odfa = Plexer.dollar_for_antiquotation.val in
+  let osrs = Plexer.simplest_raw_strings.val in
+  Plexer.dollar_for_antiquotation.val := False;
+  Plexer.simplest_raw_strings.val := False;
+  Plexer.utf8_lexing.val := True;
+  Grammar.Unsafe.gram_reinit gram (Plexer.gmake ());
+  Plexer.dollar_for_antiquotation.val := odfa;
+  Plexer.simplest_raw_strings.val := osrs ;
+};
+
+value mksequence2 loc =
+  fun
+  [ <:vala< [e] >> → e
+  | seq → <:expr< do { $_list:seq$ } >> ]
+;
+
+value mksequence loc =
+  fun
+  [ [e] → e
+  | el → <:expr< do { $list:el$ } >> ]
+;
+
+value mkmatchcase loc p aso w e =
+  let p =
+    match aso with
+    [ Some p2 → <:patt< ($p$ as $p2$) >>
+    | None → p ]
+  in
+  (p, w, e)
+;
+
+value neg_string n =
+  let len = String.length n in
+  if len > 0 && n.[0] = '-' then String.sub n 1 (len - 1) else "-" ^ n
+;
+
+value mklistexp loc last =
+  loop True where rec loop top =
+    fun
+    [ [] →
+        match last with
+        [ Some e → e
+        | None → <:expr< [] >> ]
+    | [e1 :: el] →
+        let loc = if top then loc else Ploc.encl (MLast.loc_of_expr e1) loc in
+        <:expr< [$e1$ :: $loop False el$] >> ]
+;
+
+value mklistpat loc last =
+  loop True where rec loop top =
+    fun
+    [ [] →
+        match last with
+        [ Some p → p
+        | None → <:patt< $uid:"[]"$ >> ]
+    | [p1 :: pl] →
+        let loc = if top then loc else Ploc.encl (MLast.loc_of_patt p1) loc in
+        <:patt< [$p1$ :: $loop False pl$] >> ]
+;
+
+value mktupexp loc e el = <:expr< ($list:[e::el]$) >>;
+value mktuppat loc p pl = <:patt< ($list:[p::pl]$) >>;
+value mktuptyp loc t tl = <:ctyp< ( $list:[t::tl]$ ) >>;
+
+value mklabdecl loc i mf t attrs = (loc, i, mf, t, attrs);
+value mkident i : string = i;
+
+value rec generalized_type_of_type =
+  fun
+  [ <:ctyp< $t1$ → $t2$ >> →
+      let (tl, rt) = generalized_type_of_type t2 in
+      ([t1 :: tl], rt)
+  | t → ([], t) ]
+;
+
+value warned = ref False;
+value warning_deprecated_since_6_00 loc =
+  if not warned.val then do {
+    Pcaml.warning.val loc "syntax deprecated since version 6.00";
+    warned.val := True
+  }
+  else ()
+;
+
+value build_op_attributed loc op attrs =
+  List.fold_left (fun e a -> <:expr< $e$ [@ $attribute:a$ ] >>)
+          <:expr< $lid:op$ >> attrs  
+;
+
+value build_letop_binder loc letop b l e =
+  let (argpat, argexp) = (* TODO FIX THIS CHET *)
+    List.fold_left (fun (argpat, argexp) (andop, (pat, exp)) ->
+        (<:patt< ( $argpat$, $pat$ ) >>, <:expr< $lid:andop$ $argexp$ $exp$ >>))
+      b l in
+  <:expr< $lid:letop$ $argexp$ (fun $argpat$ -> $e$) >>
+;
+
+value stream_peek_nth n strm =
+  loop n (Stream.npeek n strm) where rec loop n =
+    fun
+    [ [] -> None
+    | [x] -> if n == 1 then Some x else None
+    | [_ :: l] -> loop (n - 1) l ]
+;
+
+value patt_wrap_attrs loc e l =
+let rec wrec e = fun [
+  [] -> e
+| [h :: t] -> wrec <:patt< $e$ [@ $_attribute:h$ ] >> t
+] in wrec e l
+;
+
+value patt_to_inline loc p ext attrs =
+  let p = patt_wrap_attrs loc p attrs in
+  match ext with [ None -> p
+  | Some attrid ->
+   <:patt< [% $attrid:attrid$ ? $patt:p$ ] >>
+  ]
+;
+
+value class_expr_wrap_attrs loc e l =
+let rec wrec e = fun [
+  [] -> e
+| [h :: t] -> wrec <:class_expr< $e$ [@ $_attribute:h$ ] >> t
+] in wrec e l
+;
+
+value str_item_to_inline loc si ext =
+  match ext with [ None -> si
+  | Some attrid ->
+   <:str_item< [%% $attrid:attrid$ $stri:si$ ; ] >>
+  ]
+;
+
+
+value quotation_content s =
+  loop 0 where rec loop i =
+    if i = String.length s then ("", s)
+    else if s.[i] = ':' || s.[i] = '@' then
+      let i = i + 1 in
+      (String.sub s 0 i, String.sub s i (String.length s - i))
+    else loop (i + 1)
+;
+
 [@@@llk
 {foo|
 GRAMMAR Revised:
+EXTEND gram ;
   EXPORT: sig_item str_item ctyp patt expr functor_parameter module_type
     module_expr longident longident_lident extended_longident signature
     structure class_type class_expr class_expr_simple class_sig_item class_str_item let_binding

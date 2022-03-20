@@ -226,6 +226,17 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Bug2:
+EXPORT: e;
+
+  e: [ [ x = "A" -> x ] ] ;
+END;
+
+|foo}
+] ;;
+
 type ('a, 'b) choice =
    Left of 'a
   | Right of 'b
