@@ -12,8 +12,8 @@ INCLUDES=
 DEBUG:=$(DEBUG) -g
 OCAMLCFLAGS=$(WARNERR) $(INCLUDES)
 PACKAGES=bos,fmt,unix,compiler-libs.common,camlp5,camlp5.extfun,camlp5.extend,camlp5.pprintf
-PACKAGES := $(PACKAGES),camlp5.parser_quotations
-#PACKAGES := $(PACKAGES),camlp5.quotations
+#PACKAGES := $(PACKAGES),camlp5.parser_quotations
+PACKAGES := $(PACKAGES),camlp5.quotations
 SYNTAX = camlp5r
 
 export PERL5LIB := $(TOP):$(PERL5LIB)
