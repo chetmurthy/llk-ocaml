@@ -200,7 +200,119 @@ EXTEND gram ;
     operator_rparen
     ext_attributes
     interf implem use_file top_phrase expr patt;
+REGEXPS:
+  check_and_in = "and" | "in" ;
+  check_colon = ":" ;
+  check_eps = eps ;
+  check_phony_list = $list | $_list ;
+  check_new_type_extended = "(" "type" LIDENT+ ")" ;
 
+  check_infix_operator0 = 
+      INFIXOP0 
+    | "!=" 
+    | "<>" 
+    | "=" 
+    | "<" 
+    | ">" 
+    | "||" 
+    | "or" 
+    | "&" 
+    | "&&" 
+    | "$"
+    ;
+  check_infix_operator1 =
+      INFIXOP1 
+    | "@" 
+    | "^" 
+    ;
+  check_additive_operator2 =
+      "+" 
+    | "+=" 
+    | "-" 
+    | "+." 
+    | "-." 
+    ;
+  check_infix_operator2 =
+      INFIXOP2 
+    | check_additive_operator2
+    ;
+  check_infix_operator3 =
+      INFIXOP3
+    | "lor" 
+    | "lxor" 
+    | "mod" 
+    | "land" 
+    | "*" 
+    | "/" 
+    | "%" 
+    ;
+  check_infix_operator4 =
+      INFIXOP4 
+    | "asr" 
+    | "lsl" 
+    | "lsr" 
+    | "**" 
+    ;
+  check_prefix_operator =
+      PREFIXOP 
+    | "!" 
+    ;
+  check_infix_operator =
+      check_infix_operator0 
+    | check_infix_operator1 
+    | check_infix_operator2 
+    | check_infix_operator3 
+    | check_infix_operator4 
+    | ":=" 
+    ;
+  check_operator =
+      check_prefix_operator 
+    | check_infix_operator 
+    | HASHOP 
+    | LETOP 
+    | ANDOP 
+    | "::" 
+    | DOTOP "(" ")" 
+    | DOTOP "(" ")" "<-" 
+    | DOTOP "(" ";" ".." ")" 
+    | DOTOP "(" ";" ".." ")" "<-" 
+
+    | DOTOP "{" "}" 
+    | DOTOP "{" "}" "<-" 
+    | DOTOP "{" ";" ".." "}" 
+    | DOTOP "{" ";" ".." "}" "<-" 
+
+    | DOTOP "[" "]" 
+    | DOTOP "[" "]" "<-" 
+    | DOTOP "[" ";" ".." "]" 
+    | DOTOP "[" ";" ".." "]" "<-" 
+    ;
+  check_operator_rparen =
+      check_operator ")"
+  ;
+  check_lbracket = "[" ;
+  check_lbrace = "{" ;
+  check_lbracketbar = "[|" ;
+  check_lparen_rparen = "(" ")" ;
+  check_lparen_type = "(" "type" ;
+  check_v_uident_coloneq = ($uid | $_uid | UIDENT) ":=" ;
+  check_v_uident_eq = ($uid | $_uid | UIDENT) "=" ;
+  check_type_decl =
+         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
+         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
+         let type_parameters = ($list | $_list | type_parameter* ) in
+         ($flag | $_flag |
+          ("rec"|"nonrec") |
+          ($list | $_list) |
+          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":="))
+  ;
+  check_type_extension =
+         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
+         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-")* (tyvar | "_") in
+         let type_parameters = ($list | $_list | type_parameter* ) in
+         UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=")
+  ;
+END;
 external e_phony : PREDICTION eps ;
 external p_phony : PREDICTION eps ;
 
@@ -392,7 +504,7 @@ external p_phony : PREDICTION eps ;
           module_expr_wrap_attrs <:module_expr< struct $_list:st$ end >> alg_attrs ]
     | [ me1 = SELF; "."; me2 = SELF -> <:module_expr< $me1$ . $me2$ >> ]
     | [ me1 = SELF; me2 = paren_module_expr -> <:module_expr< $me1$ $me2$ >>
-      | me1 = SELF; "("; ")" -> <:module_expr< $me1$ (struct end) >>
+      | me1 = SELF; check_lparen_rparen ; "("; ")" -> <:module_expr< $me1$ (struct end) >>
       ]
     | [ i = mod_expr_ident -> i
       | me = paren_module_expr -> me
@@ -471,7 +583,7 @@ external p_phony : PREDICTION eps ;
       | "open"; (ext,alg_attrs) = ext_attributes; ovf = V (FLAG "!") "!"; me = module_expr ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-open"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           str_item_to_inline <:str_item< open $_!:ovf$ $me$ $_itemattrs:attrs$ >> ext
-      | "type"; (ext,attrs) = ext_attributes; nr = FLAG "nonrec";
+      | "type"; (ext,attrs) = ext_attributes; check_type_decl ; nr = FLAG "nonrec";
         htd = first_type_decl ; ttd = LIST0 rest_type_decl ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} attrs htd.MLast.tdAttributes in
           let htd = {(htd) with MLast.tdAttributes = attrs } in
@@ -482,7 +594,7 @@ external p_phony : PREDICTION eps ;
             else failwith "type-declaration cannot mix decl and subst" ;
             str_item_to_inline <:str_item< type $flag:nr$ $list:tdl$ >> ext
           }
-      | "type"; (ext,attrs) = ext_attributes; te = type_extension →
+      | "type"; (ext,attrs) = ext_attributes; check_type_extension ; te = type_extension →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-type_extension"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} attrs te.MLast.teAttributes in
           let te = { (te) with MLast.teAttributes = attrs } in
           str_item_to_inline <:str_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >> ext
@@ -544,7 +656,7 @@ external p_phony : PREDICTION eps ;
       ] ]
   ;
   mod_fun_binding:
-    [ RIGHTA
+    [
       [ arg = V functor_parameter "functor_parameter" "fp"; mb = SELF ->
           <:module_expr< functor $_fp:arg$ -> $mb$ >>
       | ":"; mt = module_type; "="; me = module_expr ->
@@ -601,7 +713,7 @@ external p_phony : PREDICTION eps ;
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-include"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< include $mt$ $_itemattrs:attrs$ >> ext
 
-      | "module"; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
+      | "module"; check_v_uident_coloneq ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
         <:sig_item< module $_uid:i$ := $longid:li$ $_itemattrs:attrs$ >>
 
       | "module"; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
@@ -611,7 +723,7 @@ external p_phony : PREDICTION eps ;
           let h = (i, mt, item_attrs) in
           sig_item_to_inline <:sig_item< module $flag:rf$ $list:[h::t]$ >> ext
 
-      | "module"; (ext,alg_attrs) = ext_attributes; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
+      | "module"; (ext,alg_attrs) = ext_attributes; check_v_uident_eq ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
 (*
 MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
@@ -632,12 +744,12 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           sig_item_to_inline <:sig_item< open $longid:i$ $_itemattrs:attrs$ >> ext
 
 
-      | "type"; (ext,attrs) = ext_attributes; nr = V (FLAG "nonrec");
+      | "type"; (ext,attrs) = ext_attributes; check_type_decl ; nr = V (FLAG "nonrec");
         htd = first_type_decl ; ttd = LIST0 rest_type_decl ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} attrs htd.MLast.tdAttributes in
           let htd = {(htd) with MLast.tdAttributes = attrs } in
           sig_item_to_inline <:sig_item< type $_flag:nr$ $list:[htd::ttd]$ >> ext
-      | "type"; (ext,attrs) = ext_attributes; te = type_extension →
+      | "type"; (ext,attrs) = ext_attributes; check_type_extension ; te = type_extension →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-type_extension"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} attrs te.MLast.teAttributes in
           let te = { (te) with MLast.teAttributes = attrs } in
           sig_item_to_inline <:sig_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >> ext
@@ -664,7 +776,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           (Ploc.VaVal i, mt, attrs) ] ]
   ;
   module_declaration:
-    [ RIGHTA
+    [
       [ ":"; mt = module_type -> <:module_type< $mt$ >>
       | arg = V functor_parameter "functor_parameter" "fp"; mt = SELF ->
           <:module_type< functor $_fp:arg$ -> $mt$ >>
@@ -694,11 +806,11 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   (* Core expressions *)
   expr:
-    [ "top" RIGHTA
-      [ e1 = SELF; ";"; e2 = SELF ->
+    [ "top" NONA
+      [ e1 = NEXT; ";"; e2 = SELF ->
           <:expr< do { $list:[e1 :: get_seq e2]$ } >>
-      | e1 = SELF; ";" -> e1
-      | el = V e_phony "list" -> <:expr< do { $_list:el$ } >> ]
+      | e1 = NEXT; ";" -> e1
+      | check_phony_list ; el = V e_phony "list" -> <:expr< do { $_list:el$ } >> ]
     | "expr1"
       [ "let" ; "exception" ; id = V UIDENT "uid" ;
         "of" ; tyl = V (LIST1 ctyp LEVEL "apply") ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
@@ -729,7 +841,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           expr_to_inline <:expr< fun [ $_list:l$ ] >> ext attrs
 
       | "fun"; (ext,attrs) = ext_attributes;
-        "("; "type"; l = LIST1 LIDENT ; ")" ; (eo, e) = fun_def ->
+        check_new_type_extended ; "("; "type"; l = LIST1 LIDENT ; ")" ; (eo, e) = fun_def ->
           if eo <> None then failwith "new-type cannot have when-clause"
           else
             let e = List.fold_right (fun id e ->
@@ -753,7 +865,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1"; "else";
         e3 = expr LEVEL "expr1" ->
           expr_to_inline <:expr< if $e1$ then $e2$ else $e3$ >> ext attrs
-      | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1" ->
+      | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1" ; check_eps ->
           expr_to_inline <:expr< if $e1$ then $e2$ else () >> ext attrs
       | "for"; (ext,attrs) = ext_attributes; i = patt; "="; e1 = SELF; df = V direction_flag "to";
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
@@ -853,14 +965,16 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
               [ <:expr< ( $list:el$ ) >> ->
                   List.fold_left (fun e1 e2 -> <:expr< $e1$ $e2$ >>) e1 el
               | _ -> <:expr< $e1$ $e2$ >> ] ]
-      | "assert"; (ext,attrs) = ext_attributes; e = SELF ->
+      ]
+    | RIGHTA
+      [ "assert"; (ext,attrs) = ext_attributes; e = SELF ->
           expr_to_inline <:expr< assert $e$ >> ext attrs
       | "lazy"; (ext,attrs) = ext_attributes; e = SELF -> 
           expr_to_inline <:expr< lazy ($e$) >> ext attrs ]
     | "." LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
-      | e1 = SELF; "."; "("; op = operator_rparen ->
+      | e1 = SELF; "."; "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             Ploc.raise loc (Failure ".(::) (dot paren colon colon paren) cannot appear except after longident")
           else
@@ -892,7 +1006,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "~-"; e = SELF -> <:expr< ~- $e$ >>
       | "~-."; e = SELF -> <:expr< ~-. $e$ >>
       | f = PREFIXOP; e = SELF -> <:expr< $lid:f$ $e$ >> ]
-    | "simple" LEFTA
+    | "simple" NONA
       [ s = V INT -> <:expr< $_int:s$ >>
       | s = V INT_l -> <:expr< $_int32:s$ >>
       | s = V INT_L -> <:expr< $_int64:s$ >>
@@ -927,7 +1041,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:expr< $uid:op$ >>
         else
           <:expr< $lid:op$ >>
-      | "("; el = V e_phony "list"; ")" -> <:expr< ($_list:el$) >>
+      | "("; check_phony_list ; el = V e_phony "list"; ")" -> <:expr< ($_list:el$) >>
       | "("; e = SELF; ":"; t = ctyp; ")" -> <:expr< ($e$ : $t$) >>
       | "("; e = SELF; ")" -> concat_comm loc <:expr< $e$ >>
       | "begin"; (ext,attrs) = ext_attributes; e = SELF; "end" -> 
@@ -940,13 +1054,14 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   let_binding:
     [ [ alg_attrs = alg_attributes_no_anti ;
-        p = val_ident ->
+        p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
+
       | alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; e = fun_binding ;
+        p = val_ident; check_colon ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -954,11 +1069,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         | _ -> (p,e)
         ] in
         (p, e, attrs)
+
       | alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; e = fun_binding ;
+        p = val_ident; check_eps ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
+
       | alg_attrs = alg_attributes_no_anti ;
         p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
@@ -972,19 +1089,19 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ] ]
   ;
   first_let_binding:
-    [ [ p = val_ident ->
+    [ [ p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< [] >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
-      | p = val_ident; e = fun_binding ;
+      | p = val_ident; check_colon; e = fun_binding ;
         item_attrs = item_attributes ->
         let (p,e) = match e with [
           <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
         | _ -> (p,e)
         ] in
         (p, e, item_attrs)
-      | p = val_ident; e = fun_binding ;
+      | p = val_ident; check_eps; e = fun_binding ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
       | p = patt; "="; e = expr ;
@@ -997,13 +1114,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   and_let_binding:
     [ [ "and"; alg_attrs = alg_attributes_no_anti ;
-        p = val_ident ->
+        p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; e = fun_binding ;
+        p = val_ident; check_colon ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1012,7 +1129,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         ] in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; e = fun_binding ;
+        p = val_ident; check_eps ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
@@ -1050,17 +1167,17 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ] ]
   ;
   fun_binding:
-    [ RIGHTA
+    [ "top"
       [ 
-        "("; "type"; l = LIST1 LIDENT ; ")" ; e = SELF ->
+        check_new_type_extended ; "("; "type"; l = LIST1 LIDENT ; ")" ; e = SELF ->
         List.fold_right (fun id e ->
             <:expr< fun [(type $lid:id$) -> $e$] >>)
           l e
       | p = patt LEVEL "simple"; e = SELF -> <:expr< fun $p$ -> $e$ >>
       | "="; e = expr -> <:expr< $e$ >>
-      | ":"; t = poly_type; "="; e = expr -> <:expr< ($e$ : $t$) >>
-      | ":"; t = poly_type; ":>"; t2 = poly_type ; "="; e = expr -> <:expr< ( ( $e$ : $t$ ) :> $t2$ ) >>
-      | ":>"; t = poly_type; "="; e = expr -> <:expr< ($e$ :> $t$) >>
+      | ":"; t = poly_type; "="; e = SELF -> <:expr< ($e$ : $t$) >>
+      | ":"; t = poly_type; ":>"; t2 = poly_type ; "="; e = SELF -> <:expr< ( ( $e$ : $t$ ) :> $t2$ ) >>
+      | ":>"; t = poly_type; "="; e = SELF -> <:expr< ($e$ :> $t$) >>
       ] ]
   ;
 (* NOTE WELL: if I expand expr_or_dot into match_case and make it two rules,
@@ -1099,7 +1216,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     [ [ el = LIST1 (expr LEVEL "expr1") SEP ";" OPT_SEP -> el ] ]
   ;
   fun_def:
-    [ RIGHTA
+    [ "top"
       [ p = patt LEVEL "simple"; (eo, e) = SELF ->
           (None, <:expr< fun [ $p$ $opt:eo$ -> $e$ ] >>)
       | eo = OPT [ "when"; e = expr -> e ]; tyo = OPT [ ":" ; ty = ctyp LEVEL "apply" -> ty ]; "->"; e = expr ->
@@ -1121,9 +1238,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | li = longident ; "." ; "(" ; e = expr ; ")" -> <:expr< $longid:li$ . ( $e$ ) >>
       | li = longident ; "." ; id = V LIDENT "lid" ->
         <:expr< $longid:li$ . $_lid:id$ >>
-      | li = longident ; "." ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; "." ; check_lbracket ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; "." ; check_lbrace ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; "." ; check_lbracketbar ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
       ]
     ]
   ;
@@ -1139,7 +1256,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         <:patt< $longid:li$ >>
       | _ -> <:patt< $longid:li$ . $p$ >>
       ]
-    | li = longident ; "("; "type";
+    | li = longident ; check_lparen_type ; "("; "type";
       loc_ids = V (LIST1 [ s = LIDENT -> (loc,s) ]) ; ")" → 
       <:patt< $longid:li$ (type $_list:loc_ids$ ) >>
     | li = longident → <:patt< $longid:li$ >>
@@ -1190,11 +1307,11 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
               match p2 with
               [ <:patt< ( $list:pl$ ) >> ->
                   List.fold_left (fun p1 p2 -> <:patt< $p1$ $p2$ >>) p1 pl
-              | _ -> <:patt< $p1$ $p2$ >> ] ]
-      | "lazy"; (ext,attrs) = ext_attributes; p = SELF -> 
-          patt_to_inline <:patt< lazy $p$ >> ext attrs ]
+              | _ -> <:patt< $p1$ $p2$ >> ] ] ]
     | "simple"
-      [ p = patt_ident -> p
+      [ "lazy"; (ext,attrs) = ext_attributes; p = SELF -> 
+          patt_to_inline <:patt< lazy $p$ >> ext attrs
+      | p = patt_ident -> p
       | s = V INT -> <:patt< $_int:s$ >>
       | s = V INT_l -> <:patt< $_int32:s$ >>
       | s = V INT_L -> <:patt< $_int64:s$ >>
@@ -1222,12 +1339,12 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "{"; lpl = V lbl_patt_list "list"; "}" ->
           <:patt< { $_list:lpl$ } >>
       | "("; ")" -> <:patt< $uid:"()"$ >>
-      | "("; op = operator_rparen -> 
+      | "("; check_operator_rparen ; op = operator_rparen -> 
           if op = "::" then
             <:patt< $uid:op$ >>
           else
             <:patt< $lid:op$ >>
-      | "("; pl = V p_phony "list"; ")" -> <:patt< ($_list:pl$) >>
+      | "("; check_phony_list ; pl = V p_phony "list"; ")" -> <:patt< ($_list:pl$) >>
       | "("; p = SELF; ":"; t = ctyp; ")" -> <:patt< ($p$ : $t$) >>
       | "("; p = SELF; ")" -> <:patt< $p$ >>
       | "("; "type"; s = V LIDENT; ")" -> <:patt< (type $_lid:s$) >>
@@ -1268,47 +1385,47 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "_" -> (<:patt< _ >>, <:patt< _ >>) ] ]
   ;
   patt_label_ident:
-    [ RIGHTA
+    [
       [ li = longident; "."; p2 = SELF -> <:patt< $longid:li$ . $p2$ >>
       | i = LIDENT -> <:patt< $lid:i$ >>
      ] ]
   ;
   (* Type declaration *)
   type_decl:
-    [ [ tpl = type_parameters; n = V type_patt; "="; pf = V (FLAG "private");
+    [ [ tpl = type_parameters; n = V type_patt "tp"; "="; pf = V (FLAG "private");
         tk = type_kind; cl = V (LIST0 constrain) ; attrs = item_attributes ->
           <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
-      | tpl = type_parameters; n = V type_patt; ":="; pf = V (FLAG "private");
+      | tpl = type_parameters; n = V type_patt "tp"; ":="; pf = V (FLAG "private");
         tk = type_kind; cl = V (LIST0 constrain) ; attrs = item_attributes ->
           <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
-      | tpl = type_parameters; n = V type_patt; cl = V (LIST0 constrain) ; attrs = item_attributes ->
+      | tpl = type_parameters; n = V type_patt "tp"; cl = V (LIST0 constrain) ; attrs = item_attributes ->
           let tk = <:ctyp< '$choose_tvar tpl$ >> in
           <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $_list:cl$ $_itemattrs:attrs$ >> ] ]
   ;
   first_type_decl:
-    [ [ tpl = type_parameters; n = V type_patt; "="; pf = V (FLAG "private");
+    [ [ tpl = type_parameters; n = V type_patt "tp"; "="; pf = V (FLAG "private");
         tk = type_kind; cl = V (LIST0 constrain) ; attrs = item_attributes ->
           <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
-      | tpl = type_parameters; n = V type_patt; ":="; pf = V (FLAG "private");
+      | tpl = type_parameters; n = V type_patt "tp"; ":="; pf = V (FLAG "private");
         tk = type_kind; cl = V (LIST0 constrain) ; attrs = item_attributes ->
           <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
-      | tpl = type_parameters; n = V type_patt; cl = V (LIST0 constrain) ; attrs = item_attributes ->
+      | tpl = type_parameters; n = V type_patt "tp"; cl = V (LIST0 constrain) ; attrs = item_attributes ->
           let tk = <:ctyp< '$choose_tvar tpl$ >> in
           <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $_list:cl$ $_itemattrs:attrs$ >> ] ]
   ;
   (* Type declaration *)
   rest_type_decl:
-    [ [ "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt; "="; pf = V (FLAG "private");
+    [ [ "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; "="; pf = V (FLAG "private");
         tk = type_kind; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
 
-      | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt; ":="; pf = V (FLAG "private");
+      | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; ":="; pf = V (FLAG "private");
         tk = type_kind; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
 
-      | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
+      | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
           let tk = <:ctyp< '$choose_tvar tpl$ >> in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $_list:cl$ $_itemattrs:attrs$ >> ] ]
@@ -1354,18 +1471,18 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "("; tpl = LIST1 type_parameter SEP ","; ")" -> tpl ] ]
   ;
   type_parameter:
-    [ [ "+"; p = V simple_type_parameter -> (p, (Some True, False))
-      | "+"; "!" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "-"; p = V simple_type_parameter -> (p, (Some False, False))
-      | "-"; "!" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | "!" ; p = V simple_type_parameter -> (p, (None, True))
-      | "!" ; "+" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "!" ; "-" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | "!+" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "+!" ; p = V simple_type_parameter -> (p, (Some True, True))
-      | "!-" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | "-!" ; p = V simple_type_parameter -> (p, (Some False, True))
-      | p = V simple_type_parameter -> (p, (None, False))
+    [ [ "+"; p = V simple_type_parameter "" -> (p, (Some True, False))
+      | "+"; "!" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "-"; p = V simple_type_parameter "" -> (p, (Some False, False))
+      | "-"; "!" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | "!" ; p = V simple_type_parameter "" -> (p, (None, True))
+      | "!" ; "+" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "!" ; "-" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | "!+" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "+!" ; p = V simple_type_parameter "" -> (p, (Some True, True))
+      | "!-" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | "-!" ; p = V simple_type_parameter "" -> (p, (Some False, True))
+      | p = V simple_type_parameter "" -> (p, (None, False))
       ] ]
   ;
   simple_type_parameter:
@@ -1387,10 +1504,10 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "of"; cdrec = record_type ; alg_attrs = alg_attributes ->
           (<:vala< [] >>, Ploc.VaVal [cdrec], <:vala< None >>, alg_attrs)
 
-      | ":"; ls = V (LIST1 typevar) ; "." ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
-          (ls, cal, <:vala< Some t >>, alg_attrs)
-      | ":" ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
-          (<:vala< [] >>, cal, <:vala< Some t >>, alg_attrs)
+      | ":"; ls = LIST1 typevar ; "." ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
+          (<:vala< ls >>, cal, <:vala< Some t >>, alg_attrs)
+      | ":" ; cal = LIST1 (ctyp LEVEL "apply") SEP "*"; "->"; t = ctyp ; alg_attrs = alg_attributes ->
+          (<:vala< [] >>, <:vala< cal >>, <:vala< Some t >>, alg_attrs)
 
       | ":"; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*") ; alg_attrs = alg_attributes ->
           let t =
@@ -1451,8 +1568,8 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     [ LEFTA
       [ me1 = SELF; "."; i = V UIDENT "uid" →
           let i = vala_map uident_True_True_ i in
-          <:extended_longident< $longid:me1$ . $_uid:i$ >>
-      | i = V UIDENT "uid" →
+          <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
+    | [ i = V UIDENT "uid" →
           let i = vala_map uident_True_True_ i in
           <:extended_longident< $_uid:i$ >>
       ] ]
@@ -1471,7 +1588,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ] ]
   ;
   ctyp_ident:
-    [ LEFTA
+    [
       [ me1 = extended_longident ; "." ; i = V LIDENT "lid" → 
           <:ctyp< $longid:me1$ . $_lid:i$ >>
       | i = V LIDENT "lid" → 
@@ -1495,10 +1612,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:ctyp< ( $list:[t :: tl]$ ) >> ]
     | "apply"
       [ t1 = SELF; t2 = SELF -> <:ctyp< $t2$ $t1$ >> ]
-    | "ctyp2" LEFTA
-      [ t = ctyp_ident → t ]
     | "simple"
-      [ "'"; i = V ident "" -> <:ctyp< '$_:i$ >>
+      [ t = ctyp_ident → t
+      | "'"; i = V ident "" -> <:ctyp< '$_:i$ >>
       | "_" -> <:ctyp< _ >>
       | e = alg_extension -> <:ctyp< [% $_extension:e$ ] >>
       | "("; "module"; (ext,attrs) = ext_attributes; mt = module_type; ")" -> 
@@ -1507,7 +1623,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           ctyp_to_inline ct ext []
 
       | "("; t = SELF; ","; tl = LIST1 ctyp SEP ","; ")";
-        i = ctyp LEVEL "ctyp2" ->
+        i = ctyp LEVEL "simple" ->
           List.fold_left (fun c a -> <:ctyp< $c$ $a$ >>) i [t :: tl]
       | "("; t = SELF; ")" -> <:ctyp< $t$ >> ] ]
   ;
@@ -1522,13 +1638,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "downto" -> False ] ]
   ;
   (* Objects and Classes *)
-  str_item:
+  str_item: AFTER "top"
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_declaration SEP "and") ->
           str_item_to_inline <:str_item< class $_list:cd$ >> ext
       | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
           str_item_to_inline <:str_item< class type $_list:ctd$ >> ext ] ]
   ;
-  sig_item:
+  sig_item: AFTER "top"
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_description SEP "and") ->
           sig_item_to_inline <:sig_item< class $_list:cd$ >> ext
       | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
@@ -1554,7 +1670,8 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "["; tpl = V (LIST1 type_parameter SEP ","); "]" -> (loc, tpl) ] ]
   ;
   class_fun_def:
-    [ [ p = patt LEVEL "simple"; "->"; ce = class_expr ->
+    [ "top"
+      [ p = patt LEVEL "simple"; "->"; ce = class_expr ->
           <:class_expr< fun $p$ -> $ce$ >>
       | p = patt LEVEL "simple"; cfd = SELF ->
           <:class_expr< fun $p$ -> $cfd$ >> ] ]
@@ -1652,7 +1769,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="cstr-inherit"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:class_str_item< method $_!:ov$ $priv:pf$ $_lid:l$ : $t$ = $e$ $_itemattrs:attrs$ >>
 
-      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; sb = fun_binding ; item_attrs = item_attributes ->
+      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; check_eps ; sb = fun_binding ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="cstr-inherit"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:class_str_item< method $_!:ov$ $priv:pf$ $_lid:l$ = $sb$ $_itemattrs:attrs$ >>
 
@@ -1680,16 +1797,18 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   (* Class types *)
   class_type:
-    [ [ t = ctyp LEVEL "star"; "->"; ct = SELF ->
+    [ "top"
+      [ t = ctyp LEVEL "star"; "->"; ct = SELF ->
           <:class_type< [ $t$ ] -> $ct$ >>
       | cs = class_signature -> cs ] ]
   ;
   class_signature:
     [ "alg_attribute" LEFTA
       [ ct = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
-        <:class_type< $ct$ [@ $_attribute:attr$ ] >>
-      | "let"; "open"; ovf = V (FLAG "!") "!"; i = extended_longident; "in"; ce = SELF →
+        <:class_type< $ct$ [@ $_attribute:attr$ ] >> ]
+    | NONA [ "let"; "open"; ovf = V (FLAG "!") "!"; i = extended_longident; "in"; ce = SELF →
         <:class_type< let open $_!:ovf$ $longid:i$ in $ce$ >>
+      | ce = NEXT -> ce
       ]
 
     | [ "["; tl = LIST1 ctyp SEP ","; "]"; id = SELF ->
@@ -1760,7 +1879,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   (* Expressions *)
   expr: LEVEL "simple"
-    [ LEFTA
+    [
       [ "new"; (ext,attrs) = ext_attributes; cli = V longident_lident "lilongid" -> 
           expr_to_inline <:expr< new $_lilongid:cli$ >> ext attrs
       | "object"; (ext,attrs) = ext_attributes; cspo = V (OPT class_self_patt);
@@ -1869,10 +1988,6 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   name_tag:
     [ [ "`"; i = ident -> i ] ]
   ;
-  expr: LEVEL "expr1"
-    [ [ "fun"; (ext,attrs) = ext_attributes; p = labeled_patt; (eo, e) = fun_def ->
-          expr_to_inline <:expr< fun [ $p$ $opt:eo$ -> $e$ ] >> ext attrs ] ]
-  ;
   expr: AFTER "apply"
     [ "label"
       [ i = V TILDEIDENTCOLON; e = SELF -> <:expr< ~{$_:i$ = $e$} >>
@@ -1882,13 +1997,6 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   expr: LEVEL "simple"
     [ [ "`"; s = V ident "" -> <:expr< ` $_:s$ >> ] ]
-  ;
-  fun_def:
-    [ [ p = labeled_patt; (eo, e) = SELF ->
-          (None, <:expr< fun [ $p$ $opt:eo$ -> $e$ ] >>) ] ]
-  ;
-  fun_binding:
-    [ [ p = labeled_patt; e = SELF -> <:expr< fun $p$ -> $e$ >> ] ]
   ;
   patt: LEVEL "simple"
     [ [ "`"; s = V ident "" -> <:patt< ` $_:s$ >>
@@ -1927,7 +2035,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "?"; "("; i = LIDENT; ":"; t = ctyp; ")" ->
           <:patt< ?{$lid:i$ : $t$} >> ] ]
   ;
-  class_type:
+  class_type: AFTER "top"
     [ [ i = LIDENT; ":"; t = ctyp LEVEL "apply"; "->"; ct = SELF ->
           <:class_type< [ ~$i$: $t$ ] -> $ct$ >>
       | i = V QUESTIONIDENTCOLON; t = ctyp LEVEL "apply"; "->"; ct = SELF ->
@@ -1941,7 +2049,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   class_fun_binding: AFTER "top"
     [ [ p = labeled_patt; cfb = SELF -> <:class_expr< fun $p$ -> $cfb$ >> ] ]
   ;
-  class_fun_def:
+  class_fun_def: AFTER "top"
     [ [ p = labeled_patt; "->"; ce = class_expr ->
           <:class_expr< fun $p$ -> $ce$ >>
       | p = labeled_patt; cfd = SELF ->

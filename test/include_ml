@@ -83,10 +83,10 @@ let pp_regexp_ast e = Fmt.(pf stdout "<:regexp_ast< %s >>" (Pr.pr_regexp_ast Ppr
 
 let pp_regexp e = Fmt.(pf stdout "<:regexp< %s >>" (PSyn.print e)) ;;
 #install_printer pp_regexp ;;
-(*
+
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
- *)
+
 let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" (Pr.level false Pprintf.empty_pc e)) ;;
 #install_printer pp_a_level ;;
 
@@ -98,6 +98,9 @@ let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" (Pr.psymbol Pprintf.empty_p
 
 let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" (Pr.rule true Pprintf.empty_pc e)) ;;
 #install_printer pp_a_rule ;;
+
+let pp_cg (cg : CG.t) = Fmt.(pf stdout "<cg>") ;;
+#install_printer pp_cg ;;
 
 (* ================================================================ *)
 

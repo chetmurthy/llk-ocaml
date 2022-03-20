@@ -189,7 +189,9 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
  
   e2': [ [ x = e1 ; "?" -> OPT (loc, x) | x = e1 -> x ] ] ;
 
-  e1: [ [ x = e0; "*" -> STAR (loc, x) | x = e0 -> x ] ] ;
+  e1: [ [ x = e0; "*" -> STAR (loc, x)
+        | x = e0; "+" -> CONC(loc, [x; STAR (loc, x)])
+        | x = e0 -> x ] ] ;
 
   e0:
     [ [ x = STRING -> Special(loc, x)
@@ -210,23 +212,9 @@ END ;
 |foo}
 ] ;;
 
-let pa s =
-  s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top
-
-(*
-let pa (loc : Ploc.t) s =
-  try
-    s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top
-  with  Ploc.Exc (loc', exn) ->
-          let rbt = Printexc.get_raw_backtrace () in
-          let loc' = Ploc.(make_loc
-                             (file_name loc)
-                             (line_nb loc + line_nb loc')
-                             (bol_pos loc')
-                             (first_pos loc', last_pos loc')
-                             (comment loc')) in
-          Printexc.raise_with_backtrace (Ploc.Exc (loc', exn)) rbt
- *)
+let pa loc s =
+  let g = s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top in
+  {(g) with gram_loc = loc}
   
 (*
 ;;; Local Variables: ***
