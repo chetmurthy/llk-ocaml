@@ -161,6 +161,7 @@ module CompilingGrammar = struct
     ; gram_externals: mutable list (string * regexp)
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
+    ; errors : mutable list (Ploc.t * string * bool * string)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -170,6 +171,7 @@ module CompilingGrammar = struct
                 ; gram_externals = []
                 ; firsts = SM.mt
                 ; follows = SM.mt
+                ; errors = []
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -223,6 +225,14 @@ module CompilingGrammar = struct
   value adjust_loc cg loc' =
     adjust0_loc (g cg).gram_loc loc'
   ;
+
+  value errors cg = (snd cg).errors ;
+  value add_error cg exn =
+    (snd cg).errors := [ exn :: (snd cg).errors ]
+  ;
+  value add_failure cg loc ename s = add_error cg (loc, ename, True, s) ;
+  value add_failuref cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, True, s)) fmt ;
+  value add_warningf cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, False, s)) fmt ;
 end ;
 module CG = CompilingGrammar ;
 
@@ -561,7 +571,7 @@ module S1Coalesce = struct
       | [_] -> ()
       | l -> failwith Fmt.(str "construct_graph: exactly one entry named %s MUST be position-free:\n%a"
                            ename
-                        (list ~{sep=const string "\n"} string)
+                        (list string)
                         (el |> List.map entry_location |> List.map (CG.adjust_loc cg) |> List.map Ploc.string_of_location)
            )
       ] ;
@@ -1863,30 +1873,33 @@ value print_token_option = fun [
 ]
 ;
 
-value report_compilation_error ?{and_raise=False} reason cg loc ename fi_fo_rule_list = do {
-  Fmt.(pf stderr "Failure in entry %s: %s\n" ename reason) ;
+value report_verbose = ref False ;
+value report_compilation_errors cg msg = do {
+  Fmt.(pf stderr "%s\n" msg) ;
+  if report_verbose.val then do {
+    Fmt.(pf stderr "================================================================\n") ;
+    (CG.gram_entries cg)
+    |> List.iter (fun e ->
+           let fi = CG.first cg e.ae_name in
+           let fo = CG.follow cg e.ae_name in
+           Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
+                  (Pr.entry Pprintf.empty_pc e)
+                  (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+           )
+         ) ;
+    Fmt.(pf stderr "================================================================\n") ;
+    prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
+  } else () ;
   Fmt.(pf stderr "================================================================\n") ;
-  fi_fo_rule_list |> List.iter (fun (fi, fo, r) ->
-      Fmt.(pf stderr "First: %s\nFollow: %s\nRule: %s\n\n"
-          (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
-          (Pr.rule False Pprintf.empty_pc r)
-                       )) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  (CG.gram_entries cg)
-  |> List.iter (fun e ->
-         let fi = CG.first cg e.ae_name in
-         let fo = CG.follow cg e.ae_name in
-         Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-             (Pr.entry Pprintf.empty_pc e)
-             (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
-         )
+  (CG.errors cg)
+  |> List.iter (fun (loc, ename, fatal, msg) ->
+         Fmt.(pf stderr "%s: %s: entry %s: %s\n"
+                (Ploc.string_of_location loc)
+                (if fatal then "Error" else "Warning")
+                ename
+             msg)
        ) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
-  Fmt.(pf stderr "\n%!") ;
-  if and_raise then
-    raise_failwithf (CG.adjust_loc cg loc) "compile1_entry: entry %s: FIFO sets were not disjoint" ename
-  else ()
+  Fmt.(pf stderr "\n%!")
 }
 ;
 
@@ -1963,8 +1976,8 @@ value rec compile1_symbol cg loc ename s =
  *)       
 
     | s -> do {
-        report_compilation_error ~{and_raise=False} Fmt.(str "compiling entry %s encountered" ename) cg (loc_of_a_symbol s) ename [];
-        raise_failwithf (CG.adjust_loc cg loc) "compile1_symbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
+        CG.add_failuref cg (CG.adjust_loc cg loc) ename "compile1_symbol: %s" (Pr.symbol Pprintf.empty_pc s) ;
+        failwith "caught"
       }
     ]
 
@@ -2027,8 +2040,8 @@ and compile1_psymbol cg loc ename ps =
        (SpNtr loc patt e, SpoNoth)
 
     | s -> do {
-        report_compilation_error ~{and_raise=False} Fmt.(str "compiling entry %s encountered" ename) cg (loc_of_a_symbol s) ename [];
-        raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "compile1_psymbol(%s): %s" ename (Pr.symbol Pprintf.empty_pc s)
+        CG.add_failuref cg (CG.adjust_loc cg (loc_of_a_symbol s)) ename "compile1_psymbol: %s" (Pr.symbol Pprintf.empty_pc s) ;
+        failwith "caught"
       }
     ]
 ;
@@ -2109,8 +2122,10 @@ value build_match_nest loc cg ename fi_fo_rule_list =
   let null_branches = match null_branches with [
         [] -> [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
       | [_] as l -> l
-      | _ -> 
-         raise_failwithf (CG.adjust_loc cg loc) "internal error in build_match_nest: more than one NULL branch for entry %s" ename
+      | _ ->  do {
+         CG.add_failure cg (CG.adjust_loc cg loc) ename "internal error in build_match_nest: entry has more than one NULL branch" ;
+         failwith "caught"
+        }
       ] in
   let branches = normal_branches @ null_branches in
   <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >>
@@ -2139,14 +2154,18 @@ value compile1a_entry cg e =
           |> List.map (compute_fifo cg loc ff) with [
       x -> x
     | exception First.ExternalEntry eename -> do {
-        report_compilation_error ~{and_raise=True} Fmt.(str "external entry %s encountered" eename) cg loc e.ae_name [];
-        raise_failwithf (CG.adjust_loc cg loc) "compile1a_entry(%s): external entry %s found, FIRST/FOLLOW disallowed" e.ae_name eename
+        CG.add_failure cg (CG.adjust_loc cg loc) eename "compile1a_entry: entry is external, FIRST/FOLLOW disallowed" ;
+        failwith "caught"
       }
       ] in do {
-    if not (disjoint cg loc fi_fo_rule_list) then
-      report_compilation_error ~{and_raise=True} "FIRST/FOLLOW disjointness test failed" cg loc e.ae_name fi_fo_rule_list
-    else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then
-      raise_failwith (CG.adjust_loc cg loc) "compile1a_entry: more than one branch is nullable"
+    if not (disjoint cg loc fi_fo_rule_list) then do {
+    CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "compile1_entry: FIFO sets were not disjoint" ;
+    failwith "caught"
+    }
+    else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then do {
+      CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "compile1a_entry: more than one branch is nullable" ;
+      failwith "caught"
+    }
     else () ;
     let match_nest = build_match_nest loc cg ename fi_fo_rule_list in
     let matcher_name = ename^"_matcher" in
@@ -2361,9 +2380,11 @@ value infer_regexp loc cg e r =
   match r.ar_psymbols with [
       [ ({ap_symb=ASregexp _ rexname} as h) :: _ ] ->
       (match CG.gram_regexp cg rexname with [
-           exception Not_found ->
-                     raise_failwithf (CG.adjust_loc cg loc) "infer_regexp: undefined regexp %s" rexname
-                   | x -> x
+           exception Not_found -> do {
+             CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: undefined regexp %s" rexname ;
+             failwith "caught"
+           }
+         | x -> x
       ])
 
      | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
@@ -2374,22 +2395,9 @@ value infer_regexp loc cg e r =
     ]
 ;
 
-(** computes the regexp for branch [r] of the entry [e].
-
-    METHOD:
-
-    (1) first, try to infer the regexp for the branch
-
-    (2) if inference fails compute FIFO; if that succeeds, convert to regexp
-
- *)
 value compute_branch_regexp cg e i r =
   let loc = e.ae_loc in
-  let rex = match infer_regexp loc cg e r with [
-        x -> x
-      | exception Failure _ ->
-         fifo_to_regexp cg e r
-      ] in
+  let rex = infer_regexp loc cg e r in
   PSyn.(rex @@ PSyn.token (OUTPUT i))  
 ;
 
@@ -2439,27 +2447,47 @@ value compile1b_entry cg e =
 
 value compile1_entry cg e =
   match compile1a_entry cg e with [
-      exception ((Failure _ | Ploc.Exc _ _) as exn) -> do {
+      exception Failure "caught" -> do {
         let locs =
           (List.hd e.ae_levels).al_rules.au_rules
           |> List.map (fun [
                            {ar_psymbols=[] ; ar_loc=loc} -> loc
                          | {ar_psymbols=[ {ap_loc=loc} :: _]} -> loc
                ]) in
-        Fmt.(pf stderr "compile1_entry(%s): FIRST/FOLLOW strategy failed\n%!%a"
-               e.ae_name
-               (list ~{sep=const string "\n"} string)
-               (locs |> List.map (CG.adjust_loc cg) |> List.map Ploc.string_of_location)
-        ) ;
+        CG.add_warningf cg e.ae_loc e.ae_name "compile1_entry: FIRST/FOLLOW strategy failed\n%!%a"
+               Fmt.(list string)
+               (locs |> List.map (CG.adjust_loc cg) |> List.map Ploc.string_of_location) ;
         compile1b_entry cg e
       }
     | x -> x
     ]
 ;
 
+value compile_entries cg el = do {
+  assert ([] = CG.errors cg) ;
+  let lol =
+    el
+    |> List.map (fun e ->
+           try Some (compile1_entry cg e)
+           with Failure "caught" -> None) in do {
+    let failed = List.exists ((=) None) lol in
+    if [] <> CG.errors cg then
+      report_compilation_errors cg
+        Fmt.(str "Compilation %s" (if failed then "FAILED" else "WARNINGS"))
+    else () ;
+    if failed then
+      failwith "COMPILATION FAILED"
+    else
+      lol
+      |> List.map Std.outSome
+      |> List.concat
+  }
+}
+;
+
 value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg)  =
 let _ = Follow.exec0 cg ~{tops=expl} el in
-  let fdefs = List.concat_map (compile1_entry cg) el in
+  let fdefs = compile_entries cg el in
   let token_patterns =
     all_tokens el @ (
       (CG.gram_regexps cg)
@@ -2592,3 +2620,7 @@ value codegen loc ?{bootstrap=False} s =
 ;
 
 end ;
+
+Pcaml.add_option "-llk-report-verbose"
+  (Arg.Unit (fun _ → Codegen.report_verbose.val := True))
+  "Enable verbose reporting from the LLK parser-generator.";
