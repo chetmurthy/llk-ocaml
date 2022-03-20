@@ -210,6 +210,10 @@ END ;
 |foo}
 ] ;;
 
+let pa s =
+  s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top
+
+(*
 let pa (loc : Ploc.t) s =
   try
     s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top
@@ -222,7 +226,7 @@ let pa (loc : Ploc.t) s =
                              (first_pos loc', last_pos loc')
                              (comment loc')) in
           Printexc.raise_with_backtrace (Ploc.Exc (loc', exn)) rbt
-
+ *)
   
 (*
 ;;; Local Variables: ***

@@ -2504,72 +2504,72 @@ open Parse_gram ;
 
 value read_file = RT.read_file ;
 
-value parse loc ?{bootstrap=False} s =
-  let pa = if bootstrap then Parse_bootstrapped.pa loc else RT.pa loc in
+value parse ?{bootstrap=False} s =
+  let pa = if bootstrap then Parse_bootstrapped.pa else RT.pa in
   s
 |> pa
 ;
 
-value normre loc ?{bootstrap=False} s =
+value normre ?{bootstrap=False} s =
   s
-  |> parse loc ~{bootstrap=bootstrap} |> CG.mk
+  |> parse ~{bootstrap=bootstrap} |> CG.mk
   |> S0ProcessRegexps.exec
   |> CheckSyntax.exec
   |> CheckLexical.exec
 ;
 
-value coalesce loc ?{bootstrap=False} s =
+value coalesce ?{bootstrap=False} s =
   s
-  |> normre loc ~{bootstrap=bootstrap}
+  |> normre ~{bootstrap=bootstrap}
   |> S1Coalesce.exec
 ;
 
-value precedence loc ?{bootstrap=False} s =
+value precedence ?{bootstrap=False} s =
   s
-  |> coalesce loc ~{bootstrap=bootstrap}
+  |> coalesce ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> S2Precedence.exec
 ;
 
-value empty_entry_elim loc ?{bootstrap=False} s =
+value empty_entry_elim ?{bootstrap=False} s =
   s
-  |> precedence loc ~{bootstrap=bootstrap}
+  |> precedence ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
   |> S3EmptyEntryElim.exec
 ;
 
-value left_factorize loc ?{bootstrap=False} s =
+value left_factorize ?{bootstrap=False} s =
   s
-  |> empty_entry_elim loc ~{bootstrap=bootstrap}
+  |> empty_entry_elim ~{bootstrap=bootstrap}
   |> S4LeftFactorize.exec
 ;
 
-value lambda_lift loc ?{bootstrap=False} s =
+value lambda_lift ?{bootstrap=False} s =
   s
-  |> left_factorize loc ~{bootstrap=bootstrap}
+  |> left_factorize ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> S5LambdaLift.exec
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
 
-value first loc ?{bootstrap=False} s =
+value first ?{bootstrap=False} s =
   s
-  |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> lambda_lift ~{bootstrap=bootstrap}
   |> First.exec
 ;
 
-value follow loc ?{bootstrap=False} ~{tops} s =
+value follow ?{bootstrap=False} ~{tops} s =
   s
-  |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> lambda_lift ~{bootstrap=bootstrap}
   |> Follow.exec ~{tops=tops}
 ;
 
-value codegen loc ?{bootstrap=False} s =
+value codegen ?{bootstrap=False} s =
   s
-  |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> lambda_lift ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> Codegen.exec
 ;
