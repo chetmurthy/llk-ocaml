@@ -337,7 +337,7 @@ value pr_extend pc = fun [
 ;
 
 value top pc g =
-  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@;%p@]@ END" g.gram_id
+  pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@;%p@]@ END;\n" g.gram_id
     pr_extend g.gram_extend
     pr_exports g.gram_exports
     pr_regexp_asts g.gram_regexp_asts

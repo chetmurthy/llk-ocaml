@@ -9,10 +9,18 @@ open Ppxutil ;
 open Comp_llk ;
 
 value rewrite_str_item arg = fun [
-  <:str_item:< [@@@llk.fallback $str:s$ ;] >> ->
-  Top.codegen loc ~{bootstrap=False} (Scanf.unescaped s)
-| <:str_item:< [@@@llk $str:s$ ;] >> ->
-  Top.codegen loc ~{bootstrap=True} (Scanf.unescaped s)
+  <:str_item< [@@@llk.fallback $exp:e$ ;] >> ->
+  (match e with [
+       <:expr:< $str:s$ >> ->
+                     Top.codegen loc ~{bootstrap=False} (Scanf.unescaped s)
+     | _ -> assert False
+     ])
+| <:str_item< [@@@llk $exp:e$ ;] >> ->
+  (match e with [
+       <:expr:< $str:s$ >> ->
+                     Top.codegen loc ~{bootstrap=True} (Scanf.unescaped s)
+     | _ -> assert False
+     ])
 | _ -> assert False
 ]
 ;

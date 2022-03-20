@@ -1,6 +1,5 @@
 
-[@@@llk
-{foo|
+[@@@llk {foo|
 GRAMMAR Mod:
 EXPORT: ident functor_parameter uidopt module_declaration mod_decl_binding
         sig_item;
