@@ -350,14 +350,15 @@ end ;
 
 module RT = struct
 
-  value pa s = 
-    s |> Stream.of_string |> Grammar.Entry.parse Pa.top
+  value pa loc s = 
+  let g = s |> Stream.of_string |> Grammar.Entry.parse Pa.top in
+  { (g) with gram_loc = loc }
   ;
 
   value pr x = 
     x |> Pr.top Pprintf.empty_pc |> print_string ;
 
-  value string s = s |> pa |> pr ;
+  value string s = s |> pa Ploc.dummy |> pr ;
 
   value read_file name =
     name |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok ;

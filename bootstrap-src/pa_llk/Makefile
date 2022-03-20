@@ -106,11 +106,7 @@ parse_bootstrapped.cmo: parse_bootstrapped.ml.ppo.ml
 parse_bootstrapped.cmx: parse_bootstrapped.ml.ppo.ml
 	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o -c parse_bootstrapped.ml.ppo.ml -o $@
 
-EXTERNAL := $(shell $(OCAMLFIND) query -predicates byte -format '%m' $(PACKAGES) | grep local-install)
-$(CMO) $(CMI) $(CMX): $(EXTERNAL)
-
 depend::
-	echo "$(CMO) $(CMI) $(CMX): $(EXTERNAL)" > .depend.NEW
 	$(OCAMLFIND) ocamldep $(IMPORT_OCAMLFLAGS) -package $(PACKAGES),pa_ppx.import,pa_ppx_migrate -syntax camlp5o $(OML) $(OMLI) >> .depend.NEW
 	$(OCAMLFIND) ocamldep -package $(PACKAGES) -syntax camlp5r $(RML) $(RMLI) >> .depend.NEW
 	mv .depend.NEW .depend

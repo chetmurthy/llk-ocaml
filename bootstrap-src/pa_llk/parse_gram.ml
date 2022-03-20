@@ -202,7 +202,9 @@ EXTEND
  
   e2': [ [ x = e1 ; "?" -> OPT loc x | x = e1 -> x ] ] ;
 
-  e1: [ [ x = e0; "*" -> STAR loc x | x = e0 -> x ] ] ;
+  e1: [ [ x = e0; "*" -> STAR loc x
+        | x = e0; "+" -> CONC loc [x; STAR loc x]
+        | x = e0 -> x ] ] ;
 
   e0:
     [ [ x = STRING -> Special loc x

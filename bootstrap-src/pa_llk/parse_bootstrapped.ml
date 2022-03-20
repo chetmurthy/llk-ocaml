@@ -122,6 +122,7 @@ module LLKGram =
           | Some ("", "(") -> 1
           | Some ("", ")") -> 1
           | Some ("", "*") -> 1
+          | Some ("", "+") -> 1
           | Some ("", ";") -> 1
           | Some ("", "?") -> 1
           | Some ("", "eps") -> 1
@@ -148,25 +149,32 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    STAR (loc, x))
                 __strm__
-          | 1 -> (parser [< >] -> x) __strm__
+          | 1 ->
+              (parser bp
+                 [< '"", "+" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   CONC (loc, [x; STAR (loc, x)]))
+                __strm__
+          | 2 -> (parser [< >] -> x) __strm__
           | _ -> raise Stream.Failure
         and e1__02_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "*") -> 0
-          | Some ("LIDENT", _) -> 1
-          | Some ("STRING", _) -> 1
-          | Some ("UIDENT", _) -> 1
-          | Some ("", "#") -> 1
-          | Some ("", "$") -> 1
-          | Some ("", "&") -> 1
-          | Some ("", "(") -> 1
-          | Some ("", ")") -> 1
-          | Some ("", ";") -> 1
-          | Some ("", "?") -> 1
-          | Some ("", "eps") -> 1
-          | Some ("", "in") -> 1
-          | Some ("", "|") -> 1
-          | Some ("", "~") -> 1
+          | Some ("", "+") -> 1
+          | Some ("LIDENT", _) -> 2
+          | Some ("STRING", _) -> 2
+          | Some ("UIDENT", _) -> 2
+          | Some ("", "#") -> 2
+          | Some ("", "$") -> 2
+          | Some ("", "&") -> 2
+          | Some ("", "(") -> 2
+          | Some ("", ")") -> 2
+          | Some ("", ";") -> 2
+          | Some ("", "?") -> 2
+          | Some ("", "eps") -> 2
+          | Some ("", "in") -> 2
+          | Some ("", "|") -> 2
+          | Some ("", "~") -> 2
           | _ -> raise Stream.Failure
         and e2 __strm__ =
           match e2_matcher __strm__ with
@@ -1091,6 +1099,7 @@ module LLKGram =
       lexer.tok_using ("", "(");
       lexer.tok_using ("", ")");
       lexer.tok_using ("", "*");
+      lexer.tok_using ("", "+");
       lexer.tok_using ("", ",");
       lexer.tok_using ("", "->");
       lexer.tok_using ("", "/");
@@ -1115,23 +1124,11 @@ module LLKGram =
       Grammar.Entry.of_parser gram "bootstrapped_top" F.bootstrapped_top
   end
 
-let pa s =
-  (s |> Stream.of_string) |> Grammar.Entry.parse LLKGram.bootstrapped_top
-
-(*
-let pa (loc : Ploc.t) s =
-  try
-    s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top
-  with  Ploc.Exc (loc', exn) ->
-          let rbt = Printexc.get_raw_backtrace () in
-          let loc' = Ploc.(make_loc
-                             (file_name loc)
-                             (line_nb loc + line_nb loc')
-                             (bol_pos loc')
-                             (first_pos loc', last_pos loc')
-                             (comment loc')) in
-          Printexc.raise_with_backtrace (Ploc.Exc (loc', exn)) rbt
- *)
+let pa loc s =
+  let g =
+    (s |> Stream.of_string) |> Grammar.Entry.parse LLKGram.bootstrapped_top
+  in
+  {g with gram_loc = loc}
   
 (*
 ;;; Local Variables: ***
