@@ -1115,18 +1115,23 @@ module LLKGram =
       Grammar.Entry.of_parser gram "bootstrapped_top" F.bootstrapped_top
   end
 
+let pa s =
+  (s |> Stream.of_string) |> Grammar.Entry.parse LLKGram.bootstrapped_top
+
+(*
 let pa (loc : Ploc.t) s =
   try
-    (s |> Stream.of_string) |> Grammar.Entry.parse LLKGram.bootstrapped_top
-  with Ploc.Exc (loc', exn) ->
-    let rbt = Printexc.get_raw_backtrace () in
-    let loc' =
-      Ploc.
-      (make_loc (file_name loc) (line_nb loc + line_nb loc') (bol_pos loc')
-        (first_pos loc', last_pos loc') (comment loc'))
-    in
-    Printexc.raise_with_backtrace (Ploc.Exc (loc', exn)) rbt
-
+    s |> Stream.of_string |> Grammar.Entry.parse LLKGram.bootstrapped_top
+  with  Ploc.Exc (loc', exn) ->
+          let rbt = Printexc.get_raw_backtrace () in
+          let loc' = Ploc.(make_loc
+                             (file_name loc)
+                             (line_nb loc + line_nb loc')
+                             (bol_pos loc')
+                             (first_pos loc', last_pos loc')
+                             (comment loc')) in
+          Printexc.raise_with_backtrace (Ploc.Exc (loc', exn)) rbt
+ *)
   
 (*
 ;;; Local Variables: ***

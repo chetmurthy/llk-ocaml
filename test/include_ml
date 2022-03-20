@@ -22,7 +22,7 @@ Pcaml.inter_phrases := Some ";\n";;
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 
-#require "camlp5.parser_quotations" ;;
+#require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
 open Pa_ppx_utils.Std ;;
@@ -31,7 +31,7 @@ open Pa_ppx_utils.Std ;;
 open Pa_ppx_testutils.Papr_util ;;
 
 #require "pa_ppx.base";;
-Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
+Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
 let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
 
@@ -83,10 +83,10 @@ let pp_regexp_ast e = Fmt.(pf stdout "<:regexp_ast< %s >>" (Pr.pr_regexp_ast Ppr
 
 let pp_regexp e = Fmt.(pf stdout "<:regexp< %s >>" (PSyn.print e)) ;;
 #install_printer pp_regexp ;;
-
+(*
 let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" (Pr.entry Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
-
+ *)
 let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" (Pr.level false Pprintf.empty_pc e)) ;;
 #install_printer pp_a_level ;;
 
@@ -143,10 +143,10 @@ open Xx ;;
 
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
+
 #load "simple_test.cmo";;
 open Simple_test ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
  *)

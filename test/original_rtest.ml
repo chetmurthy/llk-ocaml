@@ -1079,7 +1079,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   lbl_expr:
     [ [ i = patt_label_ident ;
         tycon = OPT [ ":" ; c = ctyp -> c ];
-        e = OPT [ "="; e = expr LEVEL "expr1" -> e] ->
+        e = OPT [ "="; e' = expr LEVEL "expr1" -> e'] ->
         let last = match i with [
           <:patt< $longid:_$ . $lid:j$ >> -> j
         | <:patt< $lid:j$ >> -> j
@@ -1251,7 +1251,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | le = lbl_patt -> [le] ] ]
   ;
   lbl_patt:
-    [ [ i = patt_label_ident ; tycon = OPT [ ":" ; c = ctyp -> c ]; p = OPT [ "="; p = patt -> p ] ->
+    [ [ i = patt_label_ident ; tycon = OPT [ ":" ; c = ctyp -> c ]; p = OPT [ "="; p' = patt -> p' ] ->
         let last = match i with [
           <:patt< $longid:_$ . $lid:j$ >> -> j
         | <:patt< $lid:j$ >> -> j
@@ -1543,7 +1543,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
            MLast.ciNam = i; MLast.ciExp = cfb; MLast.ciAttributes = attrs} ] ]
   ;
   class_fun_binding:
-    [ [ "="; ce = class_expr -> ce
+    [ "top" [ "="; ce = class_expr -> ce
       | ":"; ct = class_type; "="; ce = class_expr ->
           <:class_expr< ($ce$ : $ct$) >>
       | p = patt LEVEL "simple"; cfb = SELF ->
@@ -1938,7 +1938,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:class_type< [ ?$_:i$: $t$ ] -> $ct$ >>
       ] ]
   ;
-  class_fun_binding:
+  class_fun_binding: AFTER "top"
     [ [ p = labeled_patt; cfb = SELF -> <:class_expr< fun $p$ -> $cfb$ >> ] ]
   ;
   class_fun_def:

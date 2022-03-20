@@ -350,19 +350,14 @@ end ;
 
 module RT = struct
 
-  value pa (loc : Ploc.t) s = 
-  try
+  value pa s = 
     s |> Stream.of_string |> Grammar.Entry.parse Pa.top
-  with  [ Ploc.Exc loc' exn ->
-          let rbt = Printexc.get_raw_backtrace () in
-          Printexc.raise_with_backtrace (Ploc.Exc loc' exn) rbt
-        ]
   ;
 
   value pr x = 
     x |> Pr.top Pprintf.empty_pc |> print_string ;
 
-  value string s = s |> pa Ploc.dummy |> pr ;
+  value string s = s |> pa |> pr ;
 
   value read_file name =
     name |> Fpath.v |> Bos.OS.File.read |> Rresult.R.get_ok ;
