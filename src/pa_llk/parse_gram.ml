@@ -169,6 +169,8 @@ EXTEND
 
       | UIDENT "PREDICT" ; id = LIDENT ->
         ASregexp loc id
+      | UIDENT "INFER" ; n = INT ->
+        ASinfer loc (int_of_string n)
 
       | "("; s_t = SELF; ")" -> s_t ] ]
   ;

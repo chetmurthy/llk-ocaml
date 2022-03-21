@@ -161,7 +161,7 @@ module CompilingGrammar = struct
     ; gram_externals: mutable list (string * regexp)
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
-    ; errors : mutable list (Ploc.t * string * bool * string)
+    ; errors : mutable list (Ploc.t * string * bool * string * string)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -233,8 +233,9 @@ module CompilingGrammar = struct
   ;
 
   value errors cg = (snd cg).errors ;
-  value add_error cg exn =
-    (snd cg).errors := [ exn :: (snd cg).errors ]
+  value add_error cg (loc, ename, fatal, msg) =
+    let bts = Printexc.(50 |> get_callstack |> raw_backtrace_to_string) in
+    (snd cg).errors := [ (loc, ename, fatal, msg, bts) :: (snd cg).errors ]
   ;
   value add_failure cg loc ename s = add_error cg (loc, ename, True, s) ;
   value add_failuref cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, True, s)) fmt ;
@@ -481,6 +482,7 @@ value rec check_symbol cg env = fun [
   | ASnext _ _ -> ()
   | ASnterm _ _ _ _ -> ()
   | ASregexp _ _ -> ()
+  | ASinfer _ _ -> ()
   | ASopt _ s -> check_symbol cg env s
   | ASleft_assoc _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
   | ASrules _ rs -> check_rules cg env rs
@@ -1203,6 +1205,7 @@ exception ExternalEntry of string ;
 value rec psymbols cg = fun [
   [] -> TS.mk [None]
 | [{ap_symb=ASregexp _ _} :: t] -> psymbols cg t
+| [{ap_symb=ASinfer _ _} :: t] -> psymbols cg t
 | [h::t] ->
    let fh = psymbol cg h in
    if TS.mem None fh then
@@ -1244,6 +1247,8 @@ and symbol cg = fun [
   | ASvala loc s anti_kinds ->
      TS.(union (symbol cg s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
   | ASregexp loc _ as s ->
+     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
+  | ASinfer loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
 ]
 
@@ -1331,6 +1336,7 @@ value watch_follow (nt : string) (ff : TS.t token) = () ;
 value rec fifo_psymbols cg ff = fun [
       [] -> ff
     | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg ff t
+    | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg ff t
     | [h::t] ->
        let ft = fifo_psymbols cg ff t in
        fifo_psymbol cg ft h
@@ -1710,6 +1716,7 @@ and lift_symbol cg ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
+  | ASinfer _ _ as s -> s
   | ASopt loc s -> ASopt loc (lift_symbol cg mut esig revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
@@ -1851,9 +1858,9 @@ end ;
 module Infer = struct
 open PatternBaseToken ;
 
-value rec infer_symbol cg ename = fun [
+value rec infer_symbol cg stk ename = fun [
    ASflag _ s | ASopt _ s ->
-   (match infer_symbol cg ename s with [
+   (match infer_symbol cg stk ename s with [
         (re, False) ->
             if PSyn.empty re then (PSyn.epsilon, False)
             else (PSyn.(disjunction [re; epsilon]), False)
@@ -1867,7 +1874,7 @@ value rec infer_symbol cg ename = fun [
   | ASnterm _ nt _ None when not (CG.exists_entry cg nt) -> assert False
   | ASnterm _ nt _ None ->
      let e = CG.gram_entry cg nt in
-     infer_entry cg e
+     infer_entry cg stk e
 
   | ASregexp loc rexname ->
      (match CG.gram_regexp cg rexname with [
@@ -1889,7 +1896,7 @@ value rec infer_symbol cg ename = fun [
        sl
        |> List.concat_map (fun s -> PSyn.[token (ANTI s); token (ANTI ("_"^s))])
        |> PSyn.disjunction in
-     (match infer_symbol cg ename s with [
+     (match infer_symbol cg stk ename s with [
           (re, False) ->
           if PSyn.empty re then (PSyn.epsilon, False)
           else (PSyn.(disjunction [re; anti_re]), False)
@@ -1897,8 +1904,80 @@ value rec infer_symbol cg ename = fun [
      ])
 ]
 
-and infer_entry cg e = assert False
+and infer_entry cg stk e =
+  if List.mem e.ae_name stk then (PSyn.epsilon, False) else
+  let stk = [ e.ae_name :: stk ] in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let rex_comp_l = List.map (infer_rule cg stk e.ae_name) rl in
+  if List.for_all snd rex_comp_l then
+    (rex_comp_l |> List.map fst |> PSyn.disjunction, True)
+  else if List.for_all (fun (re, _) -> not (PSyn.empty re)) rex_comp_l then
+    (rex_comp_l |> List.map fst |> PSyn.disjunction, False)
+  else (PSyn.epsilon, False)
+
+and infer_rule cg stk ename r = infer_psymbols cg stk ename r.ar_psymbols
+
+and infer_psymbols cg stk ename = fun [
+      [ {ap_symb = (ASregexp _ _ as s)} :: _ ] ->
+      infer_symbol cg stk ename s
+
+    | [ {ap_symb = (ASinfer _ _)} :: t ] -> infer_psymbols cg stk ename t
+
+    | [ h :: t ] ->
+       (match infer_psymbol cg stk ename h with [
+            (h_re, False) -> (h_re, False)
+          | (h_re, True) ->
+             (match infer_psymbols cg stk ename t with [
+                  (t_re, False) -> (PSyn.(h_re @@ t_re), False)
+                | (t_re, True) -> (PSyn.(h_re @@ t_re), True)
+             ])
+       ])
+    | [] -> (PSyn.epsilon, True)
+]
+
+and infer_psymbol cg stk ename ps = infer_symbol cg stk ename ps.ap_symb
 ;
+
+value regexp_of_rule cg ename r =
+  match infer_rule cg [] ename r with [
+      (rex, False) when PSyn.empty rex -> do {
+        CG.add_failure cg (CG.adjust_loc cg r.ar_loc) ename "Infer.top_infer_rule: empty regexp" ;
+        failwith "caught"
+      }
+
+    | (rex, False) -> rex
+    | (rex, True) -> rex
+    ]
+;
+
+value length_regexp_of_rule cg ename r length =
+  let open Brzozowski2.GenericRegexp in
+  let fullre = regexp_of_rule cg ename r in
+  let rec lenrec length rex =
+    if length = 0 then (PSyn.epsilon, 0)
+    else
+      match skeleton rex with [
+          EEpsilon -> (PSyn.epsilon, length)
+        | EToken tok -> (PSyn.token tok, length - 1)
+        | ECat re1 re2 ->
+           let (re1', length) = lenrec length re1 in
+           let (re2', length) = lenrec length re2 in
+           (PSyn.(re1' @@ re2'), length)
+
+        | EDisj [] -> assert False
+        | EDisj l ->
+           let re_length_l = List.map (lenrec length) l in
+           let length = List.fold_left (fun length (_, length') -> max length length')
+                      (snd (List.hd re_length_l)) (List.tl re_length_l) in
+           (PSyn.disjunction (List.map fst re_length_l), length)
+
+        | EStar _ -> assert False
+        | EConj _ -> assert False
+        | ENeg _ -> assert False
+        ] in
+  fst (lenrec length fullre)
+;
+
 end ;
 
 (** Codegen:
@@ -1981,12 +2060,14 @@ value report_compilation_errors cg msg = do {
   } else () ;
   Fmt.(pf stderr "================================================================\n") ;
   (CG.errors cg)
-  |> List.iter (fun (loc, ename, fatal, msg) ->
-         Fmt.(pf stderr "%s: %s: entry %s: %s\n"
+  |> List.iter (fun (loc, ename, fatal, msg, bts) ->
+         Fmt.(pf stderr "%s: %s: entry %s: %s\n%s\n"
                 (Ploc.string_of_location loc)
                 (if fatal then "Error" else "Warning")
                 ename
-             msg)
+                msg
+                bts
+         )
        ) ;
   Fmt.(pf stderr "\n%!")
 }
@@ -2137,6 +2218,7 @@ and compile1_psymbol cg loc ename ps =
 value compile1_psymbols cg loc ename psl =
   let rec crec = fun [
         [{ap_symb=ASregexp _ _} :: t] -> crec t
+      | [{ap_symb=ASinfer _ _} :: t] -> crec t
       | [] -> []
       | [h ::t] -> [compile1_psymbol cg loc ename h :: crec t]
       ] in crec psl
@@ -2474,6 +2556,9 @@ value infer_regexp loc cg e r =
            }
          | x -> x
       ])
+
+    | [ ({ap_symb=ASinfer _ depth}) :: _ ] ->
+       Infer.length_regexp_of_rule cg e.ae_name r depth
 
      | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
         CG.gram_external cg nt

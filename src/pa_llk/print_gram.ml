@@ -164,6 +164,8 @@ and simple_symbol pc sy =
   match sy with
   [ ASregexp _ id ->
     pprintf pc "PREDICT %s" id
+  | ASinfer _ n ->
+    pprintf pc "INFER %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
     pprintf pc "%s%p" id (pr_option entry_actuals) args_opt
