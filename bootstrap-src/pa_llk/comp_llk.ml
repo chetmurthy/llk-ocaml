@@ -192,6 +192,12 @@ module CompilingGrammar = struct
 
   value gram_entries cg = (g cg).gram_entries ;
   value exists_entry cg nt = List.exists (fun e -> nt = e.ae_name) (g cg).gram_entries ;
+  value gram_entry cg nt =
+    match List.find_opt (fun e -> nt = e.ae_name) (g cg).gram_entries with [
+        None -> assert False
+      | Some e -> e
+      ]
+  ;
 
   value firstmap cg = (snd cg).firsts ;
 
@@ -235,6 +241,51 @@ module CompilingGrammar = struct
   value add_warningf cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, False, s)) fmt ;
 end ;
 module CG = CompilingGrammar ;
+
+
+module Anti = struct
+
+(**
+
+["flag"] for FLAG
+["list"] for LIST0 and LIST1
+["opt"] for OPT
+["chr"] for CHAR
+["flo"] for FLOAT
+["int"] for INT
+["int32"] for INT_l
+["int64"] for INT_L
+["nativeint"] for INT_n
+["lid"] for LIDENT
+["str"] for STRING
+["uid"] for UIDENT
+ *)
+value infer_kinds cg loc s kinds =
+  if kinds <> [] then kinds else
+    match s with [
+        ASflag _ _ -> ["flag"]
+      | ASlist _ _ _ _ -> ["list"]
+      | ASopt _ _ -> ["opt"]
+      | AStok loc "CHAR" _ -> ["chr"]
+      | AStok loc "FLOAT" _ -> ["flo"]
+      | AStok loc "INT" _ -> ["int"]
+      | AStok loc "INT_l" _ -> ["int32"]
+      | AStok loc "INT_L" _ -> ["int64"]
+      | AStok loc "INT_n" _ -> ["nativeint"]
+      | AStok loc "LIDENT" _ -> ["lid"]
+      | AStok loc "GIDENT" _ -> ["gid"]
+      | AStok loc "STRING" _ -> ["str"]
+      | AStok loc "UIDENT" _ -> ["uid"]
+      | AStok loc "QUESTIONIDENT" _ -> ["?"]
+      | AStok loc "QUESTIONIDENTCOLON" _ -> ["?:"]
+      | AStok loc "TILDEIDENT" _ -> ["~"]
+      | AStok loc "TILDEIDENTCOLON" _ -> ["~:"]
+      | _ -> raise_failwithf (CG.adjust_loc cg loc) "cannot infer antiquotation kind for symbol %s" (Pr.symbol Pprintf.empty_pc s)
+      ]
+;
+
+end
+;
 
 module S0ProcessRegexps = struct
 open Llk_regexps ;
@@ -465,6 +516,27 @@ value check_entry cg e =
 value exec cg = do { List.iter (check_entry cg) (CG.gram_entries cg) ; cg } ;
 
 end ;
+
+module S0ValaKinds = struct
+
+value rec exec0 cg el =
+  let open Llk_migrate in
+  let dt = make_dt() in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASvala loc s kinds ->
+        let anti_kinds = Anti.infer_kinds cg loc s kinds in
+        ASvala loc (dt.migrate_a_symbol dt s) anti_kinds
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = {(dt) with migrate_a_symbol = migrate_a_symbol } in
+  List.map (dt.migrate_a_entry dt) el
+;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
 
 (** Coalesce entries with [position] markings, to where they belong.
 
@@ -1124,50 +1196,6 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = List.map exec0 (CG.gr
 
 end ;
 
-module Anti = struct
-
-(**
-
-["flag"] for FLAG
-["list"] for LIST0 and LIST1
-["opt"] for OPT
-["chr"] for CHAR
-["flo"] for FLOAT
-["int"] for INT
-["int32"] for INT_l
-["int64"] for INT_L
-["nativeint"] for INT_n
-["lid"] for LIDENT
-["str"] for STRING
-["uid"] for UIDENT
- *)
-value infer_kinds cg loc s kinds =
-  if kinds <> [] then kinds else
-    match s with [
-        ASflag _ _ -> ["flag"]
-      | ASlist _ _ _ _ -> ["list"]
-      | ASopt _ _ -> ["opt"]
-      | AStok loc "CHAR" _ -> ["chr"]
-      | AStok loc "FLOAT" _ -> ["flo"]
-      | AStok loc "INT" _ -> ["int"]
-      | AStok loc "INT_l" _ -> ["int32"]
-      | AStok loc "INT_L" _ -> ["int64"]
-      | AStok loc "INT_n" _ -> ["nativeint"]
-      | AStok loc "LIDENT" _ -> ["lid"]
-      | AStok loc "GIDENT" _ -> ["gid"]
-      | AStok loc "STRING" _ -> ["str"]
-      | AStok loc "UIDENT" _ -> ["uid"]
-      | AStok loc "QUESTIONIDENT" _ -> ["?"]
-      | AStok loc "QUESTIONIDENTCOLON" _ -> ["?:"]
-      | AStok loc "TILDEIDENT" _ -> ["~"]
-      | AStok loc "TILDEIDENTCOLON" _ -> ["~:"]
-      | _ -> raise_failwithf (CG.adjust_loc cg loc) "cannot infer antiquotation kind for symbol %s" (Pr.symbol Pprintf.empty_pc s)
-      ]
-;
-
-end
-;
-
 module First = struct
 
 exception ExternalEntry of string ;
@@ -1213,8 +1241,7 @@ and symbol cg = fun [
   | ASrules _ rl -> rules cg rl
   | ASself _ _ -> assert False
   | AStok _ cls tokopt -> TS.mk[Some (CLS cls tokopt)]
-  | ASvala loc s kinds ->
-     let anti_kinds = Anti.infer_kinds cg loc s kinds in
+  | ASvala loc s anti_kinds ->
      TS.(union (symbol cg s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
   | ASregexp loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
@@ -1812,6 +1839,68 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 
 end ;
 
+(** Infer a regular expression from a rule.
+
+    the invariant we maintain is that each inference routine returns a pair
+    of regexp * bool, where the bool is true when the regexp is "complete".
+
+    So an incomplete regexp might still be useful, and to ensure that, we only
+    use an incomplete regexp when it is nonempty.
+
+ *)
+module Infer = struct
+open PatternBaseToken ;
+
+value rec infer_symbol cg ename = fun [
+   ASflag _ s | ASopt _ s ->
+   (match infer_symbol cg ename s with [
+        (re, False) ->
+            if PSyn.empty re then (PSyn.epsilon, False)
+            else (PSyn.(disjunction [re; epsilon]), False)
+      | (re, True) -> (PSyn.(disjunction [re; epsilon]), True)
+      ])
+
+  | ASkeyw _ kw -> (PSyn.token (SPCL kw), True)
+  | ASlist _ _ _ _ -> (PSyn.epsilon, False)
+  | ASnext _ _ -> assert False
+  | ASnterm _ nt _ (Some _) -> assert False
+  | ASnterm _ nt _ None when not (CG.exists_entry cg nt) -> assert False
+  | ASnterm _ nt _ None ->
+     let e = CG.gram_entry cg nt in
+     infer_entry cg e
+
+  | ASregexp loc rexname ->
+     (match CG.gram_regexp cg rexname with [
+          exception Not_found -> do {
+            CG.add_failuref cg (CG.adjust_loc cg loc) ename "infer_symbol: undefined regexp %s" rexname ;
+            failwith "caught"
+          }
+        | x -> (x, True)
+     ])
+
+  | ASleft_assoc _ _ _ _ -> (PSyn.epsilon, False)
+  | ASrules _ _ -> assert False
+  | ASself _ _ -> assert False
+  | AStok _ cls None -> (PSyn.token (CLS cls None), True)
+  | AStok _ cls (Some tok) -> (PSyn.token (CLS cls (Some tok)), True)
+
+  | ASvala _ s sl ->
+     let anti_re =
+       sl
+       |> List.concat_map (fun s -> PSyn.[token (ANTI s); token (ANTI ("_"^s))])
+       |> PSyn.disjunction in
+     (match infer_symbol cg ename s with [
+          (re, False) ->
+          if PSyn.empty re then (PSyn.epsilon, False)
+          else (PSyn.(disjunction [re; anti_re]), False)
+        | (re, True) -> (PSyn.(disjunction [re; anti_re]), True)
+     ])
+]
+
+and infer_entry cg e = assert False
+;
+end ;
+
 (** Codegen:
 
   0. compute the set of all tokens/classes.
@@ -2028,8 +2117,7 @@ and compile1_psymbol cg loc ename ps =
        let e = compile1_symbol cg loc ename s in
        (SpNtr loc patt e, SpoNoth)
 
-    | ASvala loc elem kinds ->
-       let anti_kinds = Anti.infer_kinds cg loc elem kinds in
+    | ASvala loc elem anti_kinds ->
        let kinds_list_expr =
          anti_kinds
          |> List.concat_map (fun k -> [k; "_"^k])
@@ -2563,9 +2651,15 @@ value normre loc ?{bootstrap=False} s =
   |> CheckLexical.exec
 ;
 
-value coalesce loc ?{bootstrap=False} s =
+value vala_kinds loc ?{bootstrap=False} s =
   s
   |> normre loc ~{bootstrap=bootstrap}
+  |> S0ValaKinds.exec
+;
+
+value coalesce loc ?{bootstrap=False} s =
+  s
+  |> vala_kinds loc ~{bootstrap=bootstrap}
   |> S1Coalesce.exec
 ;
 
