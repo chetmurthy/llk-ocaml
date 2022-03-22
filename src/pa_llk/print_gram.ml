@@ -254,7 +254,8 @@ and pr_re_let pc = fun [
     ]
 
 and pr_re_disj pc = fun [
-      DISJ _ l -> pprintf pc "@[%p@]" (plist pr_re_conj 2) (pair_with " | " l)
+      DISJ _ [] -> pprintf pc "empty"
+    | DISJ _ l -> pprintf pc "@[%p@]" (plist pr_re_conj 2) (pair_with " | " l)
     | re -> pr_re_conj pc re
     ]
 

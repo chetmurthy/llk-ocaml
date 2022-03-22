@@ -155,13 +155,14 @@ end ;
 module MSM = MutSetMap ;
 
 module CompilingGrammar = struct
+  type error_t = { loc : Ploc.t ; ename : string ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
       ctr : Ctr.t
     ; gram_regexps: mutable list (string * regexp)
     ; gram_externals: mutable list (string * regexp)
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
-    ; errors : mutable list (Ploc.t * string * bool * string * string)
+    ; errors : mutable list error_t
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -216,7 +217,7 @@ module CompilingGrammar = struct
     SM.lookup nt (snd cg).follows
   };
 
-  value add_follow cg nt fi =
+  value add_follow (cg : t) nt fi =
     (snd cg).follows := SM.addset (snd cg).follows (nt, fi) ;
 
 
@@ -233,13 +234,22 @@ module CompilingGrammar = struct
   ;
 
   value errors cg = (snd cg).errors ;
-  value add_error cg (loc, ename, fatal, msg) =
+  value add_error cg (loc, ename, kind, msg) =
     let bts = Printexc.(50 |> get_callstack |> raw_backtrace_to_string) in
-    (snd cg).errors := [ (loc, ename, fatal, msg, bts) :: (snd cg).errors ]
+    (snd cg).errors := [ {loc=loc; ename=ename; kind=kind; msg=msg; backtrace=bts} :: (snd cg).errors ]
   ;
-  value add_failure cg loc ename s = add_error cg (loc, ename, True, s) ;
-  value add_failuref cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, True, s)) fmt ;
-  value add_warningf cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, False, s)) fmt ;
+  value add_exn cg loc ename (bts,exn) =
+    let loc = match exn with [
+          Ploc.Exc loc _ -> loc
+        | _ -> loc
+        ] in
+    let msg = Printexc.to_string exn in
+    (snd cg).errors := [ {loc=loc; ename=ename; kind="Fatal"; msg=msg; backtrace=bts} :: (snd cg).errors ]
+  ;
+  value add_failure cg loc ename s = add_error cg (loc, ename, "Fatal", s) ;
+  value add_warning cg loc ename s = add_error cg (loc, ename, "Warning", s) ;
+  value add_failuref cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, "Fatal", s)) fmt ;
+  value add_warningf cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, "Warning", s)) fmt ;
 end ;
 module CG = CompilingGrammar ;
 
@@ -1232,7 +1242,13 @@ and symbol cg = fun [
     | ASnext _ _ -> assert False
 
     | ASnterm _ nt _ _ when CG.exists_entry cg nt -> CG.first cg nt
-    | ASnterm _ nt _ _  -> raise (ExternalEntry nt)
+    | ASnterm _ nt _ _ when CG.exists_external_ast cg nt ->
+     let rex = CG.gram_external cg nt in
+     let module C = Compile(struct value rex = rex ; value extra = []; end) in
+     let is_nullable = C.BEval.nullable rex in
+     let nulls = if is_nullable then [None] else [] in
+     let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
+     TS.mk (toks@nulls)
 
     | ASopt _ s -> TS.(union (mk [None]) (symbol cg s))
 
@@ -2059,14 +2075,14 @@ value report_compilation_errors cg msg = do {
     prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
   } else () ;
   Fmt.(pf stderr "================================================================\n") ;
-  (CG.errors cg)
-  |> List.iter (fun (loc, ename, fatal, msg, bts) ->
-         Fmt.(pf stderr "%s: %s: entry %s: %s\n%s\n"
-                (Ploc.string_of_location loc)
-                (if fatal then "Error" else "Warning")
-                ename
-                msg
-                bts
+  (cg |> CG.errors |> List.rev)
+  |> List.iter CG.(fun err ->
+         Fmt.(pf stderr "%s%s: entry %s: %s\n%s\n"
+                (Ploc.string_of_location err.loc)
+                err.kind
+                err.ename
+                err.msg
+                (if report_verbose.val then err.backtrace else "")
          )
        ) ;
   Fmt.(pf stderr "\n%!")
@@ -2324,16 +2340,16 @@ value compile1a_entry cg e =
           |> List.map (compute_fifo cg loc ff) with [
       x -> x
     | exception First.ExternalEntry eename -> do {
-        CG.add_failure cg (CG.adjust_loc cg loc) eename "compile1a_entry: entry is external, FIRST/FOLLOW disallowed" ;
+        CG.add_warning cg (CG.adjust_loc cg loc) eename "compile1a_entry: entry is external, FIRST/FOLLOW disallowed" ;
         failwith "caught"
       }
       ] in do {
     if not (disjoint cg loc fi_fo_rule_list) then do {
-    CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "compile1_entry: FIFO sets were not disjoint" ;
+    CG.add_warning cg (CG.adjust_loc cg loc) e.ae_name "compile1_entry: FIFO sets were not disjoint" ;
     failwith "caught"
     }
     else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then do {
-      CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "compile1a_entry: more than one branch is nullable" ;
+      CG.add_warning cg (CG.adjust_loc cg loc) e.ae_name "compile1a_entry: more than one branch is nullable" ;
       failwith "caught"
     }
     else () ;
@@ -2642,7 +2658,14 @@ value compile_entries cg el = do {
     el
     |> List.map (fun e ->
            try Some (compile1_entry cg e)
-           with Failure "caught" -> None) in do {
+           with [
+               Failure "caught" -> None
+             | exn ->
+                let bts = Printexc.(get_raw_backtrace() |> raw_backtrace_to_string) in do {
+                 CG.add_exn cg (CG.adjust_loc cg e.ae_loc) e.ae_name (bts, exn) ;
+                 None
+               }
+         ]) in do {
     let failed = List.exists ((=) None) lol in
     if [] <> CG.errors cg then
       report_compilation_errors cg
@@ -2658,8 +2681,23 @@ value compile_entries cg el = do {
 }
 ;
 
+value compute_follow (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg) =
+  try
+    Follow.exec0 cg ~{tops=expl} el
+  with
+    [
+      exn ->
+      let open Printexc in
+       let rbt = get_raw_backtrace() in
+       let bts = (rbt |> raw_backtrace_to_string) in do {
+        CG.add_exn cg Ploc.dummy "<all-entries>" (bts, exn) ;
+        report_compilation_errors cg "FIRST/FOLLOW computation FAILED" ;
+        raise_with_backtrace exn rbt
+      }
+    ]
+;
 value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg)  =
-let _ = Follow.exec0 cg ~{tops=expl} el in
+let _ = compute_follow cg in
   let fdefs = compile_entries cg el in
   let token_patterns =
     all_tokens el @ (

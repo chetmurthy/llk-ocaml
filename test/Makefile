@@ -8,9 +8,20 @@ OCAMLFIND=$(LAUNCH) ocamlfind
 NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 SYNTAX := camlp5o
 
-PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5,pa_llk_runtime,pa_ppx.runtime_fat,pa_ppx.testutils,str,camlp5.pa_o.link,pa_ppx.deriving_plugins.std,pa_llk_compiler.link
+PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5,pa_llk_runtime,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,pa_llk_compiler.link
 TESTS = simple_otest regexp_otest external_otest infer_otest self_otest bug_fifo_rtest revised_rtest original_rtest r2official_test o2official_test llkr2official_test llko2official_test
 ERROR_TESTS = parse_error_test
+
+RML = bug_fifo_rtest.ml  original_rtest.ml  revised_rtest.ml \
+	papr_test_matrix.ml \
+	o2official_test.ml \
+	r2official_test.ml \
+	llko2official_test.ml \
+	llkr2official_test.ml \
+
+OML = external_otest.ml  regexp_otest.ml  simple_otest.ml \
+	infer_otest.ml	   self_otest.ml
+
 
 test:: $(TESTS)
 
@@ -21,7 +32,7 @@ all: simple_otest.exe regexp_otest.exe external_otest.exe infer_otest.exe self_o
 	./$<
 
 %_otest.exe: %_otest.cmo
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax $(SYNTAX) -linkpkg -linkall -o $@ $<
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.pa_o.link -syntax $(SYNTAX) -linkpkg -linkall -o $@ $<
 
 %_otest.cmo: %_otest.ml
 	$(NOT_OCAMLFIND) preprocess -package $(PACKAGES),camlp5.pr_o -syntax $(SYNTAX) -ppopt -llk-report-verbose $< > $<.ppo.ml
@@ -33,7 +44,7 @@ all: simple_otest.exe regexp_otest.exe external_otest.exe infer_otest.exe self_o
 	./$<
 
 %_rtest.exe: %_rtest.cmo
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES) -syntax camlp5r -linkpkg -linkall -o $@ $<
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.pa_o.link -syntax camlp5r -linkpkg -linkall -o $@ $<
 
 %_rtest.cmo: %_rtest.ml
 	$(NOT_OCAMLFIND) preprocess -package $(PACKAGES),camlp5.pr_r -syntax camlp5r -ppopt -llk-report-verbose $< > $<.ppo.ml
@@ -58,8 +69,8 @@ llkr2official_test.exe: papr_test_matrix.cmo llkr2official_test.cmo
 llkr2official_test.cmo: llkr2official_test.ml papr_test_matrix.cmi
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro,camlp5.pr_official.link -syntax camlp5r -c $<
 
-llko2official_test.exe: papr_test_matrix.cmo llko2official_test.cmo
-	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro,camlp5.pr_official.link,camlp5.pa_o.link -syntax camlp5r -linkall -linkpkg $^ -o $@ 
+llko2official_test.exe: papr_test_matrix.cmo original_rtest.cmo llko2official_test.cmo
+	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro,camlp5.pr_official.link -syntax camlp5r -linkall -linkpkg $^ -o $@ 
 
 llko2official_test.cmo: llko2official_test.ml papr_test_matrix.cmi
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro,camlp5.pr_official.link -syntax camlp5r -c $<
@@ -71,3 +82,10 @@ papr_test_matrix.cmi papr_test_matrix.cmo: papr_test_matrix.ml
 
 clean::
 	rm -rf *.cm* *.ppo* *.exe _build
+
+depend::
+	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5o $(OML) >> .depend.NEW
+	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5r $(RML) >> .depend.NEW
+	mv .depend.NEW .depend
+
+-include .depend

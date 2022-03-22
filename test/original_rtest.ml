@@ -318,9 +318,12 @@ REGEXPS:
          let type_parameters = ($list | $_list | type_parameter* ) in
          UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=")
   ;
+  check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
+  check_cons_ident = (UIDENT | $uid | $_uid) | "true" | "false" | "[" "]" | "(" ")" | "(" "::" ")" ;
+  check_constr_decl = check_cons_ident | "|" ;
 END;
-external e_phony : PREDICTION eps ;
-external p_phony : PREDICTION eps ;
+external e_phony : PREDICTION empty ;
+external p_phony : PREDICTION empty ;
 
   infix_operator0: [ [
       x = INFIXOP0 -> x
@@ -816,6 +819,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       [ e1 = NEXT; ";"; e2 = SELF ->
           <:expr< do { $list:[e1 :: get_seq e2]$ } >>
       | e1 = NEXT; ";" -> e1
+      | e1 = NEXT -> e1
       | check_phony_list ; el = V e_phony "list" -> <:expr< do { $_list:el$ } >> ]
     | "expr1"
       [ "let" ; "exception" ; id = V UIDENT "uid" ;
@@ -884,13 +888,19 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           expr_to_inline <:expr< for $_lid:i$ = $e1$ $_to:df$ $e2$ do { $_list:el$ } >> ext attrs
       | "while"; (ext,attrs) = ext_attributes; e1 = SELF; "do"; e2 = V SELF "list"; "done" ->
           let el = Pcaml.vala_map get_seq e2 in
-          expr_to_inline <:expr< while $e1$ do { $_list:el$ } >> ext attrs ]
-    | "," [ e = SELF; ","; el = LIST1 NEXT SEP "," ->
-          <:expr< ( $list:[e :: el]$ ) >> ]
+          expr_to_inline <:expr< while $e1$ do { $_list:el$ } >> ext attrs
+      | e = NEXT -> e
+      ]
+    | "," [ e = NEXT; ","; el = LIST1 NEXT SEP "," ->
+          <:expr< ( $list:[e :: el]$ ) >>
+          | e = NEXT ; check_eps -> e
+          ]
     | ":=" NONA
-      [ e1 = SELF; ":="; e2 = expr LEVEL "expr1" ->
+      [ e1 = NEXT; ":="; e2 = expr LEVEL "expr1" ->
           <:expr< $e1$ . val := $e2$ >>
-      | e1 = SELF; "<-"; e2 = expr LEVEL "expr1" -> <:expr< $e1$ := $e2$ >> ]
+      | e1 = NEXT; "<-"; e2 = expr LEVEL "expr1" -> <:expr< $e1$ := $e2$ >>
+      | e1 = NEXT -> e1
+      ]
     | "||" RIGHTA
       [ e1 = SELF; "or"; e2 = SELF -> <:expr< $lid:"or"$ $e1$ $e2$ >>
       | e1 = SELF; "||"; e2 = SELF -> <:expr< $e1$ || $e2$ >> ]
@@ -954,6 +964,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
            <:expr< $flo:_$ >> -> e
          | _ -> <:expr< $lid:"~+."$ $e$ >>
          ]
+      | e = NEXT -> e
       ]
     | "apply" LEFTA
       [ e1 = SELF; e2 = SELF ->
@@ -1011,7 +1022,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       [ "!"; e = SELF -> <:expr< $e$ . val >>
       | "~-"; e = SELF -> <:expr< ~- $e$ >>
       | "~-."; e = SELF -> <:expr< ~-. $e$ >>
-      | f = PREFIXOP; e = SELF -> <:expr< $lid:f$ $e$ >> ]
+      | f = PREFIXOP; e = SELF -> <:expr< $lid:f$ $e$ >>
+      | e = NEXT -> e
+      ]
     | "simple" NONA
       [ s = V INT -> <:expr< $_int:s$ >>
       | s = V INT_l -> <:expr< $_int32:s$ >>
@@ -1032,7 +1045,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "[|"; "|]" -> <:expr< [| |] >>
       | "[|"; el = V expr1_semi_list "list"; "|]" ->
           <:expr< [| $_list:el$ |] >>
-      | "{"; lel = V lbl_expr_list "list"; "}" ->
+      | "{"; check_label_eq ; lel = V lbl_expr_list "list"; "}" ->
           <:expr< { $_list:lel$ } >>
       | "{"; e = expr LEVEL "apply"; "with"; lel = V lbl_expr_list "list";
         "}" ->
@@ -1234,7 +1247,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   expr_longident:
     [
-      [ li = longident -> <:expr< $longid:li$ >>
+      [ li = longident ; check_eps -> <:expr< $longid:li$ >>
       | li = longident ; "." ; "("; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
@@ -1454,7 +1467,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     [ [ "constraint"; t1 = ctyp; "="; t2 = ctyp -> (t1, t2) ] ]
   ;
   type_kind:
-    [ [ OPT "|";
+    [ [ check_constr_decl ; OPT "|";
         cdl = LIST0 constructor_declaration SEP "|" ->
           <:ctyp< [ $list:cdl$ ] >>
       | ".." -> <:ctyp< .. >>
@@ -1999,7 +2012,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       [ i = V TILDEIDENTCOLON; e = SELF -> <:expr< ~{$_:i$ = $e$} >>
       | i = V TILDEIDENT -> <:expr< ~{$_:i$} >>
       | i = V QUESTIONIDENTCOLON; e = SELF -> <:expr< ?{$_:i$ = $e$} >>
-      | i = V QUESTIONIDENT -> <:expr< ?{$_:i$} >> ] ]
+      | i = V QUESTIONIDENT -> <:expr< ?{$_:i$} >>
+      | x = NEXT -> x
+      ] ]
   ;
   expr: LEVEL "simple"
     [ [ "`"; s = V ident "" -> <:expr< ` $_:s$ >> ] ]

@@ -205,6 +205,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | "#" ; x = INT -> Output(loc, int_of_string x)
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
+      | "empty" -> DISJ(loc, [])
       | x = LIDENT -> ID(loc, x)
       ]
     ]

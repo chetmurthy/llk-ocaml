@@ -216,6 +216,7 @@ EXTEND
       | "#" ; x = INT -> Output loc (int_of_string x)
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
+      | "empty" -> DISJ loc []
       | x = LIDENT -> ID loc x
       ]
     ]
