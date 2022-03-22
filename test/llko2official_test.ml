@@ -29,12 +29,11 @@ end ;
 
 value both_pa1 =
   let open Original_rtest.Original in
-  let implem_pa1 name =
-    with_input_file name (Grammar.Entry.parse implem) in
-  let interf_pa1 name =
-    with_input_file name (Grammar.Entry.parse interf) in
-  let (implem_pa1, interf_pa1) = PAPR.both_pa1 in
-  (fun name -> implem_pa1 ~{input_file=name}, fun name -> interf_pa1 ~{input_file=name})
+  let pa pf input_file strm = let (ast, _) = with_input_file input_file pf strm in ast in
+  let pa1 pf input_file s = let ast = pf input_file (Stream.of_string s) in ast in
+  let implem_pa1 = pa1 (pa (Grammar.Entry.parse implem)) in
+  let interf_pa1 = pa1 (pa (Grammar.Entry.parse interf)) in
+  (implem_pa1, interf_pa1)
 ;
 
 value tests = "matrix" >::: (Papr_test_matrix.o2official both_pa1 Official.both_pr (Some Official.both_pa) ()) ;

@@ -140,16 +140,20 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-(*
-#load "original_rtest.cmo";;
-open Original_rtest ;;
 
+#load "original_rtest.cmo";;
+#require "camlp5.pr_official";;
+#load "papr_test_matrix.cmo";;
+#load "llko2official_test.cmo" ;;
+open Original_rtest ;;
+open Llko2official_test ;;
+(*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
+
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
  *)

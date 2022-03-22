@@ -293,9 +293,7 @@ REGEXPS:
     | DOTOP "[" ";" ".." "]" 
     | DOTOP "[" ";" ".." "]" "<-" 
     ;
-  check_operator_rparen =
-      check_operator ")"
-  ;
+  check_operator_rparen = check_operator ")" ;
   check_lbracket = "[" ;
   check_lbrace = "{" ;
   check_lbracketbar = "[|" ;
@@ -321,6 +319,8 @@ REGEXPS:
   check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
   check_cons_ident = (UIDENT | $uid | $_uid) | "true" | "false" | "[" "]" | "(" ")" | "(" "::" ")" ;
   check_constr_decl = check_cons_ident | "|" ;
+  check_val_ident = LIDENT | "(" check_operator_rparen ;
+  check_lparen_operator_rparen = "(" check_operator_rparen ;
 END;
 external e_phony : PREDICTION empty ;
 external p_phony : PREDICTION empty ;
@@ -616,7 +616,7 @@ external p_phony : PREDICTION empty ;
         "in" ; x = expr ; attrs = item_attributes ->
         let e = <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >> in
         <:str_item< $exp:e$ $_itemattrs:attrs$ >>
-      | "let"; (ext, alg_attrs) = ext_attributes ; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
+      | "let"; check_eps ; (ext, alg_attrs) = ext_attributes ; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
         x = expr ->
           let (a, b, item_attrs) = h in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
@@ -625,7 +625,7 @@ external p_phony : PREDICTION empty ;
           let e = expr_to_inline <:expr< let $_flag:r$ $list:l$ in $x$ >> ext [] in
           <:str_item< $exp:e$ >>
 
-      | "let"; (ext, alg_attrs) = ext_attributes; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding ->
+      | "let"; check_eps ; (ext, alg_attrs) = ext_attributes; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding ->
           let (a, b, item_attrs) = h in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           let h = (a, b, attrs) in
@@ -647,7 +647,7 @@ external p_phony : PREDICTION empty ;
           let e = expr_to_inline <:expr< let open $_!:ovf$ $m$ in $e$ >> ext attrs in
           <:str_item< $exp:e$ >>
 
-      | e = expr ; attrs = item_attributes -> <:str_item< $exp:e$ $_itemattrs:attrs$ >>
+      | check_eps ; e = expr ; attrs = item_attributes -> <:str_item< $exp:e$ $_itemattrs:attrs$ >>
       | attr = floating_attribute -> <:str_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:str_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
@@ -818,8 +818,8 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     [ "top" NONA
       [ e1 = NEXT; ";"; e2 = SELF ->
           <:expr< do { $list:[e1 :: get_seq e2]$ } >>
-      | e1 = NEXT; ";" -> e1
-      | e1 = NEXT -> e1
+      | e1 = NEXT; ";" ; check_eps -> e1
+      | e1 = NEXT ; check_eps -> e1
       | check_phony_list ; el = V e_phony "list" -> <:expr< do { $_list:el$ } >> ]
     | "expr1"
       [ "let" ; "exception" ; id = V UIDENT "uid" ;
@@ -828,7 +828,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
         "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >>
-      | "let"; (ext,alg_attrs) = ext_attributes; o = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
+      | "let"; check_eps ; (ext,alg_attrs) = ext_attributes; o = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
         x = expr LEVEL "top" ->
           let (a, b, item_attrs) = h in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
@@ -881,7 +881,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
           let el = Pcaml.vala_map get_seq e in
           expr_to_inline <:expr< for $i$ = $e1$ $_to:df$ $e2$ do { $_list:el$ } >> ext attrs
-      | "for"; (ext,attrs) = ext_attributes; "("; i = operator_rparen; "="; e1 = SELF; df = V direction_flag "to";
+      | "for"; (ext,attrs) = ext_attributes; check_lparen_operator_rparen ; "("; i = operator_rparen; "="; e1 = SELF; df = V direction_flag "to";
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
           let i = Ploc.VaVal i in
           let el = Pcaml.vala_map get_seq e in
@@ -1055,14 +1055,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:expr< (module $me$ : $mt$) >>
       | "("; "module"; me = module_expr; ")" ->
           <:expr< (module $me$) >>
-      | "("; op = operator_rparen ->
+      | "("; check_operator_rparen ; op = operator_rparen ->
         if op = "::" then
           <:expr< $uid:op$ >>
         else
           <:expr< $lid:op$ >>
-      | "("; check_phony_list ; el = V e_phony "list"; ")" -> <:expr< ($_list:el$) >>
-      | "("; e = SELF; ":"; t = ctyp; ")" -> <:expr< ($e$ : $t$) >>
-      | "("; e = SELF; ")" -> concat_comm loc <:expr< $e$ >>
+      | "("; e = expr; ":"; t = ctyp; ")" -> <:expr< ($e$ : $t$) >>
+      | "("; e = expr; ")" -> concat_comm loc <:expr< $e$ >>
       | "begin"; (ext,attrs) = ext_attributes; e = SELF; "end" -> 
           expr_to_inline (concat_comm loc <:expr< $e$ >>) ext attrs
       | "begin"; (ext,attrs) = ext_attributes; "end" -> 
@@ -1073,14 +1072,14 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   let_binding:
     [ [ alg_attrs = alg_attributes_no_anti ;
-        p = val_ident ; check_and_in ->
+        check_val_ident ; p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
 
       | alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; check_colon ; e = fun_binding ;
+        check_val_ident ; p = val_ident; check_colon ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1090,56 +1089,56 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         (p, e, attrs)
 
       | alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; check_eps ; e = fun_binding ;
+        check_val_ident ; p = val_ident; check_eps ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
 
       | alg_attrs = alg_attributes_no_anti ;
-        p = patt; "="; e = expr ;
+        check_eps ; p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
       | alg_attrs = alg_attributes_no_anti ;
-        p = patt; ":"; t = poly_type; "="; e = expr ;
+        check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, <:expr< ( $e$ : $t$ ) >>, attrs)
       ] ]
   ;
   first_let_binding:
-    [ [ p = val_ident ; check_and_in ->
+    [ [ check_val_ident ; p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< [] >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
-      | p = val_ident; check_colon; e = fun_binding ;
+      | check_val_ident ; p = val_ident; check_colon; e = fun_binding ;
         item_attrs = item_attributes ->
         let (p,e) = match e with [
           <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
         | _ -> (p,e)
         ] in
         (p, e, item_attrs)
-      | p = val_ident; check_eps; e = fun_binding ;
+      | check_val_ident ; p = val_ident; check_eps; e = fun_binding ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
-      | p = patt; "="; e = expr ;
+      | check_eps ; p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
-      | p = patt; ":"; t = poly_type; "="; e = expr ;
+      | check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ;
         item_attrs = item_attributes ->
         (<:patt< ($p$ : $t$) >>, e, item_attrs)
       ] ]
   ;
   and_let_binding:
     [ [ "and"; alg_attrs = alg_attributes_no_anti ;
-        p = val_ident ; check_and_in ->
+        check_val_ident ; p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; check_colon ; e = fun_binding ;
+        check_val_ident ; p = val_ident; check_colon ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1148,31 +1147,31 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         ] in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        p = val_ident; check_eps ; e = fun_binding ;
+        check_val_ident ; p = val_ident; check_eps ; e = fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        p = patt; "="; e = expr ;
+        check_eps ; p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        p = patt; ":"; t = poly_type; "="; e = expr ;
+        check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (<:patt< ($p$ : $t$) >>, e, attrs)
       ] ]
   ;
   letop_binding:
-    [ [ p = val_ident; e = fun_binding -> (p, e)
-      | p = val_ident ->
+    [ [ check_val_ident ; p = val_ident; e = fun_binding -> (p, e)
+      | check_val_ident ; p = val_ident ->
          match p with [
              <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>)
            | _ -> failwith "letop punning: binder must be a lowercase ident (variable)"
            ]
-      | p = patt; "="; e = expr -> (p, e)
-      | p = patt; ":"; t = poly_type; "="; e = expr ->
+      | check_eps ; p = patt; "="; e = expr -> (p, e)
+      | check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ->
           (<:patt< ($p$ : $t$) >>, e)
       ] ]
   ;
@@ -1248,7 +1247,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   expr_longident:
     [
       [ li = longident ; check_eps -> <:expr< $longid:li$ >>
-      | li = longident ; "." ; "("; op = operator_rparen ->
+      | li = longident ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
@@ -1289,8 +1288,10 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ]
     | LEFTA
       [ p1 = SELF; "|"; p2 = SELF -> <:patt< $p1$ | $p2$ >> ]
-    | [ p = SELF; ","; pl = LIST1 NEXT SEP "," ->
-          <:patt< ( $list:[p :: pl]$) >> ]
+    | [ p = NEXT; ","; pl = LIST1 NEXT SEP "," ->
+          <:patt< ( $list:[p :: pl]$) >>
+      | p = NEXT -> p
+      ]
     | "alg_attribute" LEFTA
       [ p = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:patt< $p$ [@ $_attribute:attr$ ] >>
@@ -1298,9 +1299,12 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   | NONA
       [ "exception"; (ext,attrs) = ext_attributes; p = SELF →
          patt_to_inline <:patt< exception $p$ >> ext attrs
+      | x = NEXT -> x
       ]
   | NONA
-      [ p1 = SELF; ".."; p2 = SELF -> <:patt< $p1$ .. $p2$ >> ]
+      [ p1 = NEXT; ".."; p2 = NEXT -> <:patt< $p1$ .. $p2$ >>
+      | p1 = NEXT -> p1
+      ]
     | RIGHTA
       [ p1 = SELF; "::"; p2 = SELF -> <:patt< [$p1$ :: $p2$] >> ]
     | LEFTA
@@ -1364,8 +1368,8 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           else
             <:patt< $lid:op$ >>
       | "("; check_phony_list ; pl = V p_phony "list"; ")" -> <:patt< ($_list:pl$) >>
-      | "("; p = SELF; ":"; t = ctyp; ")" -> <:patt< ($p$ : $t$) >>
-      | "("; p = SELF; ")" -> <:patt< $p$ >>
+      | "("; p = patt; ":"; t = ctyp; ")" -> <:patt< ($p$ : $t$) >>
+      | "("; p = patt; ")" -> <:patt< $p$ >>
       | "("; "type"; s = V LIDENT; ")" -> <:patt< (type $_lid:s$) >>
       | "("; "module"; s = V uidopt "uidopt"; ":"; mt = module_type; ")" ->
           <:patt< (module $_uidopt:s$ : $mt$) >>
@@ -1911,9 +1915,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ] ]
   ;
   expr: LEVEL "simple"
-    [ [ "("; e = SELF; ":"; t = ctyp; ":>"; t2 = ctyp; ")" ->
+    [ [ "("; e = expr; ":"; t = ctyp; ":>"; t2 = ctyp; ")" ->
           <:expr< ($e$ : $t$ :> $t2$) >>
-      | "("; e = SELF; ":>"; t = ctyp; ")" -> <:expr< ($e$ :> $t$) >>
+      | "("; e = expr; ":>"; t = ctyp; ")" -> <:expr< ($e$ :> $t$) >>
       | "{<"; ">}" -> <:expr< {< >} >>
       | "{<"; fel = V field_expr_list "list"; ">}" ->
           <:expr< {< $_list:fel$ >} >> ] ]
@@ -2114,3 +2118,5 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
 END;
 |foo} ;
 ];
+
+value pa e s = s |> Stream.of_string |> Grammar.Entry.parse e ;
