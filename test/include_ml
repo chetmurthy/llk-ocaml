@@ -146,10 +146,10 @@ open Original_rtest ;;
 
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
-#load "simple_test.cmo";;
-open Simple_test ;;
-
+ *)
+#load "simple_otest.cmo";;
+open Simple_otest ;;
+(*
 #load "external_test.cmo";;
 open External_test ;;
  *)
@@ -172,6 +172,8 @@ open External_test ;;
 #trace CG.follow ;;
 "original_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
+
+(*
 let cg = {|
 GRAMMAR Neg:
 EXPORT: e;
@@ -191,4 +193,5 @@ END ;
 END;
 
 |} |> Top.normre ~bootstrap:true Ploc.dummy ;;
-module DC = DebugCompile(struct let rexs = {|  "let" #0 | ~"let" #1 |} let cg = cg end) ;;
+module DC = DebugCompile(struct let rexs = {|  "let" #0 | (~"let" & _* ) #1 |} let cg = cg end) ;;
+ *)

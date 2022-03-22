@@ -266,7 +266,7 @@ END;
 GRAMMAR Neg:
 EXPORT: e;
 REGEXPS:
-  check_not_let = ~"let" & _*;
+  check_not_let = eps;
 END ;
   e: [ [ "let" ; s = STRING -> Right ("let "^s)
        | check_not_let ; e = e1 -> e ] ] ;
@@ -385,6 +385,10 @@ let tests = "simple" >::: [
       ; assert_equal [Left "0"; Left "1"] (pa Seq.e {|0 ; 1 ;|})
       ; assert_equal [Right "foo" ; Left "0"; Left "1"] (pa Seq.e {|let "foo" in 0 ; 1 ;|})
       ; assert_equal [Left "2" ; Right "foo" ; Left "0"; Left "1"] (pa Seq.e {|2 ; let "foo" in 0 ; 1 ;|})
+    )
+    ; "Neg" >:: (fun _ ->
+        assert_equal (Right "let a") (pa Neg.e {|let "a"|})
+      ; assert_equal (Left "0") (pa Neg.e {|0|})
     )
 ]
 
