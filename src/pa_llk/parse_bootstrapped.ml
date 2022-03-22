@@ -206,6 +206,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
       | "empty" -> DISJ(loc, [])
+      | "_" -> ANY loc
       | x = LIDENT -> ID(loc, x)
       ]
     ]

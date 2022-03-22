@@ -261,6 +261,28 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Neg:
+EXPORT: e;
+REGEXPS:
+  check_not_let = ~"let" & _*;
+END ;
+  e: [ [ "let" ; s = STRING -> Right ("let "^s)
+       | check_not_let ; e = e1 -> e ] ] ;
+
+  e1:
+    [
+      [ "let" ; s = STRING  -> Right s
+      | n = INT -> Left n
+      ]
+    ]
+  ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true

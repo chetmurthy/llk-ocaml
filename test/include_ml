@@ -8,20 +8,20 @@
 #require "bos";;
 #require "str";;
 
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
+(*
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
-
-(*
-#require "camlp5.pr_o";;
  *)
 
+#require "camlp5.pr_o";;
+
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
-
+ *)
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -172,3 +172,23 @@ open External_test ;;
 #trace CG.follow ;;
 "original_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
+let cg = {|
+GRAMMAR Neg:
+EXPORT: e;
+REGEXPS:
+  check_not_let = ~"let" & _* ;
+END ;
+  e: [ [ "let" ; s = STRING -> Right ("let "^s)
+       | check_not_let ; e = e1 -> e1 ] ] ;
+
+  e1:
+    [
+      [ "let" ; s = STRING  -> Right s
+      | n = INT -> Left n
+      ]
+    ]
+  ;
+END;
+
+|} |> Top.normre ~bootstrap:true Ploc.dummy ;;
+module DC = DebugCompile(struct let rexs = {|  "let" #0 | ~"let" #1 |} let cg = cg end) ;;

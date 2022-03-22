@@ -107,6 +107,7 @@ type astre = [
 | NEG of loc and astre
 | OPT of loc and astre
 | EPS of loc
+| ANY of loc
 | LETIN of loc and string and astre and astre
 | ID of loc and string
 ] [@@deriving (show,eq,ord) ;]
@@ -127,6 +128,7 @@ value normalize_astre env x =
       | NEG _ x -> PSyn.neg (convrec env x)
       | OPT _ x -> PSyn.disjunction [(convrec env x); PSyn.epsilon]
       | EPS _ -> PSyn.epsilon
+      | ANY _ -> PSyn.any
       | LETIN _ s e1 e2 ->
          convrec [(s,convrec env e1) :: env] e2
       | ID loc s -> match List.assoc s env with [

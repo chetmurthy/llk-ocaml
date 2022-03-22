@@ -24,15 +24,6 @@ value entry_labels e =
 value entry_position e = e.ae_pos ;
 value entry_location e = e.ae_loc ;
 
-module DebugCompile(S : sig value rexs : string ; end) = struct
-  open Print_gram ;
-  open Llk_regexps ;
-  value rexs = S.rexs ;
-  value rex = rexs |> RT.pa_regexp_ast |> normalize_astre [] ;
-  module C = Compile(struct value rex = rex ; value extra = []; end) ;
-end
-;
-
 type token = Llk_regexps.PatternBaseToken.t == [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ]
 ;
 
@@ -158,6 +149,7 @@ module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : string ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
       ctr : Ctr.t
+    ; gram_alphabet : mutable list token
     ; gram_regexps: mutable list (string * regexp)
     ; gram_externals: mutable list (string * regexp)
     ; firsts : mutable SM.t (option token)
@@ -168,6 +160,7 @@ module CompilingGrammar = struct
 
   value mk t = (t, {
                   ctr = Ctr.mk()
+                ; gram_alphabet = []
                 ; gram_regexps = []
                 ; gram_externals = []
                 ; firsts = SM.mt
@@ -250,8 +243,21 @@ module CompilingGrammar = struct
   value add_warning cg loc ename s = add_error cg (loc, ename, "Warning", s) ;
   value add_failuref cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, "Fatal", s)) fmt ;
   value add_warningf cg loc ename fmt = Fmt.kstr (fun s -> add_error cg (loc, ename, "Warning", s)) fmt ;
+
+  value set_alphabet cg l = (snd cg).gram_alphabet := l ;
+  value alphabet cg = (snd cg).gram_alphabet ;
 end ;
 module CG = CompilingGrammar ;
+
+
+module DebugCompile(S : sig value rexs : string ; value cg : CG.t; end) = struct
+  open Print_gram ;
+  open Llk_regexps ;
+  value rexs = S.rexs ;
+  value rex = rexs |> RT.pa_regexp_ast |> normalize_astre [] ;
+  module C = Compile(struct value rex = rex ; value extra = (CG.alphabet S.cg); end) ;
+end
+;
 
 
 module Anti = struct
@@ -297,6 +303,25 @@ value infer_kinds cg loc s kinds =
 
 end
 ;
+
+module S0Alphabet = struct
+  value alphabet cg =
+  let acc = ref [] in
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASkeyw _ kw as s -> do { Std.push acc (SPCL kw) ; s }
+      | AStok _ cls tokopt as s -> do { Std.push acc (CLS cls tokopt) ; s }
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in do {
+    List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg) ;
+    List.sort_uniq Llk_regexps.PatternBaseToken.compare acc.val
+  }
+;
+
+value exec cg = do { CG.set_alphabet cg (alphabet cg) ; cg } ;
+end ;
 
 module S0ProcessRegexps = struct
 open Llk_regexps ;
@@ -1244,7 +1269,7 @@ and symbol cg = fun [
     | ASnterm _ nt _ _ when CG.exists_entry cg nt -> CG.first cg nt
     | ASnterm _ nt _ _ when CG.exists_external_ast cg nt ->
      let rex = CG.gram_external cg nt in
-     let module C = Compile(struct value rex = rex ; value extra = []; end) in
+     let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
      let is_nullable = C.BEval.nullable rex in
      let nulls = if is_nullable then [None] else [] in
      let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
@@ -1549,7 +1574,7 @@ and fifo_symbol cg ff = fun [
 
   | ASnterm loc nt _ _ as s when CG.exists_external_ast cg nt ->
      let rex = CG.gram_external cg nt in
-     let module C = Compile(struct value rex = rex ; value extra = []; end) in
+     let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
      C.BEval.OutputDfa.first_tokens rex
 
   | ASleft_assoc loc s1 s2 _ ->
@@ -2611,7 +2636,7 @@ value compile1b_entry cg e =
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   let fullre = compute_entry_regexp cg e in
   let retxt = String.escaped (PSyn.print fullre) in
-  let module C = Compile(struct value rex = fullre ; value extra = []; end) in
+  let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
   let predictor = letrec_nest exported_dfa in
   let predictor_name = ename^"_regexp" in
@@ -2769,6 +2794,7 @@ value parse loc ?{bootstrap=False} s =
 value normre loc ?{bootstrap=False} s =
   s
   |> parse loc ~{bootstrap=bootstrap} |> CG.mk
+  |> S0Alphabet.exec
   |> S0ProcessRegexps.exec
   |> CheckSyntax.exec
   |> CheckLexical.exec

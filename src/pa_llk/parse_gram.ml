@@ -217,6 +217,7 @@ EXTEND
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
       | "empty" -> DISJ loc []
+      | "_" -> ANY loc
       | x = LIDENT -> ID loc x
       ]
     ]

@@ -292,6 +292,7 @@ and pr_re_simple pc = fun [
     | Anti _ x -> pprintf pc "$\"%s\"" (String.escaped x)
     | Output _ x -> pprintf pc "#%d" x
     | EPS _ -> pprintf pc "eps"
+    | ANY _ -> pprintf pc "_"
     | ID _ x -> pprintf pc "%s" x
     | x -> pr_re_let pc x
     ]
