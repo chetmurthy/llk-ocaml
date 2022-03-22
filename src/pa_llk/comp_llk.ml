@@ -708,7 +708,10 @@ module S1Coalesce = struct
       |> List.map (fun node ->
              el |> List.find_all (fun e -> node = entry2node e)
            ) in
+(*
     let sorted_el = List.map concat_entries sorted_ell in
+ *)
+    let sorted_el = List.concat sorted_ell in
     let (e0, el) = match sorted_el with [
           [] -> assert False
         | [e0::el] when entry_position e0 <> None -> assert False
@@ -1162,9 +1165,12 @@ value extract_left_factors1 rl =
          (let left_psymbol = List.hd (List.hd rl).ar_psymbols in
           rl |> List.for_all (fun r -> equal_a_psymbol left_psymbol (List.hd r.ar_psymbols))) then
     let left_psymbol = List.hd (List.hd rl).ar_psymbols in
-    ([left_psymbol],
-     rl |> List.map (fun r -> {(r) with ar_psymbols = List.tl r.ar_psymbols }))
-
+    match left_psymbol with [
+        {ap_symb=ASinfer _ _} -> ([], rl)
+      | _ ->
+         ([left_psymbol],
+          rl |> List.map (fun r -> {(r) with ar_psymbols = List.tl r.ar_psymbols }))
+      ]
   else ([], rl)
 ;
 

@@ -658,7 +658,10 @@ external p_phony : PREDICTION empty ;
       | attr = floating_attribute -> <:str_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:str_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
-      ] ]
+      | x = NEXT -> x
+      ]
+    | [  ]
+    ]
   ;
   first_mod_binding:
     [ [ i = V uidopt "uidopt"; me = mod_fun_binding ; item_attrs = item_attributes ->
@@ -1727,6 +1730,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:class_expr< let $_flag:rf$ $_list:lb$ in $ce$ >>
       | "let"; "open"; ovf = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; i = extended_longident; "in"; ce = SELF →
           class_expr_wrap_attrs <:class_expr< let open $_!:ovf$ $longid:i$ in $ce$ >> alg_attrs
+      | x = NEXT -> x
       ]
     | "alg_attribute" LEFTA
       [ ct = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
@@ -1840,9 +1844,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Class types *)
   class_type:
     [ "top"
-      [ t = ctyp LEVEL "star"; "->"; ct = SELF ->
+      [ INFER 2 ; t = ctyp LEVEL "star"; "->"; ct = SELF ->
           <:class_type< [ $t$ ] -> $ct$ >>
-      | cs = class_signature -> cs ] ]
+      | INFER 2 ; cs = class_signature -> cs ] ]
   ;
   class_signature:
     [ "alg_attribute" LEFTA
