@@ -321,6 +321,12 @@ REGEXPS:
   check_constr_decl = check_cons_ident | "|" ;
   check_val_ident = LIDENT | "(" check_operator_rparen ;
   check_lparen_operator_rparen = "(" check_operator_rparen ;
+  check_lident_colon = LIDENT ":" ;
+  check_type_binder =
+        let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
+         (tyvar tyvar * | ($list | $_list)) "." ;
+
+  check_v_lident_colon = (LIDENT | $lid | $_lid) ":" ;
 END;
 external e_phony : PREDICTION empty ;
 external p_phony : PREDICTION empty ;
@@ -483,12 +489,12 @@ external p_phony : PREDICTION empty ;
   ;
   item_extension:
   [ [ "[%%" ; e = V attribute_body "extension"; "]" -> e
-    | s = QUOTEDEXTENSION -> <:vala< make_string_extension loc s >>
+    | s = QUOTEDITEMEXTENSION -> <:vala< make_string_extension loc s >>
     ] ]
   ;
   alg_extension:
   [ [ "[%" ; e = V attribute_body "extension"; "]" -> e
-    | s = QUOTEDEXTENSION -> <:vala< make_string_extension loc s >>
+    | s = QUOTEDALGEXTENSION -> <:vala< make_string_extension loc s >>
     ] ]
   ;
   functor_parameter:
@@ -504,6 +510,7 @@ external p_phony : PREDICTION empty ;
                      <:module_expr< functor $fp:arg$ -> $me$ >>)
             argl me in
           module_expr_wrap_attrs me alg_attrs
+      | x = NEXT -> x
       ]
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
@@ -556,8 +563,8 @@ external p_phony : PREDICTION empty ;
   ;
 
   type_binder_opt: [ [
-    ls = V (LIST1 typevar) ; "." -> ls
-  | -> <:vala< [] >>
+    check_type_binder ; ls = V (LIST1 typevar) ; "." -> ls
+  | check_eps -> <:vala< [] >>
   ] ]
   ;
   ext_opt: [ [ ext = OPT [ "%" ; id = attribute_id -> id ] -> ext ] ] ;
@@ -1475,15 +1482,15 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         cdl = LIST0 constructor_declaration SEP "|" ->
           <:ctyp< [ $list:cdl$ ] >>
       | ".." -> <:ctyp< .. >>
-      | t = ctyp ->
+      | check_eps ; t = ctyp ->
           <:ctyp< $t$ >>
-      | t = ctyp; "="; pf = FLAG "private"; "{";
+      | check_eps ; t = ctyp; "="; pf = FLAG "private"; "{";
         ldl = V label_declarations "list"; "}" ->
           <:ctyp< $t$ == $priv:pf$ { $_list:ldl$ } >>
-      | t = ctyp; "="; pf = FLAG "private"; OPT "|";
+      | check_eps ; t = ctyp; "="; pf = FLAG "private"; OPT "|";
         cdl = LIST1 constructor_declaration SEP "|" ->
           <:ctyp< $t$ == $priv:pf$ [ $list:cdl$ ] >>
-      | t = ctyp; "="; pf = FLAG "private"; ".." ->
+      | check_eps ; t = ctyp; "="; pf = FLAG "private"; ".." ->
           <:ctyp< $t$ == $priv:pf$ .. >>
       | "{"; ldl = V label_declarations "list"; "}" ->
           <:ctyp< { $_list:ldl$ } >> ] ]
@@ -1527,10 +1534,10 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "of"; cdrec = record_type ; alg_attrs = alg_attributes ->
           (<:vala< [] >>, Ploc.VaVal [cdrec], <:vala< None >>, alg_attrs)
 
-      | ":"; ls = LIST1 typevar ; "." ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
+      | ":"; check_type_binder ; ls = LIST1 typevar ; "." ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
           (<:vala< ls >>, cal, <:vala< Some t >>, alg_attrs)
-      | ":" ; cal = LIST1 (ctyp LEVEL "apply") SEP "*"; "->"; t = ctyp ; alg_attrs = alg_attributes ->
-          (<:vala< [] >>, <:vala< cal >>, <:vala< Some t >>, alg_attrs)
+      | ":" ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
+          (<:vala< [] >>, cal, <:vala< Some t >>, alg_attrs)
 
       | ":"; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*") ; alg_attrs = alg_attributes ->
           let t =
@@ -1627,14 +1634,22 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ]
     | "below_alg_attribute" [ t = NEXT -> t ]
 
-    | [ t1 = SELF; "as"; "'"; i = ident -> <:ctyp< $t1$ as '$i$ >> ]
-    | "arrow" RIGHTA
-      [ t1 = SELF; "->"; t2 = SELF -> <:ctyp< $t1$ -> $t2$ >> ]
+    | [ t1 = NEXT; "as"; "'"; i = ident -> <:ctyp< $t1$ as '$i$ >>
+      | t1 = NEXT -> t1
+      ]
+    | "arrow" NONA
+      [ t1 = NEXT; "->"; t2 = SELF -> <:ctyp< $t1$ -> $t2$ >>
+      | t1 = NEXT ; check_eps -> t1
+      ]
     | "star"
-      [ t = SELF; "*"; tl = LIST1 (ctyp LEVEL "apply") SEP "*" ->
-          <:ctyp< ( $list:[t :: tl]$ ) >> ]
+      [ t = NEXT; "*"; tl = LIST1 (ctyp LEVEL "apply") SEP "*" ->
+          <:ctyp< ( $list:[t :: tl]$ ) >>
+      | t = NEXT -> t
+      ]
     | "apply"
-      [ t1 = SELF; t2 = SELF -> <:ctyp< $t2$ $t1$ >> ]
+      [ t1 = NEXT; t2 = NEXT -> <:ctyp< $t2$ $t1$ >>
+      | t1 = NEXT ; check_eps -> t1
+      ]
     | "simple"
       [ t = ctyp_ident → t
       | "'"; i = V ident "" -> <:ctyp< '$_:i$ >>
@@ -1645,10 +1660,10 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           let ct = <:ctyp< ( module $mt$ ) >> in
           ctyp_to_inline ct ext []
 
-      | "("; t = SELF; ","; tl = LIST1 ctyp SEP ","; ")";
+      | "("; t = ctyp; ","; tl = LIST1 ctyp SEP ","; ")";
         i = ctyp LEVEL "simple" ->
           List.fold_left (fun c a -> <:ctyp< $c$ $a$ >>) i [t :: tl]
-      | "("; t = SELF; ")" -> <:ctyp< $t$ >> ] ]
+      | "("; t = ctyp; ")" -> <:ctyp< $t$ >> ] ]
   ;
   (* Identifiers *)
   ident:
@@ -1665,13 +1680,17 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_declaration SEP "and") ->
           str_item_to_inline <:str_item< class $_list:cd$ >> ext
       | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
-          str_item_to_inline <:str_item< class type $_list:ctd$ >> ext ] ]
+          str_item_to_inline <:str_item< class type $_list:ctd$ >> ext
+      | x = NEXT -> x
+      ] ]
   ;
   sig_item: AFTER "top"
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_description SEP "and") ->
           sig_item_to_inline <:sig_item< class $_list:cd$ >> ext
       | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
-          sig_item_to_inline <:sig_item< class type $_list:ctd$ >> ext ] ]
+          sig_item_to_inline <:sig_item< class type $_list:ctd$ >> ext
+      | x = NEXT -> x
+      ] ]
   ;
   (* Class expressions *)
   class_declaration:
@@ -1945,7 +1964,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | f = field -> [f] ] ]
   ;
   field:
-    [ [ lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
+    [ [ check_lident_colon ; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (Some lab, t, alg_attrs)
       | t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (None, t, alg_attrs)
@@ -1958,14 +1977,14 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   poly_type:
     [ [ "type"; nt = LIST1 LIDENT; "."; ct = ctyp ->
           <:ctyp< type $list:nt$ . $ct$ >>
-      | tpl = LIST1 typevar; "."; t2 = ctyp ->
+      | check_type_binder ; tpl = LIST1 typevar; "."; t2 = ctyp ->
           <:ctyp< ! $list:tpl$ . $t2$ >>
       | t = ctyp -> t ] ]
   ;
   poly_type_below_alg_attribute:
     [ [ "type"; nt = LIST1 LIDENT; "."; ct = ctyp ->
           <:ctyp< type $list:nt$ . $ct$ >>
-      | tpl = LIST1 typevar; "."; t2 = ctyp ->
+      | check_type_binder ; tpl = LIST1 typevar; "."; t2 = ctyp ->
           <:ctyp< ! $list:tpl$ . $t2$ >>
       | t = ctyp LEVEL "below_alg_attribute" -> t ] ]
   ;
@@ -1983,10 +2002,11 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Labels *)
   ctyp: AFTER "arrow"
     [ NONA
-      [ i = V LIDENT; ":"; t = SELF -> <:ctyp< ~$_:i$: $t$ >>
+      [ check_v_lident_colon ; i = V LIDENT; ":"; t = SELF -> <:ctyp< ~$_:i$: $t$ >>
       | i = V QUESTIONIDENTCOLON; t = SELF -> <:ctyp< ?$_:i$: $t$ >>
       | i = V QUESTIONIDENT; ":"; t = SELF -> <:ctyp< ?$_:i$: $t$ >>
       | "?" ; i = V LIDENT ; ":"; t = SELF -> <:ctyp< ?$_:i$: $t$ >>
+      | x = NEXT -> x
     ] ]
   ;
   ctyp: LEVEL "simple"

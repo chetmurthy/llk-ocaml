@@ -283,6 +283,28 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Empty:
+EXPORT: e;
+
+  e: [ "top"
+       [ "let" ; s = STRING -> Right ("let "^s)
+       | x = NEXT -> x
+       ]
+     | [  ]
+     ] ;
+
+  e: AFTER "top" [ [
+       "value" ; n = INT -> Left (int_of_string n)
+     | x = NEXT -> x
+     ] ]
+  ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -389,6 +411,10 @@ let tests = "simple" >::: [
     ; "Neg" >:: (fun _ ->
         assert_equal (Right "let a") (pa Neg.e {|let "a"|})
       ; assert_equal (Left "0") (pa Neg.e {|0|})
+    )
+    ; "Empty" >:: (fun _ ->
+        assert_equal (Right "let a") (pa Empty.e {|let "a"|})
+      ; assert_equal (Left 0) (pa Empty.e {|value 0|})
     )
 ]
 

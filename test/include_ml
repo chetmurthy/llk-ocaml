@@ -62,13 +62,14 @@ let pp_ctyp ty = Fmt.(pf stdout "#<ctyp< %a >>" Pa_ppx_base.Pp_MLast.pp_ctyp ty)
 let pp_expr ty = Fmt.(pf stdout "#<expr< %a >>" Pa_ppx_base.Pp_MLast.pp_expr ty);;
 let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty);;
 *)
+
 (*
 #install_printer pp_ctyp ;;
- *)
 #install_printer pp_expr ;;
-(*
 #install_printer pp_patt ;;
+ *)
 #install_printer pp_str_item ;;
+(*
 #install_printer pp_sig_item ;;
  *)
 #require "pa_llk_compiler" ;;
@@ -140,20 +141,20 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-
+(*
 #load "original_rtest.cmo";;
 #require "camlp5.pr_official";;
 #load "papr_test_matrix.cmo";;
 #load "llko2official_test.cmo" ;;
 open Original_rtest ;;
 open Llko2official_test ;;
-(*
+
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
+ *)
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-
+(*
 #load "external_test.cmo";;
 open External_test ;;
  *)

@@ -928,11 +928,12 @@ value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
    *)
 
 value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
-    if ([] = l.al_rules.au_rules) then
-      raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s has an empty level" ename
-    else () ;
     let loc = l.al_loc in
-    let l = match l.al_assoc with [
+    let l =
+      if ([] = l.al_rules.au_rules) then
+        {(l) with al_label = None ; al_assoc = None }
+      else
+      match l.al_assoc with [
           None | Some NONA ->
             let rules =
               l.al_rules.au_rules
@@ -2386,7 +2387,7 @@ value compile1a_entry cg e =
     let rhs =
       match branches with [
         [(_,_,e)] -> e
-      | [] -> assert False
+      | [] -> <:expr< fun __strm__ -> raise Stream.Failure >>
       | _ ->
          let branches =
            branches
