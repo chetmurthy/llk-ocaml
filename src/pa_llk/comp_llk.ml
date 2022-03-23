@@ -1827,7 +1827,7 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 
 end ;
 
-(*
+
 module S7SeparateSyntactic = struct
   (** in each entry, separate entries with some rules that start
       with syntactic predicates and some that do not, into two entries,
@@ -1848,9 +1848,16 @@ value sep1_entry cg e = do {
   let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rs.au_rules in
   assert ([] > sp_rl) ;
   let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = nonsp_rl}}]} in
-  let e1_name = 
-}
+  let e1_name = CG.fresh_name cg e.ae_name in
+  let e1 = { (e) with
+             ae_name = e1_name
+           ; ae_levels = [{(lev) with al_rules = sp_rl @ [
+                 {
+               ]}]
+           } in
+  [e0; e1]
 ;
+
 value sep_entry cg e = do {
   assert (1 = List.length e.ae_levels) ;
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
@@ -1872,7 +1879,7 @@ value exec0 cg el =
 value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
 
 end ;
-*)
+
 module SortEntries = struct
 
 value exec0 el =
