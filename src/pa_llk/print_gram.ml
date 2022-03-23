@@ -285,16 +285,20 @@ and pr_re_star pc = fun [
     ]
 
 and pr_re_simple pc = fun [
-      Special _ x -> pprintf pc "\"%s\"" x
-    | Class _ x None -> pprintf pc "%s" x
-    | Class _ x (Some s) -> pprintf pc "%s/\"%s\"" x s
-    | Anti _ x when Llk_regexps.PatternBaseToken.is_lident x -> pprintf pc "$%s" x
-    | Anti _ x -> pprintf pc "$\"%s\"" (String.escaped x)
-    | Output _ x -> pprintf pc "#%d" x
+      TOKEN _ t -> pprintf pc "%p" pr_tokenast t
     | EPS _ -> pprintf pc "eps"
     | ANY _ -> pprintf pc "_"
+    | EXCEPT _ l -> pprintf pc "[^ %p]" (plist pr_tokenast 0) (pair_with " " l)
     | ID _ x -> pprintf pc "%s" x
     | x -> pr_re_let pc x
+    ]
+and pr_tokenast pc = fun [
+      Special x -> pprintf pc "\"%s\"" x
+    | Class x None -> pprintf pc "%s" x
+    | Class x (Some s) -> pprintf pc "%s/\"%s\"" x s
+    | Anti x when Llk_regexps.PatternBaseToken.is_lident x -> pprintf pc "$%s" x
+    | Anti x -> pprintf pc "$\"%s\"" (String.escaped x)
+    | Output x -> pprintf pc "#%d" x
     ]
 ;
 

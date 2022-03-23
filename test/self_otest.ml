@@ -192,16 +192,23 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   e1: [ [ x = e0; "*" -> STAR (loc, x) | x = e0 -> x ] ] ;
 
   e0:
-    [ [ x = STRING -> Special(loc, x)
-      | x = UIDENT -> Class(loc, x, None)
-      | x = UIDENT ; "/" ; s = STRING -> Class(loc, x, Some s)
-      | "$" ; x = LIDENT -> Anti(loc, x)
-      | "#" ; x = INT -> Output(loc, int_of_string x)
+    [ [ t = token -> TOKEN (loc, t)
       | "("; x = e6; ")" -> x
       | "eps" -> EPS loc
+      | "empty" -> DISJ(loc, [])
+      | "_" -> ANY loc
       | x = LIDENT -> ID(loc, x)
       ]
     ]
+  ;
+  token: [ [
+      x = STRING -> Special x
+    | x = UIDENT -> Class (x, None)
+    | x = UIDENT ; "/" ; s = STRING -> Class (x, Some s)
+    | "$" ; x = LIDENT -> Anti x
+    | "$" ; x = STRING -> Anti (Scanf.unescaped x)
+    | "#" ; x = INT -> Output (int_of_string x)
+    ] ]
   ;
 
 

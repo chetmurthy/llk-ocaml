@@ -1916,6 +1916,10 @@ value rec infer_symbol cg stk ename = fun [
       ])
 
   | ASkeyw _ kw -> (PSyn.token (SPCL kw), True)
+  | ASlist _ LML_1 s _ ->
+     let (re, _) = infer_symbol cg stk ename s in
+     (re, False)
+
   | ASlist _ _ _ _ -> (PSyn.epsilon, False)
   | ASnext _ _ -> assert False
   | ASnterm _ nt _ (Some _) -> assert False
@@ -1933,7 +1937,10 @@ value rec infer_symbol cg stk ename = fun [
         | x -> (x, True)
      ])
 
-  | ASleft_assoc _ _ _ _ -> (PSyn.epsilon, False)
+  | ASleft_assoc _ s _ _ ->
+     let (re, _) = infer_symbol cg stk ename s in
+     (re, False)
+
   | ASrules _ _ -> assert False
   | ASself _ _ -> assert False
   | AStok _ cls None -> (PSyn.token (CLS cls None), True)

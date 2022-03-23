@@ -191,7 +191,6 @@ value p_phony =
     (parser [])
 ;
 
-
 [@@@llk
 {foo|
 GRAMMAR Original:
@@ -206,6 +205,7 @@ EXTEND gram ;
     operator_rparen
     ext_attributes
     interf implem use_file top_phrase expr patt;
+
 REGEXPS:
   check_and_in = "and" | "in" ;
   check_colon = ":" ;
@@ -328,6 +328,7 @@ REGEXPS:
 
   check_v_lident_colon = (LIDENT | $lid | $_lid) ":" ;
 END;
+
 external e_phony : PREDICTION empty ;
 external p_phony : PREDICTION empty ;
 
@@ -1844,9 +1845,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Class types *)
   class_type:
     [ "top"
-      [ INFER 2 ; t = ctyp LEVEL "star"; "->"; ct = SELF ->
+      [ t = ctyp LEVEL "star"; "->"; ct = SELF ->
           <:class_type< [ $t$ ] -> $ct$ >>
-      | INFER 2 ; cs = class_signature -> cs ] ]
+      | check_eps ; cs = class_signature -> cs ] ]
   ;
   class_signature:
     [ "alg_attribute" LEFTA
