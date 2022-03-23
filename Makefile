@@ -52,10 +52,13 @@ META: META.pl
 	./META.pl > META
 
 clean::
-	$(MAKE) -C bootstrap-src clean
 	$(MAKE) -C src clean
 	$(MAKE) -C test clean
-	$(RM) -rf META bootstrap-install local-install
+	$(RM) -rf META local-install
+
+realclean:: clean
+	$(MAKE) -C bootstrap-src clean
+	$(RM) -rf bootstrap-install
 
 depend:
 	$(MAKE) -C src depend

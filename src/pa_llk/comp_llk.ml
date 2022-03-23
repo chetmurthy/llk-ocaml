@@ -158,6 +158,8 @@ module CompilingGrammar = struct
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
+ value fresh_name cg x = Ctr.fresh_name x (snd cg).ctr ;
+
   value mk t = (t, {
                   ctr = Ctr.mk()
                 ; gram_alphabet = []
@@ -323,7 +325,7 @@ module S0Alphabet = struct
 value exec cg = do { CG.set_alphabet cg (alphabet cg) ; cg } ;
 end ;
 
-module S0ProcessRegexps = struct
+module S1ProcessRegexps = struct
 open Llk_regexps ;
 
 value process_regexps cg =
@@ -351,7 +353,7 @@ value convert_regexp_references cg =
                 {(ps) with ap_symb = ASregexp loc nt}
       | {ap_symb=ASnterm loc nt _ _}
            when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
-                raise_failwithf (CG.adjust_loc cg loc) "S0ProcessRegexps: no nonterminal %s found in grammar" nt
+                raise_failwithf (CG.adjust_loc cg loc) "S1ProcessRegexps: no nonterminal %s found in grammar" nt
       | ps -> fallback_migrate_a_psymbol dt ps
       ] in
   let dt = { (dt) with Llk_migrate.migrate_a_psymbol = migrate_a_psymbol } in
@@ -591,7 +593,7 @@ end ;
 
    Taking the position-marked entry, start inserting from that list of
    tsorted entries.  *)
-module S1Coalesce = struct
+module S2Coalesce = struct
   open Std ;
 
   value is_position_marked e = isSome e.ae_pos ;
@@ -848,7 +850,7 @@ and f2a cg = fun [
     ]
 ;
 
-module S2Precedence = struct 
+module S3Precedence = struct 
 
 value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
   let right_rho = Subst.[
@@ -1102,7 +1104,7 @@ value exec0 cg e =
     | [l] ->
        (match l.al_assoc with [
             Some a ->
-            raise_failwithf (CG.adjust_loc cg l.al_loc) "S2Precedence(%s): associativity marking on single-level entry: %s"
+            raise_failwithf (CG.adjust_loc cg l.al_loc) "S3Precedence(%s): associativity marking on single-level entry: %s"
               e.ae_name (Pr.assoc Pprintf.empty_pc a)
           | None ->
              ([], [substitute_self { (e) with ae_pos = None ; ae_levels = [{ (l) with al_label = None }]}])
@@ -1157,7 +1159,7 @@ value exec (({gram_entries=el}, _) as cg) = do {
 
 end ;
 
-module S4LeftFactorize = struct
+module S5LeftFactorize = struct
 
 value extract_left_factors1 rl =
   if List.length rl > 1 &&
@@ -1183,22 +1185,22 @@ value rec extract_left_factors rl =
     ]
 ;
 
-value rec left_factorize0 ctr loc rl =
+value rec left_factorize0 cg loc rl =
   match extract_left_factors rl with [
       ([], rl) -> rl
     | (factors,rl) ->
-       let n = Ctr.fresh_name "x" ctr in
+       let n = CG.fresh_name cg "x" in
        let right_psymb = {
            ap_loc = loc
          ; ap_patt = Some <:patt< $lid:n$ >>
-         ; ap_symb = ASrules loc { au_loc = loc ; au_rules = (left_factorize ctr loc rl) }
+         ; ap_symb = ASrules loc { au_loc = loc ; au_rules = (left_factorize cg loc rl) }
          } in
        [{ ar_loc = loc
         ; ar_psymbols = factors @ [ right_psymb ]
         ; ar_action = Some <:expr< $lid:n$ >> }]
     ]
 
-and left_factorize ctr loc rl =
+and left_factorize cg loc rl =
   let mt_rules = List.filter (fun r -> [] = r.ar_psymbols) rl in
   let nonmt_rules = List.filter (fun r -> [] <> r.ar_psymbols) rl in
   let head_psymbols = List.map (fun r -> List.hd r.ar_psymbols) nonmt_rules in
@@ -1207,36 +1209,35 @@ and left_factorize ctr loc rl =
     head_psymbols
     |> List.map (fun ps ->
            nonmt_rules |> List.filter (fun r -> equal_a_psymbol ps (List.hd r.ar_psymbols))) in
-  List.concat ((List.map (left_factorize0 ctr loc) partitions) @ [mt_rules])
+  List.concat ((List.map (left_factorize0 cg loc) partitions) @ [mt_rules])
 ;
 
-value make_dt () =
-  let ctr = Ctr.mk() in
+value make_dt cg =
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_rules = dt.migrate_a_rules in
   let migrate_a_rules dt rs = 
     let rs = fallback_migrate_a_rules dt rs in
     let loc = rs.au_loc in    
-    {(rs) with au_rules = left_factorize ctr loc rs.au_rules }
+    {(rs) with au_rules = left_factorize cg loc rs.au_rules }
   in
 
   { (dt) with Llk_migrate.migrate_a_rules = migrate_a_rules }
 ;
 
-value left_factorize_level l =
-  let dt = make_dt () in
+value left_factorize_level cg l =
+  let dt = make_dt cg in
   dt.migrate_a_level dt l
 ;
 
-value left_factorize_levels l = do {
+value left_factorize_levels cg l = do {
   assert (1 = List.length l) ;
-  List.map left_factorize_level l
+  List.map (left_factorize_level cg) l
 }
 ;
 
-value exec0 e = {(e) with ae_levels = left_factorize_levels e.ae_levels } ;
+value exec0 cg e = {(e) with ae_levels = left_factorize_levels cg e.ae_levels } ;
 
-value exec cg = CG.withg cg {(CG.g cg) with gram_entries = List.map exec0 (CG.gram_entries cg)} ;
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = List.map (exec0 cg) (CG.gram_entries cg)} ;
 
 end ;
 
@@ -1667,10 +1668,7 @@ value exec ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
 
 end ;
 
-module S5LambdaLift = struct
-  (** in each entry, replace all multi-way rules with a new entry;
-      repeat until there are no multi-way rules left in any entry.
-   *)
+module FreeLids = struct
 
 value free_lids_of_expr e =
   let acc = ref [] in
@@ -1739,36 +1737,45 @@ value free_lids_of_a_rules rs =
   }
 ;
 
-value rec lift_rules cg mut esig rl = { (rl) with au_rules = List.map (lift_rule cg mut esig) rl.au_rules }
+end ;
 
-and lift_rule cg mut esig r =
+module S6LambdaLift = struct
+  (** in each entry, replace all multi-way rules with a new entry;
+      repeat until there are no multi-way rules left in any entry.
+   *)
+
+open FreeLids ;
+
+value rec lift_rules cg acc esig rl = { (rl) with au_rules = List.map (lift_rule cg acc esig) rl.au_rules }
+
+and lift_rule cg acc esig r =
   let (_, revps) = List.fold_left (fun (stkpat, revps) ps ->
-    let ps = lift_psymbol cg mut esig stkpat ps in
+    let ps = lift_psymbol cg acc esig stkpat ps in
     let stkpat = match ps.ap_patt with [ None -> stkpat | Some p -> [p :: stkpat] ] in
     (stkpat, [ps :: revps])
   ) ([], []) r.ar_psymbols in
   { (r) with ar_psymbols = List.rev revps }
 
-and lift_psymbol cg mut esig stkpat ps =
-  { (ps) with ap_symb = lift_symbol cg mut esig stkpat ps.ap_symb }
+and lift_psymbol cg acc esig stkpat ps =
+  { (ps) with ap_symb = lift_symbol cg acc esig stkpat ps.ap_symb }
 
-and lift_symbol cg ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun [
-      ASflag loc s -> ASflag loc (lift_symbol cg mut esig revpats s)
+and lift_symbol cg acc ((ename, eformals) as esig) revpats = fun [
+      ASflag loc s -> ASflag loc (lift_symbol cg acc esig revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg mut esig revpats s) None
+     ASlist loc lml (lift_symbol cg acc esig revpats s) None
   | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg mut esig revpats s) (Some (lift_symbol cg mut esig revpats s2, b))
+     ASlist loc lml (lift_symbol cg acc esig revpats s) (Some (lift_symbol cg acc esig revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg mut esig revpats s)
+  | ASopt loc s -> ASopt loc (lift_symbol cg acc esig revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg mut esig revpats s1) (lift_symbol cg mut esig revpats s2) e
+     ASleft_assoc loc (lift_symbol cg acc esig revpats s1) (lift_symbol cg acc esig revpats s2) e
 
   | ASrules loc rl ->
      let formals = eformals @ (List.rev revpats) in
@@ -1777,7 +1784,7 @@ and lift_symbol cg ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun
        formals
      |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) ids_of_rl) in
      let actuals = formals2actuals cg formals in
-     let new_ename = Ctr.fresh_name ename ctr in
+     let new_ename = CG.fresh_name cg ename in
      let new_e = {
          ae_loc = rl.au_loc
        ; ae_name = new_ename
@@ -1791,27 +1798,26 @@ and lift_symbol cg ((ctr, acc) as mut) ((ename, eformals) as esig) revpats = fun
 
   | ASself _ _ as s -> s
   | AStok _ _ _ as s -> s
-  | ASvala loc s sl -> ASvala loc (lift_symbol cg mut esig revpats s) sl
+  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc esig revpats s) sl
 ]
 ;
 
-value lift_level cg mut esig l = { (l) with al_rules = lift_rules cg mut esig l.al_rules } ;
+value lift_level cg acc esig l = { (l) with al_rules = lift_rules cg acc esig l.al_rules } ;
 
-value lift_levels cg mut esig ll = do {
+value lift_levels cg acc esig ll = do {
     assert (1 = List.length ll) ;
-    List.map (lift_level cg mut esig) ll
+    List.map (lift_level cg acc esig) ll
 }    
 ;
-value lift_entry cg mut e =
-  let ll = lift_levels cg mut (e.ae_name, e.ae_formals) e.ae_levels in
+value lift_entry cg acc e =
+  let ll = lift_levels cg acc (e.ae_name, e.ae_formals) e.ae_levels in
   { (e) with ae_levels = ll }
 ;
   
 value exec0 cg el =
-  let ctr = Ctr.mk() in 
   let rec erec el =
     let acc = ref [] in
-    let el = List.map (lift_entry cg (ctr, acc)) el in
+    let el = List.map (lift_entry cg acc) el in
     if [] = acc.val then el
     else erec (el @ acc.val)
   in erec el
@@ -1821,6 +1827,52 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 
 end ;
 
+(*
+module S7SeparateSyntactic = struct
+  (** in each entry, separate entries with some rules that start
+      with syntactic predicates and some that do not, into two entries,
+      one with syntactic predicates, and the other without.
+   *)
+
+open FreeLids ;
+
+let is_syntatic_predicate_rule = fun [
+  {ar_psymbols=[{ap_symb=ASsyntactic _ _} :: _]} -> True
+ | _ -> False
+]
+;
+
+value sep1_entry cg e = do {
+  let lev = List.hd e.ae_levels  in
+  let rs = lev.al_rules in
+  let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rs.au_rules in
+  assert ([] > sp_rl) ;
+  let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = nonsp_rl}}]} in
+  let e1_name = 
+}
+;
+value sep_entry cg e = do {
+  assert (1 = List.length e.ae_levels) ;
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  if not (List.exists is_syntactic_predicate_rule rl) then
+    [e]
+  else
+    sep1_entry cg e
+}
+;
+
+  let ll = sep_levels cg mut (e.ae_name, e.ae_formals) e.ae_levels in
+  { (e) with ae_levels = ll }
+;
+  
+value exec0 cg el =
+    List.concat_map (sep_entry cg) el
+;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+*)
 module SortEntries = struct
 
 value exec0 el =
@@ -1838,7 +1890,8 @@ end ;
   Such an entry can be eliminated, and all instances of entry "e"
   can be replaced with "f".
  *)
-module S3EmptyEntryElim = struct
+
+module S4EmptyEntryElim = struct
 
 value empty_rule cg (ename, formals) = fun [
       {ar_psymbols=[{ap_patt= Some <:patt< $lid:patt_x$ >>; ap_symb=ASnterm _ rhsname actuals None}];
@@ -2287,7 +2340,7 @@ value compile1_rule cg ename r =
       | r -> r ] in
   let spc_list = compile1_psymbols cg loc ename r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
-  let freelids = S5LambdaLift.free_lids_of_expr action in
+  let freelids = FreeLids.free_lids_of_expr action in
   if List.mem "loc" freelids then
     let action = <:expr< let loc = Grammar.loc_of_token_interval bp ep in $action$ >> in
     cparser loc (Some <:patt< bp >>, [(spc_list, Some <:patt< ep >>, action)])
@@ -2809,7 +2862,7 @@ value normre loc ?{bootstrap=False} s =
   s
   |> parse loc ~{bootstrap=bootstrap} |> CG.mk
   |> S0Alphabet.exec
-  |> S0ProcessRegexps.exec
+  |> S1ProcessRegexps.exec
   |> CheckSyntax.exec
   |> CheckLexical.exec
 ;
@@ -2823,14 +2876,14 @@ value vala_kinds loc ?{bootstrap=False} s =
 value coalesce loc ?{bootstrap=False} s =
   s
   |> vala_kinds loc ~{bootstrap=bootstrap}
-  |> S1Coalesce.exec
+  |> S2Coalesce.exec
 ;
 
 value precedence loc ?{bootstrap=False} s =
   s
   |> coalesce loc ~{bootstrap=bootstrap}
   |> CheckLexical.exec
-  |> S2Precedence.exec
+  |> S3Precedence.exec
 ;
 
 value empty_entry_elim loc ?{bootstrap=False} s =
@@ -2839,20 +2892,20 @@ value empty_entry_elim loc ?{bootstrap=False} s =
   |> CheckLexical.exec
   |> CheckNoPosition.exec
   |> CheckNoLabelAssocLevel.exec
-  |> S3EmptyEntryElim.exec
+  |> S4EmptyEntryElim.exec
 ;
 
 value left_factorize loc ?{bootstrap=False} s =
   s
   |> empty_entry_elim loc ~{bootstrap=bootstrap}
-  |> S4LeftFactorize.exec
+  |> S5LeftFactorize.exec
 ;
 
 value lambda_lift loc ?{bootstrap=False} s =
   s
   |> left_factorize loc ~{bootstrap=bootstrap}
   |> CheckLexical.exec
-  |> S5LambdaLift.exec
+  |> S6LambdaLift.exec
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
