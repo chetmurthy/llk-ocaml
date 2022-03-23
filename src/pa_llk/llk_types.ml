@@ -78,6 +78,7 @@ and a_symbol =
   | ASself of loc and list expr
   | AStok of loc and string and option string
   | ASvala of loc and a_symbol and list string
+  | ASsyntactic of loc and a_symbol
   ]
 and lmin_len =
   [ LML_0 | LML_1 ]

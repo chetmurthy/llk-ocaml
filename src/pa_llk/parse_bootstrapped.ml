@@ -161,7 +161,9 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | UIDENT/"INFER" ; n = INT ->
         ASinfer (loc, int_of_string n)
 
-      | "("; s_t = NEXT; ")" -> s_t ] ]
+      | "("; s_t = NEXT; ")" -> s_t
+      | "("; s_t = NEXT; ")" ; "?" -> ASsyntactic (loc, s_t)
+      ] ]
   ;
   pattern:
     [ [ i = LIDENT -> <:patt< $lid:i$ >>

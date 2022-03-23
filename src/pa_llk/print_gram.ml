@@ -192,6 +192,9 @@ and simple_symbol pc sy =
   | AStok _ cls None -> pprintf pc "%s" cls
   | AStok _ cls (Some constv) -> pprintf pc "%s \"%s\"" cls constv
 
+  | ASsyntactic _ sym ->
+       pprintf pc "(%p)?" symbol sym
+
   | ASlist _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" symbol sy
   ]

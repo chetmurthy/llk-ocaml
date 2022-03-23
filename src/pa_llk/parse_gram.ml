@@ -172,7 +172,9 @@ EXTEND
       | UIDENT "INFER" ; n = INT ->
         ASinfer loc (int_of_string n)
 
-      | "("; s_t = SELF; ")" -> s_t ] ]
+      | "("; s_t = SELF; ")" -> s_t
+      | "("; s_t = SELF; ")" ; "?" -> ASsyntactic loc s_t
+      ] ]
   ;
   pattern:
     [ [ i = LIDENT -> <:patt< $lid:i$ >>

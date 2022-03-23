@@ -87,3 +87,9 @@ value must_peek_nth n strm =
   if List.length l = n then Some (fst (Asttools.sep_last l))
   else None
 ;
+
+value clone_stream strm =
+  let rec crec n =
+    [: `must_peek_nth n strm ; crec (n+1) :]
+  in  crec 1
+;
