@@ -304,7 +304,7 @@ REGEXPS:
   check_type_decl =
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
-         let type_parameters = ($list | $_list | type_parameter* ) in
+         let type_parameters = eps | type_parameter | "(" ($list | $_list | type_parameter ("," type_parameter)* ) ")" in
          let v_flag_nonrec = ($flag | $_flag | "nonrec")? in
          let type_patt = $tp | $_tp | $lid | $_lid | LIDENT in
          v_flag_nonrec type_parameters type_patt
@@ -315,8 +315,8 @@ REGEXPS:
   v_longident_lident = (v_longident ".")? v_lident ;
   check_type_extension =
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
-         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-")* (tyvar | "_") in
-         let type_parameters = ($list | $_list | type_parameter* ) in
+         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
+         let type_parameters = eps | type_parameter | "(" ($list | $_list | type_parameter ("," type_parameter)* ) ")" in
          type_parameters v_longident_lident "+="
   ;
   check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
@@ -709,9 +709,8 @@ external p_phony : PREDICTION empty ;
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_type< $e1$ [@ $_attribute:attr$ ] >>
-      ]
-    | LEFTA [ mt = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") ->
-          <:module_type< $mt$ with $_list:wcl$ >> ]
+      | e1 = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") ->
+          <:module_type< $e1$ with $_list:wcl$ >> ]
     | [ "sig"; alg_attrs = alg_attributes_no_anti; sg = signature; "end" ->
           module_type_wrap_attrs <:module_type< sig $_list:sg$ end >> alg_attrs
       | "module"; "type"; "of"; alg_attrs = alg_attributes_no_anti; me = module_expr ->
@@ -796,7 +795,10 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | attr = floating_attribute -> <:sig_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:sig_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
-      ] ]
+      | si = NEXT -> si
+      ]
+    | [ ]
+    ]
   ;
   first_mod_decl_binding:
     [ [ i = uidopt_no_anti ; mt = module_declaration ; attrs = item_attributes -> (Ploc.VaVal i, mt, attrs) ] ]
@@ -1084,7 +1086,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:expr< $lid:op$ >>
       | "("; e = expr; ":"; t = ctyp; ")" -> <:expr< ($e$ : $t$) >>
       | "("; e = expr; ")" -> concat_comm loc <:expr< $e$ >>
-      | "begin"; (ext,attrs) = ext_attributes; e = SELF; "end" -> 
+      | "begin"; (ext,attrs) = ext_attributes; e = expr; "end" -> 
           expr_to_inline (concat_comm loc <:expr< $e$ >>) ext attrs
       | "begin"; (ext,attrs) = ext_attributes; "end" -> 
           expr_to_inline <:expr< $uid:"()"$ >> ext attrs
@@ -1215,9 +1217,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           l e
       | p = patt LEVEL "simple"; e = SELF -> <:expr< fun $p$ -> $e$ >>
       | "="; e = expr -> <:expr< $e$ >>
-      | ":"; t = poly_type; "="; e = SELF -> <:expr< ($e$ : $t$) >>
-      | ":"; t = poly_type; ":>"; t2 = poly_type ; "="; e = SELF -> <:expr< ( ( $e$ : $t$ ) :> $t2$ ) >>
-      | ":>"; t = poly_type; "="; e = SELF -> <:expr< ($e$ :> $t$) >>
+      | ":"; t = poly_type; "="; e = expr -> <:expr< ($e$ : $t$) >>
+      | ":"; t = poly_type; ":>"; t2 = poly_type ; "="; e = expr -> <:expr< ( ( $e$ : $t$ ) :> $t2$ ) >>
+      | ":>"; t = poly_type; "="; e = expr -> <:expr< ($e$ :> $t$) >>
       ] ]
   ;
 (* NOTE WELL: if I expand expr_or_dot into match_case and make it two rules,
@@ -1856,9 +1858,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Class types *)
   class_type:
     [ "top"
-      [ t = ctyp LEVEL "star"; "->"; ct = SELF ->
+      [ ([ ctyp LEVEL "star"; "->" ])? ; t = ctyp LEVEL "star"; "->"; ct = SELF ->
           <:class_type< [ $t$ ] -> $ct$ >>
-      | check_eps ; cs = class_signature -> cs ] ]
+      | INFER 2 ; cs = class_signature -> cs
+      | INFER 2; ct = NEXT -> ct
+      ]
+    | [ ]
+    ]
   ;
   class_signature:
     [ "alg_attribute" LEFTA
@@ -1873,7 +1879,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:class_type< $id$ [ $list:tl$ ] >>
       | "object"; alg_attrs = alg_attributes_no_anti; cst = V (OPT class_self_type);
         csf = V (LIST0 class_sig_item); "end" ->
-          class_type_wrap_attrs <:class_type< object $_opt:cst$ $_list:csf$ end >> alg_attrs ]
+          class_type_wrap_attrs <:class_type< object $_opt:cst$ $_list:csf$ end >> alg_attrs
+      | ce = NEXT -> ce
+      ]
     | [ li = extended_longident; "."; i = V LIDENT → <:class_type< $longid:li$ . $_lid:i$ >>
       | i = V LIDENT → <:class_type< $_lid:i$ >>
       ] ]

@@ -1853,20 +1853,22 @@ value sep1_entry cg e = do {
   let lev = List.hd e.ae_levels  in
   let rs = lev.al_rules in
   let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rs.au_rules in
-  assert ([] > sp_rl) ;
-  let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = nonsp_rl}}]} in
-  let e1_name = CG.fresh_name cg e.ae_name in
+  assert ([] <> sp_rl) ;
   let fresh_x = CG.fresh_name cg "__x__" in
   let actuals = formals2actuals cg e.ae_formals in
-  let e1 = { (e) with
-             ae_name = e1_name
-           ; ae_levels = [{(lev) with al_rules = {(rs) with au_rules = sp_rl @ [
+
+  let e1_name = CG.fresh_name cg e.ae_name in
+  let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = sp_rl @ [
                  { ar_loc=loc
                  ; ar_psymbols=[{ ap_loc=loc
                                 ; ap_patt = Some <:patt< $lid:fresh_x$ >>
                                 ; ap_symb = ASnterm loc e1_name actuals None}]
                  ; ar_action = Some <:expr< $lid:fresh_x$ >> }
-               ]}}]
+               ]}}]} in
+
+  let e1 = { (e) with
+             ae_name = e1_name
+           ; ae_levels = [{(lev) with al_rules = {(rs) with au_rules = nonsp_rl}}]
            } in
   [e0; e1]
 }
@@ -2792,7 +2794,7 @@ value compile_sp_entry cg e = do {
           let spred_expr = compile1_symbol cg loc ename s in
           <:expr<
             if try do { ignore ($spred_expr$ (clone_stream __strm__)) ; True }
-                      with [ (Stream.Failure _ | Stream.Error _) -> False ] then
+                      with [ (Stream.Failure | Stream.Error _) -> False ] then
               $body$ __strm__
             else
               $fallback$
@@ -2978,21 +2980,27 @@ value lambda_lift loc ?{bootstrap=False} s =
   |> SortEntries.exec
 ;
 
-value first loc ?{bootstrap=False} s =
+value separate_syntactic loc ?{bootstrap=False} s =
   s
   |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> S7SeparateSyntactic.exec
+;
+
+value first loc ?{bootstrap=False} s =
+  s
+  |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> First.exec
 ;
 
 value follow loc ?{bootstrap=False} ~{tops} s =
   s
-  |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> Follow.exec ~{tops=tops}
 ;
 
 value codegen loc ?{bootstrap=False} s =
   s
-  |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> Codegen.exec
 ;

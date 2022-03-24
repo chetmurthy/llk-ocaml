@@ -13,6 +13,7 @@ Pcaml.inter_phrases.val := Some ";;\n" ;
 
 
 module Official = struct
+include Papr_util.Official ;
 module Implem = struct
 value pr l =
   Pr_official.(with_buffer_formatter pp_implem (l, Ploc.dummy))

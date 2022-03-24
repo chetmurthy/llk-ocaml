@@ -17,10 +17,12 @@ Pcaml.inter_phrases := Some ";\n";;
  *)
 
 #require "camlp5.pr_o";;
+module Pr = Pr_o ;;
 
 (*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
+module Pr = Pr_r ;;
  *)
 #require "camlp5.quotations" ;;
 
@@ -52,10 +54,13 @@ let pp_token_stream strm =
 
 let pp_ctyp ty = Fmt.(pf stdout "#<ctyp< %s >>" (Eprinter.apply Pcaml.pr_ctyp Pprintf.empty_pc ty));;
 let pp_expr ty = Fmt.(pf stdout "#<expr< %s >>" (Eprinter.apply Pcaml.pr_expr Pprintf.empty_pc ty));;
+let pp_module_expr ty = Fmt.(pf stdout "#<module_expr< %s >>" (Eprinter.apply Pcaml.pr_module_expr Pprintf.empty_pc ty));;
+let pp_module_type ty = Fmt.(pf stdout "#<module_type< %s >>" (Eprinter.apply Pcaml.pr_module_type Pprintf.empty_pc ty));;
 let pp_patt ty = Fmt.(pf stdout "#<patt< %s >>" (Eprinter.apply Pcaml.pr_patt Pprintf.empty_pc ty));;
 
 let pp_str_item ty = Fmt.(pf stdout "#<str_item< %s >>" (Eprinter.apply Pcaml.pr_str_item Pprintf.empty_pc ty));;
 let pp_sig_item ty = Fmt.(pf stdout "#<str_item< %s >>" (Eprinter.apply Pcaml.pr_sig_item Pprintf.empty_pc ty));;
+let pp_attribute_body ty = Fmt.(pf stdout "#<attribute_body< %s >>" (Eprinter.apply Pr.pr_attribute_body Pprintf.empty_pc ty));;
 
 (*
 let pp_ctyp ty = Fmt.(pf stdout "#<ctyp< %a >>" Pa_ppx_base.Pp_MLast.pp_ctyp ty);;
@@ -65,6 +70,8 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 
 #install_printer pp_ctyp ;;
 #install_printer pp_expr ;;
+#install_printer pp_module_expr ;;
+#install_printer pp_module_type ;;
 #install_printer pp_patt ;;
 #install_printer pp_str_item ;;
 #install_printer pp_sig_item ;;
@@ -156,9 +163,14 @@ open Llko2official_test ;;
 #trace Original.F.constructor_declaration ;;
 #trace Original.F.rest_constructor_declaration ;;
 #trace Original.F.cons_ident ;;
+#trace Original.F.ctyp_ident ;;
+#trace Original.F.fun_binding ;;
 #trace Original.F.ctyp ;;
 #trace Original.F.ctyp__0003 ;;
 #trace Original.F.expr_longident ;;
+#trace Original.F.expr ;;
+#trace Original.F.paren_module_expr ;;
+#trace Original.F.module_expr ;;
 #trace Original.F.longident ;;
 #trace Original.F.longident__0002 ;;
 #trace Original.F.longident__0001__227 ;;
@@ -167,6 +179,23 @@ open Llko2official_test ;;
 #trace Original.F.extended_longident ;;
 #trace Original.F.extended_longident__0002 ;;
 #trace Original.F.extended_longident__0001__203 ;;
+#trace Original.F.str_item__0001__271_regexp ;;
+#trace Original.F.poly_type ;;
+#trace Original.F.sig_item ;;
+#trace Original.F.module_type ;;
+#trace Original.F.expr__0020 ;;
+#trace Original.F.ext_attributes ;;
+#trace Original.F.expr__0020__198 ;;
+#trace Original.F.class_signature ;;
+#trace Original.F.class_sig_item ;;
+#trace Original.F.ext_opt ;;
+#trace Original.F.class_description ;;
+#trace Original.F.alg_attributes_no_anti ;;
+#trace Original.F.class_type_parameters ;;
+#trace Original.F.class_type ;;
+#trace Original.F.class_type__0001 ;;
+#trace Original.F.class_type__0001__166 ;;
+#trace Original.F.class_type__0001__339 ;;
 
 (*
 #load "regexp_test.cmo";;
