@@ -2440,9 +2440,18 @@ value compile1a_branch cg ename i (fi, fo, r) =
     4. If they are disjoint, but more than one FIRST set is nullable, again, can't compile the entry.
     5. compile a match, with each case_branch one of the rule-branches, and the pattern being the FFO set.
  *)
-value compile1a_entry cg e =
+value compile1a_entry cg e = do {
   let loc = e.ae_loc in
   let ename = e.ae_name in
+  if ((List.hd e.ae_levels).al_rules.au_rules
+      |> List.exists (fun [
+                          {ar_psymbols=[{ap_symb=(ASregexp _ _|ASinfer _ _)} :: _]} -> True
+                        | _ -> False
+     ])) then do {
+      CG.add_warning cg (CG.adjust_loc cg loc) ename "compile1a_entry: single-rule entry, starts with regexp: FIRST/FOLLOW disallowed" ;
+      failwith "caught"
+    }
+  else () ;
   let ff = CG.follow cg ename in
   let fi_fo_rule_list =
     match (List.hd e.ae_levels).al_rules.au_rules
@@ -2485,6 +2494,7 @@ value compile1a_entry cg e =
     ;(<:patt< $lid:matcher_name$ >>, match_nest, <:vala< [] >>)
     ]
   }
+}
 ;
 
 value token_pattern loc = fun [

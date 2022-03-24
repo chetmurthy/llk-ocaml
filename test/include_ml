@@ -63,15 +63,12 @@ let pp_expr ty = Fmt.(pf stdout "#<expr< %a >>" Pa_ppx_base.Pp_MLast.pp_expr ty)
 let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty);;
 *)
 
-(*
 #install_printer pp_ctyp ;;
 #install_printer pp_expr ;;
 #install_printer pp_patt ;;
- *)
 #install_printer pp_str_item ;;
-(*
 #install_printer pp_sig_item ;;
- *)
+
 #require "pa_llk_compiler" ;;
 #require "pa_llk_runtime" ;;
 open Parse_gram ;;
@@ -141,20 +138,43 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-(*
+
 #load "original_rtest.cmo";;
 #require "camlp5.pr_official";;
 #load "papr_test_matrix.cmo";;
 #load "llko2official_test.cmo" ;;
 open Original_rtest ;;
 open Llko2official_test ;;
+#trace Original.F.implem ;;
+#trace Original.F.str_item ;;
+#trace Original.F.str_item__0001;;
+#trace Original.F.str_item__0001__268 ;;
+#trace Original.F.first_let_binding ;;
+#trace Original.F.first_type_decl ;;
+#trace Original.F.type_kind ;;
+#trace Original.F.type_kind_regexp ;;
+#trace Original.F.constructor_declaration ;;
+#trace Original.F.rest_constructor_declaration ;;
+#trace Original.F.cons_ident ;;
+#trace Original.F.ctyp ;;
+#trace Original.F.ctyp__0003 ;;
+#trace Original.F.expr_longident ;;
+#trace Original.F.longident ;;
+#trace Original.F.longident__0002 ;;
+#trace Original.F.longident__0001__227 ;;
+#trace Original.F.type_extension ;;
+#trace Original.F.str_item__0001__271 ;;
+#trace Original.F.extended_longident ;;
+#trace Original.F.extended_longident__0002 ;;
+#trace Original.F.extended_longident__0001__203 ;;
 
+(*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
+
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
  *)

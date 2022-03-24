@@ -204,6 +204,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | "eps" -> EPS loc
       | "empty" -> DISJ(loc, [])
       | "_" -> ANY loc
+      | "[" ; "^"; l = LIST1 token ; "]" -> EXCEPT (loc, l)
       | x = LIDENT -> ID(loc, x)
       ]
     ]

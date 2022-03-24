@@ -380,4 +380,6 @@ module RT = struct
   value pr_regexp_ast x = 
     x |> Pr.pr_regexp_ast Pprintf.empty_pc |> print_string ;
 
+ value pa_regexp s =
+ s |> Stream.of_string |> Grammar.Entry.parse Pa.regexp |> Llk_regexps.normalize_astre [] ;
 end ;

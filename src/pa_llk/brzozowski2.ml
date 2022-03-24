@@ -478,7 +478,7 @@ let nullable : regexp -> bool =
         Token.is_output c
     | EAny -> false
     | EExcept l ->
-       exists_char (fun a -> not (List.exists (Token.equal a) l))
+       false
     | EEpsilon
     | EStar _ ->
         true
@@ -514,6 +514,7 @@ let delta : Token.t -> regexp -> regexp =
           zero
       | EAny -> if Token.is_output a then zero else epsilon
       | EExcept l ->
+         if Token.is_output a then zero else
           if not (List.exists (Token.equal a) l) then epsilon else zero
       | EToken b ->
           if Token.equal a b then epsilon else zero

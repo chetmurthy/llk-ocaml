@@ -305,20 +305,25 @@ REGEXPS:
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
          let type_parameters = ($list | $_list | type_parameter* ) in
-         ($flag | $_flag |
-          ("rec"|"nonrec") |
-          ($list | $_list) |
-          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":="))
+         let v_flag_nonrec = ($flag | $_flag | "nonrec")? in
+         let type_patt = $tp | $_tp | $lid | $_lid | LIDENT in
+         v_flag_nonrec type_parameters type_patt
   ;
+  v_uident = $uid | $_uid | UIDENT ;
+  v_longident = (v_uident ".") * v_uident ;
+  v_lident = $lid | $_lid | LIDENT ;
+  v_longident_lident = (v_longident ".")? v_lident ;
   check_type_extension =
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-")* (tyvar | "_") in
          let type_parameters = ($list | $_list | type_parameter* ) in
-         UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=")
+         type_parameters v_longident_lident "+="
   ;
   check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
   check_cons_ident = (UIDENT | $uid | $_uid) | "true" | "false" | "[" "]" | "(" ")" | "(" "::" ")" ;
-  check_constr_decl = check_cons_ident | "|" ;
+
+  check_constr_decl = UIDENT [^ "." "("] | "true" | "false" | "|" | "[" "]";
+
   check_val_ident = LIDENT | "(" check_operator_rparen ;
   check_lparen_operator_rparen = "(" check_operator_rparen ;
   check_lident_colon = LIDENT ":" ;
@@ -327,6 +332,7 @@ REGEXPS:
          (tyvar tyvar * | ($list | $_list)) "." ;
 
   check_v_lident_colon = (LIDENT | $lid | $_lid) ":" ;
+  check_dot_v_uident = "." ($uid | $_uid | UIDENT) ;
 END;
 
 external e_phony : PREDICTION empty ;
@@ -518,9 +524,12 @@ external p_phony : PREDICTION empty ;
         <:module_expr< $e1$ [@ $_attribute:attr$ ] >>
       ]
     | [ "struct"; alg_attrs = alg_attributes_no_anti; OPT ";;"; st = structure; "end" ->
-          module_expr_wrap_attrs <:module_expr< struct $_list:st$ end >> alg_attrs ]
-    | [ me1 = SELF; "."; me2 = SELF -> <:module_expr< $me1$ . $me2$ >> ]
-    | [ me1 = SELF; me2 = paren_module_expr -> <:module_expr< $me1$ $me2$ >>
+          module_expr_wrap_attrs <:module_expr< struct $_list:st$ end >> alg_attrs 
+      | me = NEXT -> me
+      ]
+    | LEFTA [ me1 = SELF; "."; me2 = SELF -> <:module_expr< $me1$ . $me2$ >> ]
+    | LEFTA [
+        me1 = SELF; me2 = paren_module_expr -> <:module_expr< $me1$ $me2$ >>
       | me1 = SELF; check_lparen_rparen ; "("; ")" -> <:module_expr< $me1$ (struct end) >>
       ]
     | [ i = mod_expr_ident -> i
@@ -691,15 +700,17 @@ external p_phony : PREDICTION empty ;
             <:module_type< functor $fp:arg$ -> $mt$ >>)
             argl mt in
           module_type_wrap_attrs mt alg_attrs
+      | mt = NEXT -> mt
       ]
-    | RIGHTA [ mt1=SELF ; "->" ; mt2=SELF ->
+    | [ mt1=NEXT ; "->" ; mt2=SELF ->
         <:module_type< $mt1$ → $mt2$ >>
+      | mt1=NEXT ; check_eps -> mt1
      ]
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_type< $e1$ [@ $_attribute:attr$ ] >>
       ]
-    | [ mt = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") ->
+    | LEFTA [ mt = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") ->
           <:module_type< $mt$ with $_list:wcl$ >> ]
     | [ "sig"; alg_attrs = alg_attributes_no_anti; sg = signature; "end" ->
           module_type_wrap_attrs <:module_type< sig $_list:sg$ end >> alg_attrs
@@ -709,7 +720,7 @@ external p_phony : PREDICTION empty ;
       | li = extended_longident → <:module_type< $longid:li$ >>
       | i = V LIDENT → <:module_type< $_lid:i$ >>
       | e = alg_extension -> <:module_type< [% $_extension:e$ ] >>
-      | "("; mt = SELF; ")" -> <:module_type< $mt$ >> ] ]
+      | "("; mt = module_type; ")" -> <:module_type< $mt$ >> ] ]
   ;
   signature:
     [ [ sg = V (LIST0 [ s = sig_item; OPT ";;" -> s ]) -> sg ] ]
@@ -1600,7 +1611,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Core types *)
   longident:
     [ LEFTA
-      [ me1 = SELF; "."; i = V UIDENT "uid" →
+      [ me1 = SELF; check_dot_v_uident ; "."; i = V UIDENT "uid" →
           let i = vala_map uident_True_True_ i in
           <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" →
@@ -1611,7 +1622,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   extended_longident:
     [ LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
-      | me1 = SELF; "."; i = V UIDENT "uid" →
+      | me1 = SELF; check_dot_v_uident; "."; i = V UIDENT "uid" →
           let i = vala_map uident_True_True_ i in
           <:extended_longident< $longid:me1$ . $_uid:i$ >>
       ]
