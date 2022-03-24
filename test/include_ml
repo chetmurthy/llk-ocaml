@@ -8,20 +8,20 @@
 #require "bos";;
 #require "str";;
 
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
+(*
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
-
-(*
-#require "camlp5.pr_o";;
  *)
 
+#require "camlp5.pr_o";;
+
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
-
+ *)
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -151,10 +151,10 @@ open Llko2official_test ;;
 
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
+ *)
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-
+(*
 #load "external_test.cmo";;
 open External_test ;;
  *)

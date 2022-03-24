@@ -90,6 +90,9 @@ value must_peek_nth n strm =
 
 value clone_stream strm =
   let rec crec n =
-    [: `must_peek_nth n strm ; crec (n+1) :]
-  in  crec 1
+    match must_peek_nth n strm with [
+        Some tok -> [: `tok ; crec (n+1) :]
+      | None -> [: :]
+      ]
+  in [: crec 1 :]
 ;

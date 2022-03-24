@@ -115,5 +115,6 @@ value loc_of_a_symbol = fun [
   | ASself loc _ -> loc
   | AStok loc _ _ -> loc
   | ASvala loc _ _ -> loc
+  | ASsyntactic loc _ -> loc
   ]
 ;

@@ -511,7 +511,7 @@ module Env = struct
 end ;
 
 value rec check_symbol cg env = fun [
-      ASflag _ s -> check_symbol cg env s
+    ASflag _ s -> check_symbol cg env s
   | ASkeyw _ _ -> ()
   | ASlist _ _ s None -> check_symbol cg env s
   | ASlist _ _ s (Some (s2, _)) -> do { check_symbol cg env s ; check_symbol cg env s2 }
@@ -525,6 +525,7 @@ value rec check_symbol cg env = fun [
   | ASrules _ rs -> check_rules cg env rs
   | ASself _ _ -> ()
   | AStok _ _ _ -> ()
+  | ASsyntactic _ s -> check_symbol cg env s
   | ASvala _ s _ -> check_symbol cg env s
 ]
 
@@ -1249,6 +1250,7 @@ value rec psymbols cg = fun [
   [] -> TS.mk [None]
 | [{ap_symb=ASregexp _ _} :: t] -> psymbols cg t
 | [{ap_symb=ASinfer _ _} :: t] -> psymbols cg t
+| [{ap_symb=ASsyntactic _ _} :: t] -> psymbols cg t
 | [h::t] ->
    let fh = psymbol cg h in
    if TS.mem None fh then
@@ -1298,6 +1300,8 @@ and symbol cg = fun [
   | ASregexp loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
   | ASinfer loc _ as s ->
+     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
+  | ASsyntactic loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
 ]
 
@@ -1386,6 +1390,7 @@ value rec fifo_psymbols cg ff = fun [
       [] -> ff
     | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg ff t
     | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg ff t
+    | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg ff t
     | [h::t] ->
        let ft = fifo_psymbols cg ff t in
        fifo_psymbol cg ft h
@@ -1760,7 +1765,7 @@ and lift_psymbol cg acc esig stkpat ps =
   { (ps) with ap_symb = lift_symbol cg acc esig stkpat ps.ap_symb }
 
 and lift_symbol cg acc ((ename, eformals) as esig) revpats = fun [
-      ASflag loc s -> ASflag loc (lift_symbol cg acc esig revpats s)
+    ASflag loc s -> ASflag loc (lift_symbol cg acc esig revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
@@ -1798,6 +1803,7 @@ and lift_symbol cg acc ((ename, eformals) as esig) revpats = fun [
 
   | ASself _ _ as s -> s
   | AStok _ _ _ as s -> s
+  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc esig revpats s)
   | ASvala loc s sl -> ASvala loc (lift_symbol cg acc esig revpats s) sl
 ]
 ;
@@ -1836,26 +1842,34 @@ module S7SeparateSyntactic = struct
 
 open FreeLids ;
 
-let is_syntatic_predicate_rule = fun [
+value is_syntactic_predicate_rule = fun [
   {ar_psymbols=[{ap_symb=ASsyntactic _ _} :: _]} -> True
  | _ -> False
 ]
 ;
 
 value sep1_entry cg e = do {
+  let loc = e.ae_loc in
   let lev = List.hd e.ae_levels  in
   let rs = lev.al_rules in
   let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rs.au_rules in
   assert ([] > sp_rl) ;
   let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = nonsp_rl}}]} in
   let e1_name = CG.fresh_name cg e.ae_name in
+  let fresh_x = CG.fresh_name cg "__x__" in
+  let actuals = formals2actuals cg e.ae_formals in
   let e1 = { (e) with
              ae_name = e1_name
-           ; ae_levels = [{(lev) with al_rules = sp_rl @ [
-                 {
-               ]}]
+           ; ae_levels = [{(lev) with al_rules = {(rs) with au_rules = sp_rl @ [
+                 { ar_loc=loc
+                 ; ar_psymbols=[{ ap_loc=loc
+                                ; ap_patt = Some <:patt< $lid:fresh_x$ >>
+                                ; ap_symb = ASnterm loc e1_name actuals None}]
+                 ; ar_action = Some <:expr< $lid:fresh_x$ >> }
+               ]}}]
            } in
   [e0; e1]
+}
 ;
 
 value sep_entry cg e = do {
@@ -1866,10 +1880,6 @@ value sep_entry cg e = do {
   else
     sep1_entry cg e
 }
-;
-
-  let ll = sep_levels cg mut (e.ae_name, e.ae_formals) e.ae_levels in
-  { (e) with ae_levels = ll }
 ;
   
 value exec0 cg el =
@@ -2751,12 +2761,53 @@ value compile1_entry cg e =
     ]
 ;
 
+value compile_sp_entry cg e = do {
+  let loc = e.ae_loc in
+  let ename = e.ae_name in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S7SeparateSyntactic.is_syntactic_predicate_rule rl in
+  assert (List.length nonsp_rl = 1) ;
+  assert (sp_rl <> []) ;
+  let fallback = match List.hd nonsp_rl with [
+        {ar_psymbols = psl ; ar_action = Some e} as r ->
+        <:expr< $compile1_rule cg ename r$ __strm__ >>
+
+      | _ -> assert False
+      ] in
+  let rhs = List.fold_right (fun r fallback ->
+      match r with [
+          {ar_psymbols=[{ap_loc=loc; ap_symb=ASsyntactic _ s} :: t]} ->
+          let r' = {(r) with ar_psymbols = t} in
+          let body = compile1_rule cg ename r' in
+          let spred_expr = compile1_symbol cg loc ename s in
+          <:expr<
+            if try do { ignore ($spred_expr$ (clone_stream __strm__)) ; True }
+                      with [ (Stream.Failure _ | Stream.Error _) -> False ] then
+              $body$ __strm__
+            else
+              $fallback$
+              >>
+        | _ -> assert False
+        ]
+    ) sp_rl fallback in
+  let rhs = <:expr< fun __strm__ -> $rhs$ >> in
+  [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)]
+}
+;
+
+value compile_entry cg e =
+  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S7SeparateSyntactic.is_syntactic_predicate_rule then
+    compile_sp_entry cg e
+  else
+    compile1_entry cg e
+;
+
 value compile_entries cg el = do {
   assert ([] = CG.errors cg) ;
   let lol =
     el
     |> List.map (fun e ->
-           try Some (compile1_entry cg e)
+           try Some (compile_entry cg e)
            with [
                Failure "caught" -> None
              | exn ->

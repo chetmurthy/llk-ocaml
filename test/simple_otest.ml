@@ -305,6 +305,22 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Syntactic:
+EXPORT: e;
+
+  binder: [ [ l = LIST1 LIDENT ; "." -> l ] ] ;
+  e: [
+       [ (binder)? ; b = binder ; x = LIDENT -> (b, x)
+       | x = LIDENT -> ([], x)
+       ]
+     ] ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true
@@ -415,6 +431,10 @@ let tests = "simple" >::: [
     ; "Empty" >:: (fun _ ->
         assert_equal (Right "let a") (pa Empty.e {|let "a"|})
       ; assert_equal (Left 0) (pa Empty.e {|value 0|})
+    )
+    ; "Syntactic" >:: (fun _ ->
+        assert_equal ([], "x") (pa Syntactic.e {|x|})
+      ; assert_equal (["x"; "y"], "z") (pa Syntactic.e {|x y.z|})
     )
 ]
 
