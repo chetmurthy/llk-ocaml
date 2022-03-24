@@ -63,7 +63,7 @@ o2official_test.exe: papr_test_matrix.cmo o2official_test.cmo
 o2official_test.cmo: o2official_test.ml papr_test_matrix.cmi
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro,camlp5.pr_official.link -syntax camlp5r -c $<
 
-llkr2official_test.exe: papr_test_matrix.cmo llkr2official_test.cmo
+llkr2official_test.exe: papr_test_matrix.cmo revised_rtest.cmo llkr2official_test.cmo
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro,camlp5.pr_official.link,camlp5.pa_r.link -syntax camlp5r -linkall -linkpkg $^ -o $@ 
 
 llkr2official_test.cmo: llkr2official_test.ml papr_test_matrix.cmi
