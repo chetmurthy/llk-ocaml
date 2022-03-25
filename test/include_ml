@@ -145,48 +145,20 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #trace X.BEval.OutputDfa.dfa ;;
  *)
 
-
+(*
 #load "revised_rtest.cmo";;
 #require "camlp5.pr_official";;
 #load "papr_test_matrix.cmo";;
 #load "llkr2official_test.cmo" ;;
 open Revised_rtest ;;
 open Llkr2official_test ;;
-#trace Revised.F.implem ;;
-#trace Revised.F.str_item ;;
-#trace Revised.F.module_expr ;;
-#trace Revised.F.module_type ;;
-#trace Revised.F.expr ;;
-#trace Revised.F.patt ;;
-#trace Revised.F.ipatt ;;
-#trace Revised.F.paren_ipatt ;;
-#trace Revised.F.sequence ;;
-#trace Revised.F.attribute_body ;;
-#trace Revised.F.attribute_body__95 ;;
-#trace Revised.F.attribute_signature ;;
-#trace Revised.F.class_declaration ;;
-#trace Revised.F.class_type_parameters ;;
-#trace Revised.F.class_fun_binding ;;
-#trace Revised.F.class_expr ;;
-#trace Revised.F.class_expr_simple ;;
-#trace Revised.F.type_decl ;;
-#trace Revised.F.type_patt ;;
-#trace Revised.F.type_parameter ;;
-#trace Revised.F.ctyp ;;
-#trace Revised.F.let_binding ;;
-#trace Revised.F.extended_longident ;;
-#trace Revised.F.longident ;;
-#trace Revised.F.fun_def ;;
-(*
-#trace Revised.F.ctyp__0009 ;;
- *)
-#trace Revised.F.ctyp__0004 ;;
-#trace Revised.F.ctyp__0002 ;;
-#trace Revised.F.ctyp__0002__115 ;;
-(*
+
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
+ *)
+#load "error_rtest.cmo";;
+open Error_rtest ;;
+(*
 #load "simple_otest.cmo";;
 open Simple_otest ;;
 
