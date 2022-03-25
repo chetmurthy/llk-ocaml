@@ -6,6 +6,8 @@ open Asttools;
 open Pcaml;
 open Mlsyntax.Original;
 
+Pcaml.no_constructors_arity.val := True;
+
 value with_value r newv f arg = do {
     let oldv = r.val in
     r.val := newv ;
