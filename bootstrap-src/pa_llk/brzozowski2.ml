@@ -63,12 +63,14 @@ module GenericRegexp = struct
 
   and 'a skeleton =
     | EEpsilon
-  | EToken of 'a
-  | ECat of 'a regexp * 'a regexp
-  | EStar of 'a regexp
-  | EDisj of 'a regexp list
-  | EConj of 'a regexp list
-  | ENeg of 'a regexp
+    | EAny
+    | EExcept of 'a list
+    | EToken of 'a
+    | ECat of 'a regexp * 'a regexp
+    | EStar of 'a regexp
+    | EDisj of 'a regexp list
+    | EConj of 'a regexp list
+    | ENeg of 'a regexp
 
 
 (* [skeleton] allows inspecting the structure of an expression. *)
@@ -80,6 +82,11 @@ let skeleton = HashCons.data
       match s1, s2 with
       | EEpsilon, EEpsilon ->
           true
+      | EAny, EAny ->
+          true
+      | EExcept l1, EExcept l2 ->
+         List.length l1 = List.length l2 &&
+           List.for_all2 token_equal l1 l2
       | EToken c1, EToken c2 ->
           token_equal c1 c2
       | ECat (e1, f1), ECat (e2, f2) ->
@@ -101,23 +108,28 @@ let skeleton = HashCons.data
       match s with
       | EEpsilon ->
           0
+      | EAny ->
+          1
+      | EExcept l ->
+         List.fold_left (fun h t -> h %% (token_hash t)) 2 l
       | EToken c ->
-          1 %% token_hash c
+          3 %% token_hash c
       | ECat (e1, e2) ->
-          2 %% hash e1 %% hash e2
+          4 %% hash e1 %% hash e2
       | EStar e ->
-          3 %% hash e
+          5 %% hash e
       | EDisj es ->
-          List.fold_left (fun h e -> h %% hash e) 4 es
+          List.fold_left (fun h e -> h %% hash e) 6 es
       | EConj es ->
-          List.fold_left (fun h e -> h %% hash e) 5 es
+          List.fold_left (fun h e -> h %% hash e) 7 es
       | ENeg e ->
-          6 %% hash e
+          8 %% hash e
 
     let tokens rex =
       let l = ref [] in
       let rec trec rex = match skeleton rex with
-      | EEpsilon -> ()
+      | EEpsilon | EAny -> ()
+      | EExcept l2 -> l := l2 @ !l ; ()
       | EToken c -> l := c :: !l ; ()
       | ECat (e1, e2) -> trec e1 ; trec e2
       | EStar e -> trec e
@@ -240,6 +252,14 @@ let one : regexp =
 let epsilon : regexp =
   make EEpsilon
 
+(* Any non-output char. *)
+
+let any : regexp =
+  make EAny
+
+let except l : regexp =
+  make (EExcept (List.sort_uniq Token.compare l))
+
 (* A character. *)
 
 let token c =
@@ -359,6 +379,10 @@ let rec print0 b e =
   match skeleton e with
   | EEpsilon ->
       bprintf b "eps"
+  | EAny ->
+      bprintf b "_"
+  | EExcept l ->
+     bprintf b "[^ %s]" (String.concat " " (List.map Token.print l))
   | EToken c ->
       bprintf b "%s" (Token.print c)
   | EDisj [] ->
@@ -452,6 +476,9 @@ let nullable : regexp -> bool =
     match skeleton e with
     | EToken c ->
         Token.is_output c
+    | EAny -> false
+    | EExcept l ->
+       false
     | EEpsilon
     | EStar _ ->
         true
@@ -485,6 +512,10 @@ let delta : Token.t -> regexp -> regexp =
       match skeleton e with
       | EEpsilon ->
           zero
+      | EAny -> if Token.is_output a then zero else epsilon
+      | EExcept l ->
+         if Token.is_output a then zero else
+          if not (List.exists (Token.equal a) l) then epsilon else zero
       | EToken b ->
           if Token.equal a b then epsilon else zero
       | ECat (e1, e2) ->
@@ -754,54 +785,32 @@ end
 
 module OutputDfa = struct
 
+let reverse re =
+  let rec rerec re = match skeleton re with
+    | EEpsilon | EAny | EExcept _ | EToken _ -> re
+  | ECat (re1, re2) -> Syntax.( (rerec re2) @@ (rerec re1) )
+  | EStar re -> Syntax.star (rerec re)
+  | EDisj l -> Syntax.disjunction (List.map rerec l)
+  | EConj l -> Syntax.conjunction (List.map rerec l)
+  | ENeg re -> Syntax.neg (rerec re)
+  in rerec re
 
-let first_tokens : regexp -> Token.t list =
-  let module M = Memoize.ForHashedType(R) in
-  M.fix (fun delta e ->
-      match skeleton e with
-      | EEpsilon ->
-        []
-      | EToken b ->
-        [b]
-      | ECat (e1, e2) ->
-        delta e1 @ (if nullable e1 then delta e2 else [])
-      | EStar e ->
-        delta e
-      | EDisj es ->
-        List.concat_map delta es
-      | EConj es ->
-        failwith "first_tokens: cannot work on conjunctions"
-      | ENeg e ->
-        failwith "first_tokens: cannot work on negations"
-    )
+let first_tokens re =
+  if Syntax.empty re then [] else
+  let acc = ref [] in
+  Token.foreach (fun a ->
+      let re' = delta a re in
+      if not (Syntax.empty re') then
+        acc := a:: !acc) ;
+  List.sort_uniq Token.compare !acc
+
+let last_tokens re = first_tokens (reverse re)
 
 let first_outputs re =
   re
   |> first_tokens
   |> List.sort_uniq Token.compare
   |> List.filter Token.is_output
-
-
-let last_tokens : regexp -> Token.t list =
-  let module M = Memoize.ForHashedType(R) in
-  M.fix (fun delta e ->
-      match skeleton e with
-      | EEpsilon ->
-        []
-      | EToken b ->
-        [b]
-      | ECat (e1, e2) ->
-        delta e2 @ (if nullable e2 then delta e1 else [])
-      | EStar e ->
-        delta e
-      | EDisj es ->
-        List.concat_map delta es
-      | EConj es ->
-        failwith "last_tokens: cannot work on conjunctions"
-      | ENeg e ->
-        failwith "last_tokens: cannot work on negations"
-    )
-
 
 let last_outputs re =
   re

@@ -82,8 +82,17 @@ value parse_antiquot elem kinds = parser [
 ]
 ;
 
-value must_peek_nth n strm =
+value must_peek_nth n strm : option (string * string) =
   let l = Stream.npeek n strm in
   if List.length l = n then Some (fst (Asttools.sep_last l))
   else None
+;
+
+value clone_stream strm =
+  let rec crec n =
+    match must_peek_nth n strm with [
+        Some tok -> [: `tok ; crec (n+1) :]
+      | None -> [: :]
+      ]
+  in [: crec 1 :]
 ;

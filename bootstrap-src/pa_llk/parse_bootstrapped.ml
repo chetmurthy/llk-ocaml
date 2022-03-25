@@ -38,99 +38,57 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e0 __strm__ =
           match e0_matcher __strm__ with
-            0 ->
+            0 -> (parser [< '"", "("; x = e6; '"", ")" >] -> x) __strm__
+          | 1 ->
               (parser bp
-                 [< '"", "#"; '"INT", x >] ep ->
+                 [< '"", "["; '"", "^"; l = parse_list1 token;
+                    '"", "]" >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
-                   Output (loc, int_of_string x))
+                   EXCEPT (loc, l))
                 __strm__
-          | 1 -> (parser [< '"", "$"; a = e0__00 >] -> a) __strm__
-          | 2 -> (parser [< '"", "("; x = e6; '"", ")" >] -> x) __strm__
+          | 2 ->
+              (parser bp
+                 [< '"", "_" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in ANY loc)
+                __strm__
           | 3 ->
+              (parser bp
+                 [< '"", "empty" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   DISJ (loc, []))
+                __strm__
+          | 4 ->
               (parser bp
                  [< '"", "eps" >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in EPS loc)
                 __strm__
-          | 4 ->
+          | 5 ->
+              (parser bp
+                 [< t = token >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   TOKEN (loc, t))
+                __strm__
+          | 6 ->
               (parser bp
                  [< '"LIDENT", x >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ID (loc, x))
                 __strm__
-          | 5 ->
-              (parser bp
-                 [< '"STRING", x >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   Special (loc, x))
-                __strm__
-          | 6 -> (parser [< '"UIDENT", x; a = e0__01 x >] -> a) __strm__
           | _ -> raise Stream.Failure
         and e0_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("", "#") -> 0
-          | Some ("", "$") -> 1
-          | Some ("", "(") -> 2
-          | Some ("", "eps") -> 3
-          | Some ("LIDENT", _) -> 4
+            Some ("", "(") -> 0
+          | Some ("", "[") -> 1
+          | Some ("", "_") -> 2
+          | Some ("", "empty") -> 3
+          | Some ("", "eps") -> 4
           | Some ("STRING", _) -> 5
-          | Some ("UIDENT", _) -> 6
+          | Some ("UIDENT", _) -> 5
+          | Some ("", "#") -> 5
+          | Some ("", "$") -> 5
+          | Some ("LIDENT", _) -> 6
           | _ -> raise Stream.Failure
-        and e0__00 __strm__ =
-          match e0__00_matcher __strm__ with
-            0 ->
-              (parser bp
-                 [< '"LIDENT", x >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   Anti (loc, x))
-                __strm__
-          | 1 ->
-              (parser bp
-                 [< '"STRING", x >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   Anti (loc, Scanf.unescaped x))
-                __strm__
-          | _ -> raise Stream.Failure
-        and e0__00_matcher __strm__ =
-          match Stream.peek __strm__ with
-            Some ("LIDENT", _) -> 0
-          | Some ("STRING", _) -> 1
-          | _ -> raise Stream.Failure
-        and e0__01 x __strm__ =
-          match e0__01_matcher __strm__ with
-            0 ->
-              (parser bp
-                 [< '"", "/"; '"STRING", s >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   Class (loc, x, Some s))
-                __strm__
-          | 1 ->
-              (parser bp
-                 [< >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   Class (loc, x, None))
-                __strm__
-          | _ -> raise Stream.Failure
-        and e0__01_matcher __strm__ =
-          match Stream.peek __strm__ with
-            Some ("", "/") -> 0
-          | Some ("LIDENT", _) -> 1
-          | Some ("STRING", _) -> 1
-          | Some ("UIDENT", _) -> 1
-          | Some ("", "#") -> 1
-          | Some ("", "$") -> 1
-          | Some ("", "&") -> 1
-          | Some ("", "(") -> 1
-          | Some ("", ")") -> 1
-          | Some ("", "*") -> 1
-          | Some ("", "+") -> 1
-          | Some ("", ";") -> 1
-          | Some ("", "?") -> 1
-          | Some ("", "eps") -> 1
-          | Some ("", "in") -> 1
-          | Some ("", "|") -> 1
-          | Some ("", "~") -> 1
-          | _ -> raise Stream.Failure
-        and e1 = parser [< x = e0; a = e1__02 x >] -> a
+        and e1 = parser [< x = e0; a = e1__00 x >] -> a
         and e1_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("LIDENT", _) -> 0
@@ -139,10 +97,13 @@ module LLKGram =
           | Some ("", "#") -> 0
           | Some ("", "$") -> 0
           | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "_") -> 0
+          | Some ("", "empty") -> 0
           | Some ("", "eps") -> 0
           | _ -> raise Stream.Failure
-        and e1__02 x __strm__ =
-          match e1__02_matcher __strm__ with
+        and e1__00 x __strm__ =
+          match e1__00_matcher __strm__ with
             0 ->
               (parser bp
                  [< '"", "*" >] ep ->
@@ -157,7 +118,7 @@ module LLKGram =
                 __strm__
           | 2 -> (parser [< >] -> x) __strm__
           | _ -> raise Stream.Failure
-        and e1__02_matcher __strm__ =
+        and e1__00_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "*") -> 0
           | Some ("", "+") -> 1
@@ -171,6 +132,9 @@ module LLKGram =
           | Some ("", ")") -> 2
           | Some ("", ";") -> 2
           | Some ("", "?") -> 2
+          | Some ("", "[") -> 2
+          | Some ("", "_") -> 2
+          | Some ("", "empty") -> 2
           | Some ("", "eps") -> 2
           | Some ("", "in") -> 2
           | Some ("", "|") -> 2
@@ -195,9 +159,12 @@ module LLKGram =
           | Some ("", "#") -> 1
           | Some ("", "$") -> 1
           | Some ("", "(") -> 1
+          | Some ("", "[") -> 1
+          | Some ("", "_") -> 1
+          | Some ("", "empty") -> 1
           | Some ("", "eps") -> 1
           | _ -> raise Stream.Failure
-        and e2' = parser [< x = e1; a = e2'__03 x >] -> a
+        and e2' = parser [< x = e1; a = e2'__01 x >] -> a
         and e2'_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("LIDENT", _) -> 0
@@ -206,10 +173,13 @@ module LLKGram =
           | Some ("", "#") -> 0
           | Some ("", "$") -> 0
           | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "_") -> 0
+          | Some ("", "empty") -> 0
           | Some ("", "eps") -> 0
           | _ -> raise Stream.Failure
-        and e2'__03 x __strm__ =
-          match e2'__03_matcher __strm__ with
+        and e2'__01 x __strm__ =
+          match e2'__01_matcher __strm__ with
             0 ->
               (parser bp
                  [< '"", "?" >] ep ->
@@ -218,7 +188,7 @@ module LLKGram =
                 __strm__
           | 1 -> (parser [< >] -> x) __strm__
           | _ -> raise Stream.Failure
-        and e2'__03_matcher __strm__ =
+        and e2'__01_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "?") -> 0
           | Some ("LIDENT", _) -> 1
@@ -230,6 +200,9 @@ module LLKGram =
           | Some ("", "(") -> 1
           | Some ("", ")") -> 1
           | Some ("", ";") -> 1
+          | Some ("", "[") -> 1
+          | Some ("", "_") -> 1
+          | Some ("", "empty") -> 1
           | Some ("", "eps") -> 1
           | Some ("", "in") -> 1
           | Some ("", "|") -> 1
@@ -247,6 +220,9 @@ module LLKGram =
           | Some ("", "#") -> 0
           | Some ("", "$") -> 0
           | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "_") -> 0
+          | Some ("", "empty") -> 0
           | Some ("", "eps") -> 0
           | Some ("", "~") -> 0
           | _ -> raise Stream.Failure
@@ -264,6 +240,9 @@ module LLKGram =
           | Some ("", "#") -> 0
           | Some ("", "$") -> 0
           | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "_") -> 0
+          | Some ("", "empty") -> 0
           | Some ("", "eps") -> 0
           | Some ("", "~") -> 0
           | _ -> raise Stream.Failure
@@ -281,6 +260,9 @@ module LLKGram =
           | Some ("", "#") -> 0
           | Some ("", "$") -> 0
           | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "_") -> 0
+          | Some ("", "empty") -> 0
           | Some ("", "eps") -> 0
           | Some ("", "~") -> 0
           | _ -> raise Stream.Failure
@@ -304,12 +286,15 @@ module LLKGram =
           | Some ("", "#") -> 1
           | Some ("", "$") -> 1
           | Some ("", "(") -> 1
+          | Some ("", "[") -> 1
+          | Some ("", "_") -> 1
+          | Some ("", "empty") -> 1
           | Some ("", "eps") -> 1
           | Some ("", "~") -> 1
           | _ -> raise Stream.Failure
         and entry =
           parser bp
-            [< '"LIDENT", n; formals = entry__04; '"", ":";
+            [< '"LIDENT", n; formals = entry__02; '"", ":";
                pos = parse_opt position; ll = level_list >] ep ->
               let loc = Grammar.loc_of_token_interval bp ep in
               {ae_loc = loc; ae_formals = formals; ae_name = n; ae_pos = pos;
@@ -318,8 +303,8 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("LIDENT", _) -> 0
           | _ -> raise Stream.Failure
-        and entry__04 __strm__ =
-          match entry__04_matcher __strm__ with
+        and entry__02 __strm__ =
+          match entry__02_matcher __strm__ with
             0 ->
               (parser
                  [< '"", "[";
@@ -332,7 +317,7 @@ module LLKGram =
                 __strm__
           | 1 -> (parser [< >] -> []) __strm__
           | _ -> raise Stream.Failure
-        and entry__04_matcher __strm__ =
+        and entry__02_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "[") -> 0
           | Some ("", ":") -> 1
@@ -364,10 +349,10 @@ module LLKGram =
         and grammar_body =
           parser bp
             [< '"UIDENT", gid; '"", ":";
-               extend_opt = parse_opt grammar_body__05;
-               expl = grammar_body__06; rl = grammar_body__07;
-               extl = grammar_body__08;
-               el = parse_list1 grammar_body__09 >] ep ->
+               extend_opt = parse_opt grammar_body__03;
+               expl = grammar_body__04; rl = grammar_body__05;
+               extl = grammar_body__06;
+               el = parse_list1 grammar_body__07 >] ep ->
               let loc = Grammar.loc_of_token_interval bp ep in
               {gram_loc = loc; gram_extend = extend_opt; gram_id = gid;
                gram_exports = expl; gram_external_asts = extl;
@@ -376,51 +361,51 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("UIDENT", _) -> 0
           | _ -> raise Stream.Failure
-        and grammar_body__05 =
+        and grammar_body__03 =
           parser
             [< '"", "EXTEND";
                id = Grammar.Entry.parse_token_stream longident_lident;
                '"", ";" >] ->
               id
-        and grammar_body__05_matcher __strm__ =
+        and grammar_body__03_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "EXTEND") -> 0
           | _ -> raise Stream.Failure
-        and grammar_body__06 __strm__ =
-          match grammar_body__06_matcher __strm__ with
+        and grammar_body__04 __strm__ =
+          match grammar_body__04_matcher __strm__ with
             0 -> (parser [< a = exports >] -> a) __strm__
           | 1 -> (parser [< >] -> []) __strm__
           | _ -> raise Stream.Failure
-        and grammar_body__06_matcher __strm__ =
+        and grammar_body__04_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "EXPORT") -> 0
           | Some ("UIDENT", "REGEXPS") -> 1
           | Some ("LIDENT", _) -> 1
           | Some ("", "external") -> 1
           | _ -> raise Stream.Failure
-        and grammar_body__07 __strm__ =
-          match grammar_body__07_matcher __strm__ with
+        and grammar_body__05 __strm__ =
+          match grammar_body__05_matcher __strm__ with
             0 -> (parser [< a = regexps >] -> a) __strm__
           | 1 -> (parser [< >] -> []) __strm__
           | _ -> raise Stream.Failure
-        and grammar_body__07_matcher __strm__ =
+        and grammar_body__05_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "REGEXPS") -> 0
           | Some ("LIDENT", _) -> 1
           | Some ("", "external") -> 1
           | _ -> raise Stream.Failure
-        and grammar_body__08 __strm__ =
-          match grammar_body__08_matcher __strm__ with
+        and grammar_body__06 __strm__ =
+          match grammar_body__06_matcher __strm__ with
             0 -> (parser [< a = externals >] -> a) __strm__
           | 1 -> (parser [< >] -> []) __strm__
           | _ -> raise Stream.Failure
-        and grammar_body__08_matcher __strm__ =
+        and grammar_body__06_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "external") -> 0
           | Some ("LIDENT", _) -> 1
           | _ -> raise Stream.Failure
-        and grammar_body__09 = parser [< e = entry; '"", ";" >] -> e
-        and grammar_body__09_matcher __strm__ =
+        and grammar_body__07 = parser [< e = entry; '"", ";" >] -> e
+        and grammar_body__07_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("LIDENT", _) -> 0
           | _ -> raise Stream.Failure
@@ -509,7 +494,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol __strm__ =
           match
-            psymbol_regexp __strm__[@llk.regexp "\"_\" #0 | LIDENT \"=\" #1 | LIDENT \"[\" #2 | \"(\" (LIDENT | \"(\" | \"_\" | \",\" | \")\")* \"=\" #3 | (LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\") #4"]
+            psymbol_regexp __strm__[@llk.regexp "\"_\" #0 | LIDENT \"=\" #1 | LIDENT \"[\" #2 | \"(\" (LIDENT | \"(\" | \"_\" | \",\" | \")\")* \"=\" #3 | (LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\") #4"]
           with
             Some (_, 0) ->
               (parser bp
@@ -528,8 +513,8 @@ module LLKGram =
                 __strm__
           | Some (_, 2) ->
               (parser bp
-                 [< '"LIDENT", p; args = psymbol__10;
-                    lev = parse_opt psymbol__11 >] ep ->
+                 [< '"LIDENT", p; args = psymbol__08;
+                    lev = parse_opt psymbol__09 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {ap_loc = loc; ap_patt = None;
                     ap_symb = ASnterm (loc, p, args, lev)})
@@ -556,6 +541,8 @@ module LLKGram =
             | Some ("", "[") -> q0002 lastf (ofs + 1)
             | Some ("", "_") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "FLAG") ->
+                let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "INFER") ->
                 let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "LEFT_ASSOC") ->
                 let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
@@ -608,8 +595,8 @@ module LLKGram =
           and q0007 lastf ofs = let lastf = Some (ofs, 2) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
-        and psymbol__10 __strm__ =
-          match psymbol__10_matcher __strm__ with
+        and psymbol__08 __strm__ =
+          match psymbol__08_matcher __strm__ with
             0 ->
               (parser
                  [< '"", "[";
@@ -622,7 +609,7 @@ module LLKGram =
                 __strm__
           | 1 -> (parser [< >] -> []) __strm__
           | _ -> raise Stream.Failure
-        and psymbol__10_matcher __strm__ =
+        and psymbol__08_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "[") -> 0
           | Some ("UIDENT", "LEVEL") -> 1
@@ -631,8 +618,8 @@ module LLKGram =
           | Some ("", "]") -> 1
           | Some ("", "|") -> 1
           | _ -> raise Stream.Failure
-        and psymbol__11 = parser [< '"UIDENT", "LEVEL"; '"STRING", s >] -> s
-        and psymbol__11_matcher __strm__ =
+        and psymbol__09 = parser [< '"UIDENT", "LEVEL"; '"STRING", s >] -> s
+        and psymbol__09_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "LEVEL") -> 0
           | _ -> raise Stream.Failure
@@ -645,6 +632,9 @@ module LLKGram =
           | Some ("", "#") -> 0
           | Some ("", "$") -> 0
           | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "_") -> 0
+          | Some ("", "empty") -> 0
           | Some ("", "eps") -> 0
           | Some ("", "let") -> 0
           | Some ("", "~") -> 0
@@ -678,7 +668,7 @@ module LLKGram =
                  [< psl =
                       parse_list1_with_sep psymbol
                         (parser [< '"", ";" >] -> ());
-                    a = rule__12 psl >] ->
+                    a = rule__10 psl >] ->
                    a)
                 __strm__
           | _ -> raise Stream.Failure
@@ -686,6 +676,7 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("", "->") -> 0
           | Some ("UIDENT", "FLAG") -> 1
+          | Some ("UIDENT", "INFER") -> 1
           | Some ("UIDENT", "LEFT_ASSOC") -> 1
           | Some ("UIDENT", "LIST0") -> 1
           | Some ("UIDENT", "LIST1") -> 1
@@ -701,8 +692,8 @@ module LLKGram =
           | Some ("", "[") -> 1
           | Some ("", "_") -> 1
           | _ -> raise Stream.Failure
-        and rule__12 psl __strm__ =
-          match rule__12_matcher __strm__ with
+        and rule__10 psl __strm__ =
+          match rule__10_matcher __strm__ with
             0 ->
               (parser bp
                  [< '"", "->";
@@ -717,19 +708,19 @@ module LLKGram =
                    {ar_loc = loc; ar_psymbols = psl; ar_action = None})
                 __strm__
           | _ -> raise Stream.Failure
-        and rule__12_matcher __strm__ =
+        and rule__10_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "->") -> 0
           | Some ("", "]") -> 1
           | Some ("", "|") -> 1
           | _ -> raise Stream.Failure
-        and rule_list = parser [< '"", "["; a = rule_list__13 >] -> a
+        and rule_list = parser [< '"", "["; a = rule_list__11 >] -> a
         and rule_list_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "[") -> 0
           | _ -> raise Stream.Failure
-        and rule_list__13 __strm__ =
-          match rule_list__13_matcher __strm__ with
+        and rule_list__11 __strm__ =
+          match rule_list__11_matcher __strm__ with
             0 ->
               (parser bp
                  [< '"", "]" >] ep ->
@@ -745,10 +736,11 @@ module LLKGram =
                    {au_loc = loc; au_rules = rules})
                 __strm__
           | _ -> raise Stream.Failure
-        and rule_list__13_matcher __strm__ =
+        and rule_list__11_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "]") -> 0
           | Some ("UIDENT", "FLAG") -> 1
+          | Some ("UIDENT", "INFER") -> 1
           | Some ("UIDENT", "LEFT_ASSOC") -> 1
           | Some ("UIDENT", "LIST0") -> 1
           | Some ("UIDENT", "LIST1") -> 1
@@ -768,14 +760,14 @@ module LLKGram =
         and sep_opt_sep =
           parser
             [< '"UIDENT", ("SEP" as sep); t = symbol;
-               b = parse_flag sep_opt_sep__14 >] ->
+               b = parse_flag sep_opt_sep__12 >] ->
               t, b
         and sep_opt_sep_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "SEP") -> 0
           | _ -> raise Stream.Failure
-        and sep_opt_sep__14 = parser [< '"UIDENT", "OPT_SEP" >] -> ()
-        and sep_opt_sep__14_matcher __strm__ =
+        and sep_opt_sep__12 = parser [< '"UIDENT", "OPT_SEP" >] -> ()
+        and sep_opt_sep__12_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "OPT_SEP") -> 0
           | _ -> raise Stream.Failure
@@ -783,6 +775,7 @@ module LLKGram =
         and symbol_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "FLAG") -> 0
+          | Some ("UIDENT", "INFER") -> 0
           | Some ("UIDENT", "LEFT_ASSOC") -> 0
           | Some ("UIDENT", "LIST0") -> 0
           | Some ("UIDENT", "LIST1") -> 0
@@ -845,6 +838,7 @@ module LLKGram =
           | Some ("UIDENT", "LIST0") -> 2
           | Some ("UIDENT", "LIST1") -> 3
           | Some ("UIDENT", "OPT") -> 4
+          | Some ("UIDENT", "INFER") -> 5
           | Some ("UIDENT", "NEXT") -> 5
           | Some ("UIDENT", "PREDICT") -> 5
           | Some ("UIDENT", "SELF") -> 5
@@ -871,6 +865,7 @@ module LLKGram =
         and symbol__0002_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "V") -> 0
+          | Some ("UIDENT", "INFER") -> 1
           | Some ("UIDENT", "NEXT") -> 1
           | Some ("UIDENT", "PREDICT") -> 1
           | Some ("UIDENT", "SELF") -> 1
@@ -883,7 +878,10 @@ module LLKGram =
         and symbol__0003 __strm__ =
           match symbol__0003_matcher __strm__ with
             0 ->
-              (parser [< '"", "("; s_t = symbol__0001; '"", ")" >] -> s_t)
+              (parser
+                 [< '"", "("; s_t = symbol__0001; '"", ")";
+                    a = symbol__0003__13 s_t >] ->
+                   a)
                 __strm__
           | 1 ->
               (parser bp
@@ -896,49 +894,108 @@ module LLKGram =
                 __strm__
           | 2 ->
               (parser bp
-                 [< '"UIDENT", "NEXT"; args = symbol__0003__15 >] ep ->
+                 [< '"UIDENT", "INFER"; '"INT", n >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASinfer (loc, int_of_string n))
+                __strm__
+          | 3 ->
+              (parser bp
+                 [< '"UIDENT", "NEXT"; args = symbol__0003__14 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASnext (loc, args))
                 __strm__
-          | 3 ->
+          | 4 ->
               (parser bp
                  [< '"UIDENT", "PREDICT"; '"LIDENT", id >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASregexp (loc, id))
                 __strm__
-          | 4 ->
+          | 5 ->
               (parser bp
-                 [< '"UIDENT", "SELF"; args = symbol__0003__16 >] ep ->
+                 [< '"UIDENT", "SELF"; args = symbol__0003__15 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASself (loc, args))
                 __strm__
-          | 5 ->
+          | 6 ->
               (parser bp
                  [< '"STRING", e >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASkeyw (loc, e))
                 __strm__
-          | 6 ->
+          | 7 ->
               (parser bp
-                 [< '"LIDENT", id; args = symbol__0003__17;
-                    lev = parse_opt symbol__0003__18 >] ep ->
+                 [< '"LIDENT", id; args = symbol__0003__16;
+                    lev = parse_opt symbol__0003__17 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASnterm (loc, id, args, lev))
                 __strm__
-          | 7 ->
-              (parser [< '"UIDENT", x; a = symbol__0003__19 x >] -> a)
+          | 8 ->
+              (parser [< '"UIDENT", x; a = symbol__0003__18 x >] -> a)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0003_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "(") -> 0
           | Some ("", "[") -> 1
-          | Some ("UIDENT", "NEXT") -> 2
-          | Some ("UIDENT", "PREDICT") -> 3
-          | Some ("UIDENT", "SELF") -> 4
-          | Some ("STRING", _) -> 5
-          | Some ("LIDENT", _) -> 6
-          | Some ("UIDENT", _) -> 7
+          | Some ("UIDENT", "INFER") -> 2
+          | Some ("UIDENT", "NEXT") -> 3
+          | Some ("UIDENT", "PREDICT") -> 4
+          | Some ("UIDENT", "SELF") -> 5
+          | Some ("STRING", _) -> 6
+          | Some ("LIDENT", _) -> 7
+          | Some ("UIDENT", _) -> 8
+          | _ -> raise Stream.Failure
+        and symbol__0003__13 s_t __strm__ =
+          match symbol__0003__13_matcher __strm__ with
+            0 ->
+              (parser bp
+                 [< '"", "?" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASsyntactic (loc, s_t))
+                __strm__
+          | 1 -> (parser [< >] -> s_t) __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0003__13_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", "?") -> 0
+          | Some ("UIDENT", "ACCUMULATE") -> 1
+          | Some ("UIDENT", "OPT_SEP") -> 1
+          | Some ("UIDENT", "SEP") -> 1
+          | Some ("UIDENT", "WITH") -> 1
+          | Some ("STRING", _) -> 1
+          | Some ("", ")") -> 1
+          | Some ("", "->") -> 1
+          | Some ("", ";") -> 1
+          | Some ("", "]") -> 1
+          | Some ("", "|") -> 1
+          | _ -> raise Stream.Failure
+        and symbol__0003__14 __strm__ =
+          match symbol__0003__14_matcher __strm__ with
+            0 ->
+              (parser
+                 [< '"", "[";
+                    l =
+                      parse_list1_with_sep
+                        (Grammar.Entry.parse_token_stream expr)
+                        (parser [< '"", "," >] -> ());
+                    '"", "]" >] ->
+                   l)
+                __strm__
+          | 1 -> (parser [< >] -> []) __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0003__14_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", "[") -> 0
+          | Some ("UIDENT", "ACCUMULATE") -> 1
+          | Some ("UIDENT", "OPT_SEP") -> 1
+          | Some ("UIDENT", "SEP") -> 1
+          | Some ("UIDENT", "WITH") -> 1
+          | Some ("STRING", _) -> 1
+          | Some ("", ")") -> 1
+          | Some ("", "->") -> 1
+          | Some ("", ";") -> 1
+          | Some ("", "]") -> 1
+          | Some ("", "|") -> 1
           | _ -> raise Stream.Failure
         and symbol__0003__15 __strm__ =
           match symbol__0003__15_matcher __strm__ with
@@ -986,34 +1043,6 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("", "[") -> 0
           | Some ("UIDENT", "ACCUMULATE") -> 1
-          | Some ("UIDENT", "OPT_SEP") -> 1
-          | Some ("UIDENT", "SEP") -> 1
-          | Some ("UIDENT", "WITH") -> 1
-          | Some ("STRING", _) -> 1
-          | Some ("", ")") -> 1
-          | Some ("", "->") -> 1
-          | Some ("", ";") -> 1
-          | Some ("", "]") -> 1
-          | Some ("", "|") -> 1
-          | _ -> raise Stream.Failure
-        and symbol__0003__17 __strm__ =
-          match symbol__0003__17_matcher __strm__ with
-            0 ->
-              (parser
-                 [< '"", "[";
-                    l =
-                      parse_list1_with_sep
-                        (Grammar.Entry.parse_token_stream expr)
-                        (parser [< '"", "," >] -> ());
-                    '"", "]" >] ->
-                   l)
-                __strm__
-          | 1 -> (parser [< >] -> []) __strm__
-          | _ -> raise Stream.Failure
-        and symbol__0003__17_matcher __strm__ =
-          match Stream.peek __strm__ with
-            Some ("", "[") -> 0
-          | Some ("UIDENT", "ACCUMULATE") -> 1
           | Some ("UIDENT", "LEVEL") -> 1
           | Some ("UIDENT", "OPT_SEP") -> 1
           | Some ("UIDENT", "SEP") -> 1
@@ -1025,14 +1054,14 @@ module LLKGram =
           | Some ("", "]") -> 1
           | Some ("", "|") -> 1
           | _ -> raise Stream.Failure
-        and symbol__0003__18 =
+        and symbol__0003__17 =
           parser [< '"UIDENT", "LEVEL"; '"STRING", s >] -> s
-        and symbol__0003__18_matcher __strm__ =
+        and symbol__0003__17_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "LEVEL") -> 0
           | _ -> raise Stream.Failure
-        and symbol__0003__19 x __strm__ =
-          match symbol__0003__19_matcher __strm__ with
+        and symbol__0003__18 x __strm__ =
+          match symbol__0003__18_matcher __strm__ with
             0 ->
               (parser bp
                  [< '"", "/"; '"STRING", e >] ep ->
@@ -1046,7 +1075,7 @@ module LLKGram =
                    AStok (loc, x, None))
                 __strm__
           | _ -> raise Stream.Failure
-        and symbol__0003__19_matcher __strm__ =
+        and symbol__0003__18_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "/") -> 0
           | Some ("UIDENT", "ACCUMULATE") -> 1
@@ -1060,6 +1089,64 @@ module LLKGram =
           | Some ("", "]") -> 1
           | Some ("", "|") -> 1
           | _ -> raise Stream.Failure
+        and token __strm__ =
+          match token_matcher __strm__ with
+            0 ->
+              (parser [< '"", "#"; '"INT", x >] -> Output (int_of_string x))
+                __strm__
+          | 1 -> (parser [< '"", "$"; a = token__19 >] -> a) __strm__
+          | 2 -> (parser [< '"STRING", x >] -> Special x) __strm__
+          | 3 -> (parser [< '"UIDENT", x; a = token__20 x >] -> a) __strm__
+          | _ -> raise Stream.Failure
+        and token_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", "#") -> 0
+          | Some ("", "$") -> 1
+          | Some ("STRING", _) -> 2
+          | Some ("UIDENT", _) -> 3
+          | _ -> raise Stream.Failure
+        and token__19 __strm__ =
+          match token__19_matcher __strm__ with
+            0 -> (parser [< '"LIDENT", x >] -> Anti x) __strm__
+          | 1 ->
+              (parser [< '"STRING", x >] -> Anti (Scanf.unescaped x)) __strm__
+          | _ -> raise Stream.Failure
+        and token__19_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("LIDENT", _) -> 0
+          | Some ("STRING", _) -> 1
+          | _ -> raise Stream.Failure
+        and token__20 x __strm__ =
+          match token__20_matcher __strm__ with
+            0 ->
+              (parser [< '"", "/"; '"STRING", s >] -> Class (x, Some s))
+                __strm__
+          | 1 -> (parser [< >] -> Class (x, None)) __strm__
+          | _ -> raise Stream.Failure
+        and token__20_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", "/") -> 0
+          | Some ("LIDENT", _) -> 1
+          | Some ("STRING", _) -> 1
+          | Some ("UIDENT", _) -> 1
+          | Some ("", "#") -> 1
+          | Some ("", "$") -> 1
+          | Some ("", "&") -> 1
+          | Some ("", "(") -> 1
+          | Some ("", ")") -> 1
+          | Some ("", "*") -> 1
+          | Some ("", "+") -> 1
+          | Some ("", ";") -> 1
+          | Some ("", "?") -> 1
+          | Some ("", "[") -> 1
+          | Some ("", "]") -> 1
+          | Some ("", "_") -> 1
+          | Some ("", "empty") -> 1
+          | Some ("", "eps") -> 1
+          | Some ("", "in") -> 1
+          | Some ("", "|") -> 1
+          | Some ("", "~") -> 1
+          | _ -> raise Stream.Failure
       end
     open Plexing
     let _ =
@@ -1067,6 +1154,7 @@ module LLKGram =
       lexer.tok_using ("INT", "");
       lexer.tok_using ("LIDENT", "");
       lexer.tok_using ("STRING", "");
+      lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
@@ -1112,7 +1200,9 @@ module LLKGram =
       lexer.tok_using ("", "GRAMMAR");
       lexer.tok_using ("", "[");
       lexer.tok_using ("", "]");
+      lexer.tok_using ("", "^");
       lexer.tok_using ("", "_");
+      lexer.tok_using ("", "empty");
       lexer.tok_using ("", "eps");
       lexer.tok_using ("", "external");
       lexer.tok_using ("", "in");

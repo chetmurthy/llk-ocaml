@@ -95,11 +95,14 @@ type loc = Ploc.t ;
 value compare_loc a b = 0 ;
 value equal_loc a b = True ;
 
-type astre = [
-  Special of loc and string
-| Class of loc and string and option string
-| Anti of loc and string
-| Output of loc and int
+type tokenast = [
+    Special of string
+  | Class of string and option string
+  | Anti of string
+  | Output of int
+  ]
+and astre = [
+  TOKEN of loc and tokenast
 | DISJ of loc and list astre
 | CONJ of loc and list astre
 | CONC of loc and list astre
@@ -107,19 +110,28 @@ type astre = [
 | NEG of loc and astre
 | OPT of loc and astre
 | EPS of loc
+| ANY of loc
+| EXCEPT of loc and list tokenast
 | LETIN of loc and string and astre and astre
 | ID of loc and string
 ] [@@deriving (show,eq,ord) ;]
 ;
 
+value normalize_tokenast = 
+let open PatternBaseToken in
+fun [
+    Special x -> SPCL (Scanf.unescaped x)
+  | Class x None -> CLS (Scanf.unescaped x) None
+  | Class x (Some s) -> CLS (Scanf.unescaped x) (Some (Scanf.unescaped s))
+  | Anti x -> ANTI (Scanf.unescaped x)
+  | Output x -> OUTPUT x
+  ]
+;
+
 value normalize_astre env x =
   let open PatternBaseToken in
   let rec convrec env = fun [
-        Special _ x -> PSyn.token (SPCL (Scanf.unescaped x))
-      | Class _ x None -> PSyn.token (CLS (Scanf.unescaped x) None)
-      | Class _ x (Some s) -> PSyn.token (CLS (Scanf.unescaped x) (Some (Scanf.unescaped s)))
-      | Anti _ x -> PSyn.token (ANTI (Scanf.unescaped x))
-      | Output _ x -> PSyn.token (OUTPUT x)
+        TOKEN _ c -> PSyn.token (normalize_tokenast c)
       | DISJ _ l -> PSyn.disjunction (List.map (convrec env) l)
       | CONJ _ l -> PSyn.conjunction (List.map (convrec env) l)
       | CONC _ l -> concatenation (List.map (convrec env) l)
@@ -127,7 +139,9 @@ value normalize_astre env x =
       | NEG _ x -> PSyn.neg (convrec env x)
       | OPT _ x -> PSyn.disjunction [(convrec env x); PSyn.epsilon]
       | EPS _ -> PSyn.epsilon
-      | LETIN _ s e1 e2 ->
+      | ANY _ -> PSyn.any
+      | EXCEPT _ l -> PSyn.except (List.map normalize_tokenast l)
+    | LETIN _ s e1 e2 ->
          convrec [(s,convrec env e1) :: env] e2
       | ID loc s -> match List.assoc s env with [
            exception Not_found ->

@@ -71,12 +71,14 @@ and a_symbol =
   | ASnext of loc and list expr
   | ASnterm of loc and string and list expr and option string
   | ASregexp of loc and string
+  | ASinfer of loc and int
   | ASopt of loc and a_symbol
   | ASleft_assoc of loc and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
   | ASself of loc and list expr
   | AStok of loc and string and option string
   | ASvala of loc and a_symbol and list string
+  | ASsyntactic of loc and a_symbol
   ]
 and lmin_len =
   [ LML_0 | LML_1 ]
@@ -106,11 +108,13 @@ value loc_of_a_symbol = fun [
   | ASnext loc _ -> loc
   | ASnterm loc _ _ _ -> loc
   | ASregexp loc _ -> loc
+  | ASinfer loc _ -> loc
   | ASopt loc _ -> loc
   | ASleft_assoc loc _ _ _ -> loc
   | ASrules loc _ -> loc
   | ASself loc _ -> loc
   | AStok loc _ _ -> loc
   | ASvala loc _ _ -> loc
+  | ASsyntactic loc _ -> loc
   ]
 ;

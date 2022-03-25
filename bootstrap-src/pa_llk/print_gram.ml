@@ -164,6 +164,8 @@ and simple_symbol pc sy =
   match sy with
   [ ASregexp _ id ->
     pprintf pc "PREDICT %s" id
+  | ASinfer _ n ->
+    pprintf pc "INFER %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
     pprintf pc "%s%p" id (pr_option entry_actuals) args_opt
@@ -189,6 +191,9 @@ and simple_symbol pc sy =
 
   | AStok _ cls None -> pprintf pc "%s" cls
   | AStok _ cls (Some constv) -> pprintf pc "%s \"%s\"" cls constv
+
+  | ASsyntactic _ sym ->
+       pprintf pc "(%p)?" symbol sym
 
   | ASlist _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" symbol sy
@@ -252,7 +257,8 @@ and pr_re_let pc = fun [
     ]
 
 and pr_re_disj pc = fun [
-      DISJ _ l -> pprintf pc "@[%p@]" (plist pr_re_conj 2) (pair_with " | " l)
+      DISJ _ [] -> pprintf pc "empty"
+    | DISJ _ l -> pprintf pc "@[%p@]" (plist pr_re_conj 2) (pair_with " | " l)
     | re -> pr_re_conj pc re
     ]
 
@@ -282,15 +288,20 @@ and pr_re_star pc = fun [
     ]
 
 and pr_re_simple pc = fun [
-      Special _ x -> pprintf pc "\"%s\"" x
-    | Class _ x None -> pprintf pc "%s" x
-    | Class _ x (Some s) -> pprintf pc "%s/\"%s\"" x s
-    | Anti _ x when Llk_regexps.PatternBaseToken.is_lident x -> pprintf pc "$%s" x
-    | Anti _ x -> pprintf pc "$\"%s\"" (String.escaped x)
-    | Output _ x -> pprintf pc "#%d" x
+      TOKEN _ t -> pprintf pc "%p" pr_tokenast t
     | EPS _ -> pprintf pc "eps"
+    | ANY _ -> pprintf pc "_"
+    | EXCEPT _ l -> pprintf pc "[^ %p]" (plist pr_tokenast 0) (pair_with " " l)
     | ID _ x -> pprintf pc "%s" x
     | x -> pr_re_let pc x
+    ]
+and pr_tokenast pc = fun [
+      Special x -> pprintf pc "\"%s\"" x
+    | Class x None -> pprintf pc "%s" x
+    | Class x (Some s) -> pprintf pc "%s/\"%s\"" x s
+    | Anti x when Llk_regexps.PatternBaseToken.is_lident x -> pprintf pc "$%s" x
+    | Anti x -> pprintf pc "$\"%s\"" (String.escaped x)
+    | Output x -> pprintf pc "#%d" x
     ]
 ;
 
@@ -369,4 +380,6 @@ module RT = struct
   value pr_regexp_ast x = 
     x |> Pr.pr_regexp_ast Pprintf.empty_pc |> print_string ;
 
+ value pa_regexp s =
+ s |> Stream.of_string |> Grammar.Entry.parse Pa.regexp |> Llk_regexps.normalize_astre [] ;
 end ;

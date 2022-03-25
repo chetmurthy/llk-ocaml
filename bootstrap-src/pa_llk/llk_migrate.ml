@@ -110,6 +110,7 @@ end
         ; dstmod = Llk_regexps
         ; types = [
             astre
+          ; tokenast
           ]
         }
       ]
