@@ -642,7 +642,7 @@ and t2 = bool[@@"foo"];
      exclude=[];
      o_input = EXN {foo|let|| x = 1 [@@argle] in 2|foo}
                    (Ploc.Exc Ploc.dummy (Stream.Error
-                    "[andop_binding] expected after [letop_binding] (in [expr])")) ;
+                    "")) ;
      official_input = EXN {foo|let|| x = 1 [@@argle] in 2|foo}
                    (Syntaxerr.Error (Syntaxerr.Other Location.none)) ;
      r_input = EXN {foo|let|| x = 1 [@@argle] in 2;|foo}
