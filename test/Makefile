@@ -9,7 +9,7 @@ NOT_OCAMLFIND=$(LAUNCH) not-ocamlfind
 SYNTAX := camlp5o
 
 PACKAGES := $(PACKAGES),ounit2,pa_llk_compiler,camlp5,pa_llk_runtime,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,pa_llk_compiler.link
-TESTS = simple_otest regexp_otest external_otest infer_otest self_otest bug_fifo_rtest revised_rtest original_rtest r2official_test o2official_test llkr2official_test llko2official_test
+TESTS = simple_otest regexp_otest external_otest infer_otest self_otest bug_fifo_rtest revised_rtest original_rtest r2official_test o2official_test llkr2official_test llko2official_test error_otest
 ERROR_TESTS = parse_error_test
 
 RML = bug_fifo_rtest.ml  original_rtest.ml  revised_rtest.ml \
@@ -20,12 +20,12 @@ RML = bug_fifo_rtest.ml  original_rtest.ml  revised_rtest.ml \
 	llkr2official_test.ml \
 
 OML = external_otest.ml  regexp_otest.ml  simple_otest.ml \
-	infer_otest.ml	   self_otest.ml
+	infer_otest.ml	   self_otest.ml error_otest.ml
 
 
 test:: $(TESTS)
 
-all: simple_otest.exe regexp_otest.exe external_otest.exe infer_otest.exe self_otest.exe bug_fifo_rtest.exe revised_rtest.exe original_rtest.exe r2official_test.exe o2official_test.exe llkr2official_test.exe llko2official_test.exe
+all: simple_otest.exe regexp_otest.exe external_otest.exe infer_otest.exe self_otest.exe bug_fifo_rtest.exe revised_rtest.exe original_rtest.exe r2official_test.exe o2official_test.exe llkr2official_test.exe llko2official_test.exe error_otest.exe
 
 %test: %test.exe
 	mkdir -p _build
