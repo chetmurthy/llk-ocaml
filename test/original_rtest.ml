@@ -1664,8 +1664,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | t = NEXT -> t
       ]
     | "apply"
-      [ t1 = NEXT; t2 = NEXT -> <:ctyp< $t2$ $t1$ >>
-      | t1 = NEXT ; check_eps -> t1
+      LEFTA [ t1 = SELF; t2 = NEXT -> <:ctyp< $t2$ $t1$ >>
       ]
     | "simple"
       [ t = ctyp_ident → t
