@@ -15,38 +15,48 @@ ord_MLast.cmx : \
 ord_MLast.cmi :
 parse_bootstrapped.cmo : \
     print_gram.cmo \
+    primtypes.cmo \
     parse_gram.cmo \
     llk_types.cmo \
     llk_regexps.cmo
 parse_bootstrapped.cmx : \
     print_gram.cmx \
+    primtypes.cmx \
     parse_gram.cmx \
     llk_types.cmx \
     llk_regexps.cmx
 comp_llk.cmo : \
     print_gram.cmo \
+    primtypes.cmo \
     parse_gram.cmo \
     parse_bootstrapped.cmo \
     ord_MLast.cmi \
     llk_types.cmo \
     llk_regexps.cmo \
-    llk_migrate.cmo
+    llk_migrate.cmo \
+    brzozowski2.cmo
 comp_llk.cmx : \
     print_gram.cmx \
+    primtypes.cmx \
     parse_gram.cmx \
     parse_bootstrapped.cmx \
     ord_MLast.cmx \
     llk_types.cmx \
     llk_regexps.cmx \
-    llk_migrate.cmx
+    llk_migrate.cmx \
+    brzozowski2.cmx
 llk_regexps.cmo : \
+    primtypes.cmo \
     brzozowski2.cmo
 llk_regexps.cmx : \
+    primtypes.cmx \
     brzozowski2.cmx
 llk_types.cmo : \
+    primtypes.cmo \
     ord_MLast.cmi \
     llk_regexps.cmo
 llk_types.cmx : \
+    primtypes.cmx \
     ord_MLast.cmx \
     llk_regexps.cmx
 pa_llk.cmo : \
@@ -54,19 +64,25 @@ pa_llk.cmo : \
 pa_llk.cmx : \
     comp_llk.cmx
 parse_gram.cmo : \
+    primtypes.cmo \
     ord_MLast.cmi \
     llk_types.cmo \
     llk_regexps.cmo
 parse_gram.cmx : \
+    primtypes.cmx \
     ord_MLast.cmx \
     llk_types.cmx \
     llk_regexps.cmx
+primtypes.cmo :
+primtypes.cmx :
 print_gram.cmo : \
+    primtypes.cmo \
     parse_gram.cmo \
     ord_MLast.cmi \
     llk_types.cmo \
     llk_regexps.cmo
 print_gram.cmx : \
+    primtypes.cmx \
     parse_gram.cmx \
     ord_MLast.cmx \
     llk_types.cmx \

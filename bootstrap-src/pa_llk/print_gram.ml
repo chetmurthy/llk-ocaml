@@ -9,6 +9,7 @@ open Prtools;
 open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
+open Primtypes ;
 open Llk_types ;
 open Parse_gram ;
 
@@ -163,15 +164,15 @@ and symbol pc = fun [
 and simple_symbol pc sy =
   match sy with
   [ ASregexp _ id ->
-    pprintf pc "PREDICT %s" id
+    pprintf pc "PREDICT %s" (Name.print id)
   | ASinfer _ n ->
     pprintf pc "INFER %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-    pprintf pc "%s%p" id (pr_option entry_actuals) args_opt
+    pprintf pc "%s%p" (Name.print id) (pr_option entry_actuals) args_opt
   | ASnterm _ id args (Some lev) ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-     pprintf pc "%s%p LEVEL \"%s\"" id (pr_option entry_actuals) args_opt lev
+     pprintf pc "%s%p LEVEL \"%s\"" (Name.print id) (pr_option entry_actuals) args_opt lev
   | ASself _ args ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
      pprintf pc "SELF%p" (pr_option entry_actuals) args_opt
@@ -221,7 +222,7 @@ and entry pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos 
     in
     let formals_opt = match formals with [ [] -> None | l -> Some l ] in
     comm_bef pc.ind loc ^
-      pprintf pc "@[<b>%s%p:%p@;[ %p ]@ ;@]" name (pr_option entry_formals) formals_opt (pr_option position) pos 
+      pprintf pc "@[<b>%s%p:%p@;[ %p ]@ ;@]" (Name.print name) (pr_option entry_formals) formals_opt (pr_option position) pos 
         (vlist2 (level force_vertic) (bar_before (level force_vertic))) ll      
 
 and level force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
@@ -250,7 +251,7 @@ open Llk_regexps ;
 value rec pr_regexp_ast pc re = pr_re_let pc re
 
 and pr_re_let pc = fun [
-      LETIN _ s re1 re2 -> pprintf pc "let %s = %p@ in %p" s
+      LETIN _ s re1 re2 -> pprintf pc "let %s = %p@ in %p" (Name.print s)
                              pr_re_disj re1
                              pr_re_disj re2
     | re -> pr_re_disj pc re
@@ -292,7 +293,7 @@ and pr_re_simple pc = fun [
     | EPS _ -> pprintf pc "eps"
     | ANY _ -> pprintf pc "_"
     | EXCEPT _ l -> pprintf pc "[^ %p]" (plist pr_tokenast 0) (pair_with " " l)
-    | ID _ x -> pprintf pc "%s" x
+    | ID _ x -> pprintf pc "%s" (Name.print x)
     | x -> pr_re_let pc x
     ]
 and pr_tokenast pc = fun [
@@ -306,17 +307,18 @@ and pr_tokenast pc = fun [
 ;
 
 value ident pc id = pprintf pc "%s" id ;
+value name pc id = pprintf pc "%s" (Name.print id) ;
 
 value pr_exports pc l =
   match l with
   [ [] -> pprintf pc ""
   | _ ->
-      pprintf pc "EXPORT: %p;@ " (plist ident 2) (pair_with "" l)
+      pprintf pc "EXPORT: %p;@ " (plist name 2) (pair_with "" l)
   ]
 ;
 
 value pr_external pc (id, ast) =
-  pprintf pc "external %s : PREDICTION %p;" id pr_regexp_ast ast
+  pprintf pc "external %s : PREDICTION %p;" (Name.print id) pr_regexp_ast ast
 ;
 
 value pr_externals pc l =
@@ -324,7 +326,7 @@ value pr_externals pc l =
 ;
 
 value pr_regexp_binding pc (id, ast) =
-  pprintf pc "%s = %p;" id pr_regexp_ast ast
+  pprintf pc "%s = %p;" (Name.print id) pr_regexp_ast ast
 ;
 
 value pr_regexp_asts pc l =

@@ -12,6 +12,7 @@ open Ord_MLast ;
 open Pa_ppx_utils ;
 open Ppxutil ;
 
+open Primtypes ;
 open Llk_regexps ;
 open Llk_types ;
 open Print_gram ;
@@ -34,7 +35,7 @@ module Ctr = struct
 
   value fresh_name root ctr =
     let n = next ctr in
-    Fmt.(str "%s__%02d" root n) ;
+    Name.fresh root n ;
 end ;
 
 module type TOKENSET = sig
@@ -81,19 +82,19 @@ module type SETMAP = sig
   type set_t 'a = 'd ;
  *)
   type set_t 'a = TS.t 'a ;
-  type t 'a = list (string * set_t 'a) ;
+  type t 'a = list (Name.t * set_t 'a) ;
 
   value canon : t 'a -> t 'a ;
   value mt : t 'a ;
-  value add : t 'a -> (string * 'a) -> t 'a ;
-  value lookup : string -> t 'a -> set_t 'a ;
-  value addset : t 'a -> (string * set_t 'a) -> t 'a ;
-  value export : t 'a -> list (string * list 'a) ;
+  value add : t 'a -> (Name.t * 'a) -> t 'a ;
+  value lookup : Name.t -> t 'a -> set_t 'a ;
+  value addset : t 'a -> (Name.t * set_t 'a) -> t 'a ;
+  value export : t 'a -> list (Name.t * list 'a) ;
 end ;
 
 module SetMap : (SETMAP with type set_t 'a = TS.t 'a) = struct
   type set_t 'a = TS.t 'a ;
-  type t 'a = list (string * set_t 'a) ;
+  type t 'a = list (Name.t * set_t 'a) ;
 
   value canon m = m |> List.sort Stdlib.compare ;
   value mt = [] ;
@@ -123,12 +124,12 @@ module type MUTSETMAP = sig
   type set_t 'a = 'd ;
  *)
   type set_t 'a = TS.t 'a ;
-  type t 'a = ref (list (string * set_t 'a)) ;
+  type t 'a = ref (list (Name.t * set_t 'a)) ;
 
   value mk : unit -> t 'a ;
-  value add : t 'a -> (string * 'a) -> unit ;
-  value lookup : string -> t 'a -> set_t 'a ;
-  value addset : t 'a -> (string * set_t 'a) -> unit ;
+  value add : t 'a -> (Name.t * 'a) -> unit ;
+  value lookup : Name.t -> t 'a -> set_t 'a ;
+  value addset : t 'a -> (Name.t * set_t 'a) -> unit ;
   value export : t 'a -> SM.t 'a ;
 end ;
 
@@ -146,12 +147,12 @@ end ;
 module MSM = MutSetMap ;
 
 module CompilingGrammar = struct
-  type error_t = { loc : Ploc.t ; ename : string ; kind : string ; msg : string ; backtrace : string } ;
+  type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
       ctr : Ctr.t
     ; gram_alphabet : mutable list token
-    ; gram_regexps: mutable list (string * regexp)
-    ; gram_externals: mutable list (string * regexp)
+    ; gram_regexps: mutable list (Name.t * regexp)
+    ; gram_externals: mutable list (Name.t * regexp)
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     ; errors : mutable list error_t
@@ -353,7 +354,7 @@ value convert_regexp_references cg =
                 {(ps) with ap_symb = ASregexp loc nt}
       | {ap_symb=ASnterm loc nt _ _}
            when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
-                raise_failwithf (CG.adjust_loc cg loc) "S1ProcessRegexps: no nonterminal %s found in grammar" nt
+                raise_failwithf (CG.adjust_loc cg loc) "S1ProcessRegexps: no nonterminal %s found in grammar" (Name.print nt)
       | ps -> fallback_migrate_a_psymbol dt ps
       ] in
   let dt = { (dt) with Llk_migrate.migrate_a_psymbol = migrate_a_psymbol } in
@@ -373,17 +374,17 @@ value check cg =
   let migrate_a_symbol dt = fun [
         ASnterm loc nt _ _
            when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
-                raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: no nonterminal %s defined in grammar" nt
+                raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: no nonterminal %s defined in grammar" (Name.print nt)
       | ASnterm loc nt _ (Some _) when CG.exists_external_ast cg nt ->
-                raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: external nonterminal %s has forbidden level marking" nt
+                raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: external nonterminal %s has forbidden level marking" (Name.print nt)
       | ASregexp loc nt ->
-         raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: regexp %s used in grammar in non-psymbol position" nt
+         raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: regexp %s used in grammar in non-psymbol position" (Name.print nt)
       | s -> fallback_migrate_a_symbol dt s
       ] in
   let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
   let migrate_a_psymbol dt = fun [
         {ap_symb=ASregexp loc nt} when not (CG.exists_regexp_ast cg nt) ->
-            raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: no regexp %s defined in grammar" nt
+            raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: no regexp %s defined in grammar" (Name.print nt)
       | {ap_symb=ASregexp _ _ } as ps -> ps
       | s -> fallback_migrate_a_psymbol dt s
       ] in
@@ -430,7 +431,7 @@ value free_names_of_regexp init re =
              Llk_migrate.migrate_astre = migrate_astre
            } in do {
     ignore (dt.migrate_astre dt re) ;
-    List.sort_uniq String.compare regexps.val
+    List.sort_uniq Name.compare regexps.val
   }
 ;
 
@@ -440,7 +441,7 @@ value regexp_mentions cg = do {
     |> List.iter (fun (id, re) -> do {
                     acc.val := acc.val @ (free_names_of_regexp [] re)
          }) ;
-    List.sort_uniq String.compare acc.val
+    List.sort_uniq Name.compare acc.val
   }
 ;
 
@@ -451,15 +452,15 @@ value check_names cg = do {
   let regexps = (CG.gram_regexp_asts cg) |> List.map fst in
   let multiply_defined = Std.intersect defined externals in
   if [] <> multiply_defined then
-    Fmt.(failwithf "Entries are both external and defined: %a" (list ~{sep=sp} string) multiply_defined)
+    Fmt.(failwithf "Entries are both external and defined: %a" (list ~{sep=sp} Name.pp) multiply_defined)
   else () ;
   let regexp_and_entry = Std.(intersect regexps (union defined externals)) in
   if [] <> regexp_and_entry then
-    Fmt.(failwithf "Entries are both regexp and external/defined: %a" (list ~{sep=sp} string) regexp_and_entry)
+    Fmt.(failwithf "Entries are both regexp and external/defined: %a" (list ~{sep=sp} Name.pp) regexp_and_entry)
   else () ;
   let missing = Std.(subtract exported (union defined externals)) in
   if [] <> missing then
-    Fmt.(failwithf "Undefined exported entries: %a" (list ~{sep=sp} string) missing)
+    Fmt.(failwithf "Undefined exported entries: %a" (list ~{sep=sp} Name.pp) missing)
   else () ;
   let (mentioned_entries, mentioned_regexps) = mentions cg in
   let regexp_mentioned_regexps = regexp_mentions cg in
@@ -467,7 +468,7 @@ value check_names cg = do {
                       defined
                       (union exported (union mentioned_entries (union mentioned_regexps regexp_mentioned_regexps)))) in
   if [] <> unused then
-    Fmt.(failwithf "Unused entries: %a" (list ~{sep=sp} string) unused)
+    Fmt.(failwithf "Unused entries: %a" (list ~{sep=sp} Name.pp) unused)
   else () 
   }
 ;
@@ -659,7 +660,7 @@ module S2Coalesce = struct
   }
   ;
     
-  type node = (string * option a_position) ;
+  type node = (Name.t * option a_position) ;
   value tsort_nodes (adj : list (node * list node)) =
     let adj = adj |> List.sort_uniq Stdlib.compare in
     Tsort.tsort (fun v l -> [v :: l]) adj [] ;
@@ -679,16 +680,16 @@ module S2Coalesce = struct
              |> List.map (fun lab -> (lab, entry2node e))
            ) in do {
     match el |> List.map entry_position |> List.find_all ((=) None) with [
-        [] -> failwith Fmt.(str "construct_graph: NO entry named %s is position-free" ename)
+        [] -> failwith Fmt.(str "construct_graph: NO entry named %s is position-free" (Name.print ename))
       | [_] -> ()
       | l -> failwith Fmt.(str "construct_graph: exactly one entry named %s MUST be position-free:\n%a"
-                           ename
+                           (Name.print ename)
                         (list string)
                         (el |> List.map entry_location |> List.map (CG.adjust_loc cg) |> List.map Ploc.string_of_location)
            )
       ] ;
     if not (distinct (el |> List.concat_map entry_labels)) then
-      failwith Fmt.(str "construct_graph: entry %s does not have distinct labels" ename)
+      failwith Fmt.(str "construct_graph: entry %s does not have distinct labels" (Name.print ename))
     else () ;
 
     let adj = el |> List.filter_map (fun e ->
@@ -697,7 +698,7 @@ module S2Coalesce = struct
           (match List.assoc lev label2node with [
                exception Not_found ->
                          failwith Fmt.(str "construct_graph: entry %s, position LEVEL \"%s\" not found"
-                                         (entry_name e) lev)
+                                         (Name.print (entry_name e)) lev)
                        | n -> Some (entry2node e, [n])
           ])
         | Some(POS_LIKE levpat) -> failwith Fmt.(str "construct_graph: LIKE position not implemented")
@@ -726,14 +727,14 @@ module S2Coalesce = struct
 
   value coalesce_entries cg el =
     let all_entry_names =
-      el |> List.map entry_name |> List.sort_uniq String.compare in
+      el |> List.map entry_name |> List.sort_uniq Name.compare in
     all_entry_names
     |> List.map (fun name ->
       let el = el |> List.find_all (fun e -> name = entry_name e) in
       match el with [
           [({ae_pos = None} as e)] -> e
         | [{ae_pos = Some _}] ->
-           failwith Fmt.(str "construct_graph: only one entry named %s, but with position" name)
+           failwith Fmt.(str "construct_graph: only one entry named %s, but with position" (Name.print name))
         | el -> coalesce_entries_for cg name el
          ])
   ;
@@ -747,7 +748,7 @@ module CheckNoPosition = struct
 value exec (({gram_entries=el}, _) as cg) = do {
   el |> List.iter (fun e ->
       if e.ae_pos <> None then
-        raise_failwithf (CG.adjust_loc cg e.ae_loc) "CheckNoPosition: entry %s still has a position" e.ae_name
+        raise_failwithf (CG.adjust_loc cg e.ae_loc) "CheckNoPosition: entry %s still has a position" (Name.print e.ae_name)
       else ()
     ) ;
   cg
@@ -785,9 +786,9 @@ end ;
 
 module Subst = struct
 
-type key_t = [ NT of string and option string | NEXT | SELF ] ;
+type key_t = [ NT of Name.t and option string | NEXT | SELF ] ;
 
-value lookup_rho s rho : string = List.assoc s rho ;
+value lookup_rho s rho : Name.t = List.assoc s rho ;
 
 value make_dt rho =
   let dt = Llk_migrate.make_dt () in
@@ -958,7 +959,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
              let rl = l.al_rules.au_rules in do {
              if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
                raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s RIGHTA level rules must all have at least 2 psymbols"
-                 ename
+                 (Name.print ename)
              else () ;
              let last_symbol = 
                let (last_psymbol, _) = Std.sep_last (List.hd rl).ar_psymbols in
@@ -966,13 +967,13 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
              if not (rl |> List.for_all (fun r -> 
                                equal_a_symbol last_symbol (fst (Std.sep_last r.ar_psymbols)).ap_symb)) then
                raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s RIGHTA level does not have identical last symbols\n%s"
-                 ename
+                 (Name.print ename)
                  (Pr.entry Pprintf.empty_pc e)
              else () ;
              match last_symbol with [
                  ASnterm _ name _ None when name = ename -> ()
                | ASself _ _ -> ()
-               | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "rewrite1: entry %s RIGHTA level has last psymbol non-recursive" ename
+               | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "rewrite1: entry %s RIGHTA level has last psymbol non-recursive" (Name.print ename)
                ] ;
              let rl = rewrite_righta cg loc (ename,eargs) ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
@@ -991,7 +992,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
              let rl = l.al_rules.au_rules in do {
              if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
                raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s LEFTA level rules must all have at least 2 psymbols"
-                 ename
+                 (Name.print ename)
              else () ;
              let first_symbol =
                let first_psymbol = List.hd (List.hd rl).ar_psymbols in
@@ -999,14 +1000,14 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
              rl |> List.iter (fun r ->
                        if not (equal_a_symbol first_symbol (List.hd r.ar_psymbols).ap_symb) then
                          raise_failwithf (CG.adjust_loc cg r.ar_loc) "rewrite1: entry %s LEFTA level does not have identical first symbols"
-                           ename
+                           (Name.print ename)
                        else ()
                      ) ;
              match first_symbol with [
                  ASnterm _ name _ None when name = ename -> ()
                | ASself _ _ -> ()
                | _ -> raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s LEFTA level has first psymbol non-recursive"
-                        ename
+                        (Name.print ename)
                ] ;
              let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} Subst.[
                           (NEXT, next)
@@ -1026,11 +1027,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
 }
 ;
 
-value new_name e n = Printf.sprintf "%s__%04d" e.ae_name n ;
-
-value passthru_entry cg e fromi toj =
-  let from_name = match fromi with [ None -> e.ae_name | Some i -> new_name e i ] in
-  let to_name = new_name e toj in
+value passthru_entry cg e from_name to_name =
   let loc = e.ae_loc in
   let formals = e.ae_formals in
   let actuals = formals2actuals cg e.ae_formals in
@@ -1070,8 +1067,12 @@ value exec1 cg e = do {
   let formals = e.ae_formals in
   let levels = e.ae_levels in
   let n_levels = List.length levels in
+  let zero_name = CG.fresh_name cg e.ae_name in
   let named_levels =
-    List.mapi (fun i l -> (i+1, new_name e (i+1), l)) levels in
+    List.mapi (fun i l -> (i+1, CG.fresh_name cg e.ae_name, l)) levels in
+  let first_name = Std.snd3 (List.hd named_levels) in
+  let bot_name = CG.fresh_name cg e.ae_name in
+  let i2name = [(0,zero_name)]@(List.map (fun (i, n, _) -> (i,n)) named_levels)@[(n_levels+1, bot_name)] in
   let dict =
     named_levels
     |> List.filter_map (fun (i, newname, l) ->
@@ -1082,13 +1083,16 @@ value exec1 cg e = do {
   let newents =
     named_levels
     |> List.map (fun (i, newname, l) ->
-           rewrite1 cg e (ename,formals) ~{cur=newname} ~{next=new_name e (i+1)} dict l) in
+           let next_name = match List.assoc (i+1) i2name with [
+                 x -> x
+               | exception Not_found -> assert False ] in
+           rewrite1 cg e (ename,formals) ~{cur=newname} ~{next=next_name} dict l) in
   let top2_entries = [
-      passthru_entry cg e None 0 ;
-      passthru_entry cg e (Some 0) 1
+      passthru_entry cg e e.ae_name zero_name ;
+      passthru_entry cg e zero_name first_name
     ] in
   let bottom_entries = [
-      passthru_entry cg e (Some (n_levels+1)) 0
+      passthru_entry cg e bot_name zero_name
     ] in
 
   (dict, top2_entries @ newents @ bottom_entries)
@@ -1106,7 +1110,7 @@ value exec0 cg e =
        (match l.al_assoc with [
             Some a ->
             raise_failwithf (CG.adjust_loc cg l.al_loc) "S3Precedence(%s): associativity marking on single-level entry: %s"
-              e.ae_name (Pr.assoc Pprintf.empty_pc a)
+              (Name.print e.ae_name) (Pr.assoc Pprintf.empty_pc a)
           | None ->
              ([], [substitute_self { (e) with ae_pos = None ; ae_levels = [{ (l) with al_label = None }]}])
        ])
@@ -1131,7 +1135,7 @@ value check_no_level cg el =
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm loc nt _ (Some _) when CG.exists_external_ast cg nt ->
-        raise_failwithf (CG.adjust_loc cg loc) "CheckNoLabelAssocLevel: level marking found on EXTERNAL nonterminal %s" nt
+        raise_failwithf (CG.adjust_loc cg loc) "CheckNoLabelAssocLevel: level marking found on EXTERNAL nonterminal %s" (Name.print nt)
       | s -> fallback_migrate_a_symbol dt s
       ] in
   let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
@@ -1145,12 +1149,12 @@ value exec (({gram_entries=el}, _) as cg) = do {
       match l.al_label with [
           None -> ()
         | Some lab ->
-           raise_failwithf (CG.adjust_loc cg e.ae_loc) "CheckNoLabelAssocLevel: entry %s still has a label %s" e.ae_name lab
+           raise_failwithf (CG.adjust_loc cg e.ae_loc) "CheckNoLabelAssocLevel: entry %s still has a label %s" (Name.print e.ae_name) lab
         ] ;
       match l.al_assoc with [
           None -> ()
         | Some a ->
-           raise_failwithf (CG.adjust_loc cg e.ae_loc) "CheckNoLabelAssocLevel: entry %s still has an assoc %a" e.ae_name pp_a_assoc a
+           raise_failwithf (CG.adjust_loc cg e.ae_loc) "CheckNoLabelAssocLevel: entry %s still has an assoc %a" (Name.print e.ae_name) pp_a_assoc a
         ]
     })
   ) ;
@@ -1190,15 +1194,15 @@ value rec left_factorize0 cg loc rl =
   match extract_left_factors rl with [
       ([], rl) -> rl
     | (factors,rl) ->
-       let n = CG.fresh_name cg "x" in
+       let n = CG.fresh_name cg (Name.mk "x") in
        let right_psymb = {
            ap_loc = loc
-         ; ap_patt = Some <:patt< $lid:n$ >>
+         ; ap_patt = Some <:patt< $lid:Name.print n$ >>
          ; ap_symb = ASrules loc { au_loc = loc ; au_rules = (left_factorize cg loc rl) }
          } in
        [{ ar_loc = loc
         ; ar_psymbols = factors @ [ right_psymb ]
-        ; ar_action = Some <:expr< $lid:n$ >> }]
+        ; ar_action = Some <:expr< $lid:Name.print n$ >> }]
     ]
 
 and left_factorize cg loc rl =
@@ -1244,7 +1248,7 @@ end ;
 
 module First = struct
 
-exception ExternalEntry of string ;
+exception ExternalEntry of Name.t ;
 
 value rec psymbols cg = fun [
   [] -> TS.mk [None]
@@ -1383,7 +1387,7 @@ value fi2fo cg loc fi = fifo_concat cg loc ~{must=True} fi TS.mt ;
 
  *)
 
-value watch_follow (nt : string) (ff : TS.t token) = () ;
+value watch_follow (nt : Name.t) (ff : TS.t token) = () ;
 
 
 value rec fifo_psymbols cg ff = fun [
@@ -1854,16 +1858,16 @@ value sep1_entry cg e = do {
   let rs = lev.al_rules in
   let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rs.au_rules in
   assert ([] <> sp_rl) ;
-  let fresh_x = CG.fresh_name cg "__x__" in
+  let fresh_x = CG.fresh_name cg (Name.mk "__x__") in
   let actuals = formals2actuals cg e.ae_formals in
 
   let e1_name = CG.fresh_name cg e.ae_name in
   let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = sp_rl @ [
                  { ar_loc=loc
                  ; ar_psymbols=[{ ap_loc=loc
-                                ; ap_patt = Some <:patt< $lid:fresh_x$ >>
+                                ; ap_patt = Some <:patt< $lid:Name.print fresh_x$ >>
                                 ; ap_symb = ASnterm loc e1_name actuals None}]
-                 ; ar_action = Some <:expr< $lid:fresh_x$ >> }
+                 ; ar_action = Some <:expr< $lid:Name.print fresh_x$ >> }
                ]}}]} in
 
   let e1 = { (e) with
@@ -1895,7 +1899,7 @@ end ;
 module SortEntries = struct
 
 value exec0 el =
-  let cmp e1 e2 = String.compare e1.ae_name e2.ae_name in
+  let cmp e1 e2 = Name.compare e1.ae_name e2.ae_name in
   List.stable_sort cmp el ;
 
 value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 (CG.gram_entries cg) } ;
@@ -1930,7 +1934,7 @@ value empty_level cg (ename, formal) l =
 ;
 
 value gen_re = Pcre.regexp "^([a-zA-Z0-9_]+)__([0-9]{4})(__[0-9]{2})?$" ;
-value is_generated_entry_name n = Pcre.pmatch ~{rex=gen_re} n ;
+value is_generated_entry_name (_, n) = n > -1 ;
 
 value find_empty_entry cg el =
   el |> List.find_map (fun e ->
@@ -2003,7 +2007,7 @@ value rec infer_symbol cg stk ename = fun [
   | ASregexp loc rexname ->
      (match CG.gram_regexp cg rexname with [
           exception Not_found -> do {
-            CG.add_failuref cg (CG.adjust_loc cg loc) ename "infer_symbol: undefined regexp %s" rexname ;
+            CG.add_failuref cg (CG.adjust_loc cg loc) ename "infer_symbol: undefined regexp %s" (Name.print rexname) ;
             failwith "caught"
           }
         | x -> (x, True)
@@ -2191,7 +2195,7 @@ value report_compilation_errors cg msg = do {
          Fmt.(pf stderr "%s%s: entry %s: %s\n%s\n"
                 (Ploc.string_of_location err.loc)
                 err.kind
-                err.ename
+                (Name.print err.ename)
                 err.msg
                 (if report_verbose.val then err.backtrace else "")
          )
@@ -2222,10 +2226,10 @@ value rec compile1_symbol cg loc ename s =
           None, <:expr< () >>)]))
 
     | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
-       Expr.applist <:expr< $lid:nt$ >> actuals
+       Expr.applist <:expr< $lid:Name.print nt$ >> actuals
 
     | ASnterm loc nt actuals None when CG.exists_external_ast cg nt ->
-       <:expr< Grammar.Entry.parse_token_stream $lid:nt$ >>
+       <:expr< Grammar.Entry.parse_token_stream $lid:Name.print nt$ >>
 
     | AStok loc cls None ->
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
@@ -2297,11 +2301,11 @@ and compile1_psymbol cg loc ename ps =
        ((SpTrm loc <:patt< ("", ($str:kws$ as $patt$)) >> <:vala<  None >>), SpoNoth)
 
     | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
-       let e = Expr.applist <:expr< $lid:nt$ >> actuals in
+       let e = Expr.applist <:expr< $lid:Name.print nt$ >> actuals in
         (SpNtr loc patt e, SpoNoth)
 
     | ASnterm loc nt [] None when CG.exists_external_ast cg nt ->
-       let e = <:expr< Grammar.Entry.parse_token_stream $lid:nt$ >> in
+       let e = <:expr< Grammar.Entry.parse_token_stream $lid:Name.print nt$ >> in
         (SpNtr loc patt e, SpoNoth)
 
     | AStok loc cls None ->
@@ -2474,7 +2478,7 @@ value compile1a_entry cg e = do {
     }
     else () ;
     let match_nest = build_match_nest loc cg ename fi_fo_rule_list in
-    let matcher_name = ename^"_matcher" in
+    let matcher_name = (Name.print ename)^"_matcher" in
     let branches =
       fi_fo_rule_list
     |> List.mapi (compile1a_branch cg ename) in
@@ -2492,7 +2496,7 @@ value compile1a_entry cg e = do {
          <:expr< fun __strm__ -> match $lid:matcher_name$ __strm__ with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-    [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+    [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)
     ;(<:patt< $lid:matcher_name$ >>, match_nest, <:vala< [] >>)
     ]
   }
@@ -2688,7 +2692,7 @@ value infer_regexp loc cg e r =
       [ ({ap_symb=ASregexp _ rexname} as h) :: _ ] ->
       (match CG.gram_regexp cg rexname with [
            exception Not_found -> do {
-             CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: undefined regexp %s" rexname ;
+             CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: undefined regexp %s" (Name.print rexname) ;
              failwith "caught"
            }
          | x -> x
@@ -2735,7 +2739,7 @@ value compile1b_entry cg e =
   let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
   let predictor = letrec_nest exported_dfa in
-  let predictor_name = ename^"_regexp" in
+  let predictor_name = (Name.print ename)^"_regexp" in
   let branches = 
     rl
     |> List.mapi (compile1b_branch cg ename) in
@@ -2750,7 +2754,7 @@ value compile1b_entry cg e =
                                 $list:branches$
                               ] >> in
   let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-  [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)
+  [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)
   ;(<:patt< $lid:predictor_name$ >>, predictor, <:vala< [] >>)
   ]
   ;
@@ -2804,7 +2808,7 @@ value compile_sp_entry cg e = do {
     ) sp_rl fallback in
   let rhs = <:expr< fun __strm__ -> $rhs$ >> in
   let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-  [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)]
+  [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)]
 }
 ;
 
@@ -2853,7 +2857,7 @@ value compute_follow (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_i
       let open Printexc in
        let rbt = get_raw_backtrace() in
        let bts = (rbt |> raw_backtrace_to_string) in do {
-        CG.add_exn cg Ploc.dummy "<all-entries>" (bts, exn) ;
+        CG.add_exn cg Ploc.dummy (Name.mk "<all-entries>") (bts, exn) ;
         report_compilation_errors cg "FIRST/FOLLOW computation FAILED" ;
         raise_with_backtrace exn rbt
       }
@@ -2882,7 +2886,7 @@ let _ = compute_follow cg in
   let exported_entries =
     expl
   |> List.filter (fun ename -> not (CG.exists_external_ast cg ename))
-  |> List.map (fun ename -> <:str_item< value $lid:ename$ = Grammar.Entry.of_parser gram $str:ename$ F. $lid:ename$ >>) in
+  |> List.map (fun ename -> <:str_item< value $lid:Name.print ename$ = Grammar.Entry.of_parser gram $str:Name.print ename$ F. $lid:Name.print ename$ >>) in
   let lexer_gram = match (CG.g cg).gram_extend with [
         None -> <:str_item< declare
                      value lexer = Plexer.gmake () ;

@@ -9,6 +9,7 @@ open Prtools;
 open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
+open Primtypes ;
 open Llk_types ;
 
 module Pa = struct
@@ -64,13 +65,13 @@ EXTEND
     } ] ]
   ;
   exports:
-    [ [ UIDENT "EXPORT"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
+    [ [ UIDENT "EXPORT"; ":"; sl = LIST1 LIDENT; ";" -> List.map Name.mk sl ] ]
   ;
   externals:
     [ [ l = LIST1 external_entry -> l ] ]
   ;
   external_entry:
-    [ [ "external"; s = LIDENT; ":"; UIDENT "PREDICTION" ; r = regexp ; ";" -> (s,r) ] ]
+    [ [ "external"; s = LIDENT; ":"; UIDENT "PREDICTION" ; r = regexp ; ";" -> (Name.mk s,r) ] ]
   ;
   regexps:
     [ [ UIDENT "REGEXPS"; ":"; rl = LIST1 regexp_entry; "END" ; ";" -> rl ] ]
@@ -79,7 +80,7 @@ EXTEND
     [ [ n = LIDENT;
         formals = [ "[" ; l = LIST1 patt SEP "," ; "]" -> l | -> [] ] ;
         ":"; pos = OPT position; ll = level_list ->
-          {ae_loc = loc; ae_formals = formals ; ae_name = n; ae_pos = pos; ae_levels = ll}
+          {ae_loc = loc; ae_formals = formals ; ae_name = Name.mk n; ae_pos = pos; ae_levels = ll}
       ] ]
   ;
   position:
@@ -119,7 +120,7 @@ EXTEND
       | i = LIDENT; 
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
-          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm loc i args lev}
+          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm loc (Name.mk i) args lev}
       | p = pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
       | s = symbol ->
@@ -165,10 +166,10 @@ EXTEND
       | id = LIDENT ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->
-        ASnterm loc id args lev
+        ASnterm loc (Name.mk id) args lev
 
       | UIDENT "PREDICT" ; id = LIDENT ->
-        ASregexp loc id
+        ASregexp loc (Name.mk id)
       | UIDENT "INFER" ; n = INT ->
         ASinfer loc (int_of_string n)
 
@@ -188,11 +189,11 @@ EXTEND
     | [ p = pattern -> [p] ] ]
   ;
 
-  regexp_entry: [ [ n = LIDENT ; "=" ; r = regexp ; ";" -> (n,r) ] ] ;
+  regexp_entry: [ [ n = LIDENT ; "=" ; r = regexp ; ";" -> (Name.mk n,r) ] ] ;
 
   regexp: [ [ x = e6 -> x ] ] ;
 
-  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e6 -> LETIN loc s re1 re2
+  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e6 -> LETIN loc (Name.mk s) re1 re2
         | x = e5 -> x
         ] ] ;
 
@@ -217,7 +218,7 @@ EXTEND
       | "empty" -> DISJ loc []
       | "_" -> ANY loc
       | "[" ; "^"; l = LIST1 token ; "]" -> EXCEPT loc l
-      | x = LIDENT -> ID loc x
+      | x = LIDENT -> ID loc (Name.mk x)
       ]
     ]
   ;
