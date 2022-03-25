@@ -1,6 +1,7 @@
 
 open Pcaml ;;
 
+open Primtypes ;;
 open Llk_types ;;
 open Llk_regexps ;;
 open Parse_gram ;;
@@ -45,13 +46,13 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
     } ] ]
   ;
   exports:
-    [ [ UIDENT/"EXPORT"; ":"; sl = LIST1 LIDENT; ";" -> sl ] ]
+    [ [ UIDENT/"EXPORT"; ":"; sl = LIST1 LIDENT; ";" -> List.map Name.mk sl ] ]
   ;
   externals:
     [ [ l = LIST1 external_entry -> l ] ]
   ;
   external_entry:
-    [ [ "external"; s = LIDENT; ":"; UIDENT/"PREDICTION" ; r = regexp ; ";" -> (s,r) ] ]
+    [ [ "external"; s = LIDENT; ":"; UIDENT/"PREDICTION" ; r = regexp ; ";" -> (Name.mk s,r) ] ]
   ;
   regexps:
     [ [ UIDENT/"REGEXPS"; ":"; rl = LIST1 regexp_entry; "END" ; ";" -> rl ] ]
@@ -60,7 +61,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
     [ [ n = LIDENT;
         formals = [ "[" ; l = LIST1 patt SEP "," ; "]" -> l | -> [] ] ;
         ":"; pos = OPT position; ll = level_list ->
-          {ae_loc = loc; ae_formals = formals ; ae_name = n; ae_pos = pos; ae_levels = ll}
+          {ae_loc = loc; ae_formals = formals ; ae_name = Name.mk n; ae_pos = pos; ae_levels = ll}
       ] ]
   ;
   position:
@@ -103,7 +104,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | check_lident_lbracket; p = LIDENT; 
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT/"LEVEL"; s = STRING -> s ] ->
-          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm (loc, p, args, lev)}
+          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm (loc, Name.mk p, args, lev)}
       | check_pattern_equal ; p = paren_pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
        | "_" ; "="; s = symbol ->
@@ -153,10 +154,10 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | id = LIDENT ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT/"LEVEL"; s = STRING -> s ] ->
-        ASnterm (loc, id, args, lev)
+        ASnterm (loc, Name.mk id, args, lev)
 
       | UIDENT/"PREDICT" ; id = LIDENT ->
-        ASregexp (loc, id)
+        ASregexp (loc, Name.mk id)
 
       | "("; s_t = SELF; ")" -> s_t ] ]
   ;
@@ -171,11 +172,11 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           <:patt< ( $list:l$ ) >> ] ]
   ;
 
-  regexp_entry: [ [ n = LIDENT ; "=" ; r = regexp ; ";" -> (n,r) ] ] ;
+  regexp_entry: [ [ n = LIDENT ; "=" ; r = regexp ; ";" -> (Name.mk n,r) ] ] ;
 
   regexp: [ [ x = e6 -> x ] ] ;
 
-  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e6 -> LETIN (loc, s, re1, re2)
+  e6: [ [ "let" ; s=LIDENT ; "=" ; re1 = e5 ; "in" ; re2 = e6 -> LETIN (loc, Name.mk s, re1, re2)
         | x = e5 -> x
         ] ] ;
 
@@ -197,7 +198,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | "eps" -> EPS loc
       | "empty" -> DISJ(loc, [])
       | "_" -> ANY loc
-      | x = LIDENT -> ID(loc, x)
+      | x = LIDENT -> ID(loc, Name.mk x)
       ]
     ]
   ;

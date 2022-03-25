@@ -7,6 +7,7 @@ open Pa_ppx_base ;
 open Pp_MLast ;
 open Pa_ppx_utils ;
 open Ppxutil ;
+open Primtypes ;
 
 module PatternBaseToken = struct
   value lident_re = Str.regexp "^[a-z_][a-zA-Z0-9_]*$" ;
@@ -112,8 +113,8 @@ and astre = [
 | EPS of loc
 | ANY of loc
 | EXCEPT of loc and list tokenast
-| LETIN of loc and string and astre and astre
-| ID of loc and string
+| LETIN of loc and Name.t and astre and astre
+| ID of loc and Name.t
 ] [@@deriving (show,eq,ord) ;]
 ;
 
@@ -145,7 +146,7 @@ value normalize_astre env x =
          convrec [(s,convrec env e1) :: env] e2
       | ID loc s -> match List.assoc s env with [
            exception Not_found ->
-                     raise_failwithf loc "Llk_regexps.normalize_astre: unrecognized ID: %s" s
+                     raise_failwithf loc "Llk_regexps.normalize_astre: unrecognized ID: %s" (Name.print s)
          | e -> e
          ]
       ]

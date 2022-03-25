@@ -82,9 +82,13 @@ end
 end
 
 [%%import: Llk_types.a_symbol
-  [@add [%%import: Llk_regexps.astre]]
+  [@add [%%import: Llk_regexps.astre
+          [@with Primtypes.Name.t := name_t]
+        ]]
+  [@add type name_t = [%import: Primtypes.Name.t]]
   [@with Ord_MLast.patt := patt]
   [@with Ord_MLast.expr := expr]
+  [@with Primtypes.Name.t := name_t]
 ]
 [@@deriving migrate
     { dispatch_type = dispatch_table_t
@@ -145,6 +149,11 @@ end
       ; migrate_lmin_len = {
           srctype = [%typ: lmin_len]
         ; dsttype = [%typ: lmin_len]
+        ; code = fun __dt__ x -> x
+        }
+      ; migrate_name_t = {
+          srctype = [%typ: name_t]
+        ; dsttype = [%typ: name_t]
         ; code = fun __dt__ x -> x
         }
       }

@@ -9,6 +9,7 @@ open Prtools;
 open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
+open Primtypes ;
 
 type expr = MLast.expr ;
 type patt = MLast.patt ;
@@ -43,7 +44,7 @@ and a_assoc = [
 ]
 and a_entry =
   { ae_loc : loc;
-    ae_name : string;
+    ae_name : Name.t;
     ae_pos : option a_position;
     ae_formals : list patt ;
     ae_levels : list a_level }
@@ -69,8 +70,8 @@ and a_symbol =
   | ASlist of loc and lmin_len and a_symbol and
       option (a_symbol * bool)
   | ASnext of loc and list expr
-  | ASnterm of loc and string and list expr and option string
-  | ASregexp of loc and string
+  | ASnterm of loc and Name.t and list expr and option string
+  | ASregexp of loc and Name.t
   | ASinfer of loc and int
   | ASopt of loc and a_symbol
   | ASleft_assoc of loc and a_symbol and a_symbol and expr
@@ -82,19 +83,19 @@ and a_symbol =
   ]
 and lmin_len =
   [ LML_0 | LML_1 ]
-and named_astre = (string * astre)
+and named_astre = (Name.t * astre)
 and _top = {
     gram_loc: loc
   ; gram_id: string
   ; gram_extend: option longid_lident
-  ; gram_exports: list string
-  ; gram_external_asts: list (string * astre)
-  ; gram_regexp_asts: list (string * astre)
+  ; gram_exports: list Name.t
+  ; gram_external_asts: list (Name.t * astre)
+  ; gram_regexp_asts: list (Name.t * astre)
   ; gram_entries : list a_entry
   } [@@deriving (show,eq,ord) ;] ;
 
 type top = _top ;
-value norm_top g = {(g) with gram_exports = List.sort_uniq String.compare g.gram_exports
+value norm_top g = {(g) with gram_exports = List.sort_uniq Name.compare g.gram_exports
                            ; gram_external_asts = List.sort_uniq compare_named_astre g.gram_external_asts
                            ; gram_entries = List.sort compare_a_entry g.gram_entries } ;
 value show_top = show__top ;
