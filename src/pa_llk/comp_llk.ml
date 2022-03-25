@@ -2803,6 +2803,7 @@ value compile_sp_entry cg e = do {
         ]
     ) sp_rl fallback in
   let rhs = <:expr< fun __strm__ -> $rhs$ >> in
+  let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
   [(<:patt< $lid:ename$ >>, rhs, <:vala< [] >>)]
 }
 ;

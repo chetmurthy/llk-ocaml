@@ -180,16 +180,19 @@ REGEXPS:
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
          let type_parameters = ($list | $_list | type_parameter* ) in
-         ($flag | $_flag |
-          ("rec"|"nonrec") |
-          ($list | $_list) |
-          (LIDENT | $tp | $_tp | $lid | $_lid) type_parameters ("=" | ":="))
+         let v_flag_nonrec = ($flag | $_flag | "nonrec")? in
+         let type_patt = $tp | $_tp | $lid | $_lid | LIDENT in
+         v_flag_nonrec type_patt type_parameters
   ;
+  v_uident = $uid | $_uid | UIDENT ;
+  v_longident = (v_uident ".") * v_uident ;
+  v_lident = $lid | $_lid | LIDENT ;
+  v_longident_lident = (v_longident ".")? v_lident ;
   check_type_extension =
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-")* (tyvar | "_") in
          let type_parameters = ($list | $_list | type_parameter* ) in
-         UIDENT | $lilongid | $_lilongid | (LIDENT type_parameters "+=")
+         v_longident_lident type_parameters "+="
   ;
   check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
   check_let_exception = "let" "exception" ;
@@ -201,7 +204,7 @@ REGEXPS:
   check_colon = ":" ;
   check_lparen_type = "(" "type" ;
 
-  check_sig_item = "exception" | "type" (check_type_decl | check_type_extension) | "[%%" | "[@@@" | "declare" | "external" | "include" | "module" | "open" | "value" | $_signature | $signature ;
+  check_sig_item = "exception" | "type" (check_type_decl | check_type_extension) | "[%%" | "[@@@" | "declare" | "external" | "include" | "module" | "open" | "value" | $_signature | $signature | "class" ;
   check_ctyp = "'" | LIDENT | UIDENT | GIDENT | "!" | "_" | $lid | $_lid | $uid | $_uid | "[" | "{" | "(" | "type" | "#" | QUESTIONIDENTCOLON | TILDEIDENTCOLON | ".." | "<" | "[%" | $"?:" | $"_?:" | $_type | $"_~:" | $"type" | $"~:" ;
 
   check_arrow = "->" ;
@@ -414,9 +417,9 @@ END;
       <:attribute_body< $_attrid:id$ : $_signature:si$ >>
     | id = V attribute_id "attrid" ; ":" ; check_ctyp ; ty = V ctyp "type" -> 
       <:attribute_body< $_attrid:id$ : $_type:ty$ >>
-    | id = V attribute_id "attrid" ; "?" ;  p = V patt "patt" -> 
+    | id = V attribute_id "attrid" ; ([ "?" ; patt ])? ; "?" ;  p = V patt "patt" -> 
       <:attribute_body< $_attrid:id$ ? $_patt:p$ >>
-    | id = V attribute_id "attrid" ; "?" ;  p = V patt "patt"; "when"; e = V expr "expr" -> 
+    | id = V attribute_id "attrid" ; ([ "?" ; patt ])? ; "?" ;  p = V patt "patt"; "when"; e = V expr "expr" -> 
       <:attribute_body< $_attrid:id$ ? $_patt:p$ when $_expr:e$ >>
     ] ]
   ;
@@ -461,15 +464,19 @@ END;
   module_expr:
     [ [ "functor"; arg = V functor_parameter "functor_parameter" "fp"; "->";
         me = SELF →
-           <:module_expr< functor $_fp:arg$ → $me$ >> ]
+           <:module_expr< functor $_fp:arg$ → $me$ >>
+      | x = NEXT -> x
+      ]
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_expr< $e1$ [@ $_attribute:attr$ ] >>
       ]
     | [ "struct"; st = structure; "end" →
-          <:module_expr< struct $_list:st$ end >> ]
-    | [ me1 = SELF; me2 = SELF → <:module_expr< $me1$ $me2$ >> ]
-    | [ me1 = SELF; "."; me2 = SELF → <:module_expr< $me1$ . $me2$ >> ]
+          <:module_expr< struct $_list:st$ end >>
+      | x = NEXT -> x
+      ]
+    | LEFTA [ me1 = SELF; me2 = SELF → <:module_expr< $me1$ $me2$ >> ]
+    | LEFTA [ me1 = SELF; "."; me2 = SELF → <:module_expr< $me1$ . $me2$ >> ]
     | "simple"
       [ i = V UIDENT → <:module_expr< $_uid:i$ >>
       | "("; "value"; e = expr; ":"; mt1 = module_type; ":>"; mt2 = module_type; ")" →
@@ -478,9 +485,9 @@ END;
           <:module_expr< (value $e$ : $mt1$) >>
       | "("; "value"; e = expr; ")" →
           <:module_expr< (value $e$) >>
-      | "("; me = SELF; ":"; mt = module_type; ")" →
+      | "("; me = module_expr; ":"; mt = module_type; ")" →
           <:module_expr< ( $me$ : $mt$ ) >>
-      | "("; me = SELF; ")" → <:module_expr< $me$ >>
+      | "("; me = module_expr; ")" → <:module_expr< $me$ >>
       | e = alg_extension -> <:module_expr< [% $_extension:e$ ] >>
       ] ]
   ;
@@ -533,7 +540,10 @@ END;
       | attr = floating_attribute -> <:str_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:str_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
-      ] ]
+      | e = NEXT -> e
+      ]
+    | [ ]
+    ]
   ;
   mod_binding:
     [ [ i = V uidopt "uidopt"; me = mod_fun_binding ;
@@ -561,20 +571,22 @@ END;
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_type< $e1$ [@ $_attribute:attr$ ] >>
+      | e1 = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") →
+          <:module_type< $e1$ with $_list:wcl$ >>
       ]
-    | [ mt = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") →
-          <:module_type< $mt$ with $_list:wcl$ >> ]
     | [ "sig"; sg = signature; "end" →
           <:module_type< sig $_list:sg$ end >>
       | "module"; "type"; "of"; me = module_expr →
-          <:module_type< module type of $me$ >> ]
+          <:module_type< module type of $me$ >>
+      | x = NEXT -> x
+      ]
     | "simple"
       [ li = extended_longident; "."; i = V LIDENT → <:module_type< $longid:li$ . $_lid:i$ >>
-      | li = extended_longident → <:module_type< $longid:li$ >>
+      | li = extended_longident ; check_eps → <:module_type< $longid:li$ >>
       | i = V LIDENT → <:module_type< $_lid:i$ >>
       | e = alg_extension -> <:module_type< [% $_extension:e$ ] >>
       | "'"; i = V ident "" → <:module_type< ' $_:i$ >>
-      | "("; mt = SELF; ")" → <:module_type< $mt$ >> ] ]
+      | "("; mt = module_type; ")" → <:module_type< $mt$ >> ] ]
   ;
   signature:
     [ [ st = V (LIST0 [ s = sig_item; ";" → s ]) → st ] ]
@@ -631,7 +643,10 @@ END;
       | attr = floating_attribute -> <:sig_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:sig_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
-      ] ]
+      | x = NEXT -> x
+      ]
+    | [ ]
+    ]
   ;
   mod_decl_binding:
     [ [ i = V uidopt "uidopt"; mt = module_declaration ; attrs = item_attributes → (i, mt, attrs) ] ]
@@ -702,7 +717,7 @@ END;
           expr_to_inline <:expr< match $e$ with $p1$ → $e1$ >> ext attrs
       | "try"; (ext,attrs) = ext_attributes; e = SELF; "with"; l = closed_case_list →
           expr_to_inline <:expr< try $e$ with [ $_list:l$ ] >> ext attrs
-      | "try"; (ext,attrs) = ext_attributes; e = SELF; "with"; mc = match_case →
+      | "try"; (ext,attrs) = ext_attributes; e = SELF; "with"; (patt)? ; mc = match_case →
           expr_to_inline <:expr< try $e$ with [ $list:[mc]$ ] >> ext attrs
       | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = SELF; "else"; e3 = SELF →
           expr_to_inline <:expr< if $e1$ then $e2$ else $e3$ >> ext attrs
@@ -715,9 +730,10 @@ END;
           expr_to_inline <:expr< while $e$ do { $_list:seq$ } >> ext attrs
       | e = NEXT -> e
       ]
-    | "where"
+    | "where" LEFTA
       [ e = SELF; "where"; (ext,attrs) = ext_attributes; rf = V (FLAG "rec"); lb = let_binding →
-          expr_to_inline <:expr< let $_flag:rf$ $list:[lb]$ in $e$ >> ext attrs ]
+          expr_to_inline <:expr< let $_flag:rf$ $list:[lb]$ in $e$ >> ext attrs
+      ]
     | ":=" RIGHTA
       [ e1 = SELF; ":="; e2 = SELF → <:expr< $e1$ := $e2$ >> ]
     | "||" RIGHTA
@@ -782,6 +798,7 @@ END;
            <:expr< $flo:_$ >> -> e
          | _ -> <:expr< $lid:"~+."$ $e$ >>
          ]
+      | e = NEXT -> e
       ]
     | "apply" LEFTA
       [ e1 = SELF; e2 = SELF → <:expr< $e1$ $e2$ >> ]
@@ -825,6 +842,7 @@ END;
       [ "~-"; e = SELF → <:expr< ~- $e$ >>
       | "~-."; e = SELF → <:expr< ~-. $e$ >>
       | f = PREFIXOP; e = SELF -> <:expr< $lid:f$ $e$ >>
+      | e = NEXT -> e
       ]
     | "simple"
       [ s = V INT → <:expr< $_int:s$ >>
@@ -845,7 +863,7 @@ END;
       | "[|"; el = V (LIST0 expr SEP ";"); "|]" → <:expr< [| $_list:el$ |] >>
       | "{"; lel = V (LIST1 label_expr SEP ";"); "}" →
           <:expr< { $_list:lel$ } >>
-      | "{"; "("; e = SELF; ")"; "with"; lel = V (LIST1 label_expr SEP ";");
+      | "{"; "("; e = expr; ")"; "with"; lel = V (LIST1 label_expr SEP ";");
         "}" →
           <:expr< { ($e$) with $_list:lel$ } >>
       | "("; ")" → <:expr< $uid:"()"$ >>
@@ -853,18 +871,18 @@ END;
           <:expr< (module $me$ : $mt$) >>
       | "("; "module"; me = module_expr; ")" →
           <:expr< (module $me$) >>
-      | "("; op = operator_rparen ->
+      | "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:expr< $uid:op$ >>
           else
             <:expr< $lid:op$ >>
-      | "("; e = SELF; ":"; t = ctyp; ")" → <:expr< ($e$ : $t$) >>
-      | "("; e = SELF; ","; el = LIST1 expr SEP ","; ")" → mktupexp loc e el
-      | "("; e = SELF; ")" → <:expr< $e$ >> ] ]
+      | "("; e = expr; ":"; t = ctyp; ")" → <:expr< ($e$ : $t$) >>
+      | "("; e = expr; ","; el = LIST1 expr SEP ","; ")" → mktupexp loc e el
+      | "("; e = expr; ")" → <:expr< $e$ >> ] ]
   ;
   expr_longident:
     [
-      [ li = longident -> <:expr< $longid:li$ >>
+      [ li = longident ; check_eps -> <:expr< $longid:li$ >>
       | li = longident ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
@@ -968,11 +986,15 @@ END;
       [ p = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:patt< $p$ [@ $_attribute:attr$ ] >>
       ]
-    | NONA [ "exception"; (ext,attrs) = ext_attributes; p = patt →
+    | NONA
+      [ "exception"; (ext,attrs) = ext_attributes; p = patt →
         patt_to_inline loc <:patt< exception $p$ >> ext attrs
+      | x = NEXT -> x
       ]
     | NONA
-      [ p1 = SELF; ".."; p2 = SELF → <:patt< $p1$ .. $p2$ >> ]
+      [ p1 = NEXT; ".."; p2 = NEXT → <:patt< $p1$ .. $p2$ >>
+      | p1 = NEXT -> p1
+      ]
     | LEFTA
       [ p1 = SELF; p2 = SELF → <:patt< $p1$ $p2$ >> ]
     | "simple"
@@ -1001,7 +1023,7 @@ END;
       | "[|"; pl = V (LIST0 patt SEP ";"); "|]" → <:patt< [| $_list:pl$ |] >>
       | "{"; lpl = V (LIST1 label_patt SEP ";"); "}" →
           <:patt< { $_list:lpl$ } >>
-      | "("; op = operator_rparen ->
+      | "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:patt< $uid:op$ >>
           else
@@ -1042,7 +1064,7 @@ END;
       ]
     | "simple"
       [ p = patt_ident -> p
-      | "("; op = operator_rparen ->
+      | "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:patt< $uid:op$ >>
           else
@@ -1051,7 +1073,11 @@ END;
           <:patt< { $_list:lpl$ } >>
       | "("; p = paren_ipatt; ")" → p
       | e = alg_extension -> <:patt< [% $_extension:e$ ] >>
-      | "_" → <:patt< _ >> ] ]
+      | "_" → <:patt< _ >>
+      | x = NEXT -> x
+      ]
+    | [ ]
+    ]
   ;
   paren_ipatt:
     [ [ p = ipatt; ":"; t = ctyp → <:patt< ($p$ : $t$) >>
@@ -1162,8 +1188,8 @@ END;
       | "_" → <:ctyp< _ >>
       | e = alg_extension -> <:ctyp< [% $_extension:e$ ] >>
       | "(" ; "module"; mt = module_type ; ")" → <:ctyp< ( module $mt$ ) >>
-      | "("; t = SELF; "*"; tl = LIST1 ctyp SEP "*"; ")" → mktuptyp loc t tl
-      | "("; t = SELF; ")" → <:ctyp< $t$ >>
+      | "("; t = ctyp; "*"; tl = LIST1 ctyp SEP "*"; ")" → mktuptyp loc t tl
+      | "("; t = ctyp; ")" → <:ctyp< $t$ >>
       | "["; cdl = V (LIST1 constructor_declaration SEP "|"); "]" →
           <:ctyp< [ $_list:cdl$ ] >>
       | "["; "|"; "]" →
@@ -1266,12 +1292,14 @@ END;
           <:class_expr< let $_flag:rf$ $_list:lb$ in $ce$ >>
       | "let"; "open"; ovf = V (FLAG "!") "!"; i = extended_longident; "in"; ce = SELF →
           <:class_expr< let open $_!:ovf$ $longid:i$ in $ce$ >>
+      | x = NEXT -> x
       ]
     | "alg_attribute" LEFTA
       [ ct = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:class_expr< $ct$ [@ $_attribute:attr$ ] >>
       ]
     | [ e = alg_extension -> <:class_expr< [% $_extension:e$ ] >>
+      | x = NEXT -> x
       ]
     | [ ce = class_expr_apply -> ce ]
     ]
@@ -1362,11 +1390,13 @@ END;
           <:class_type< $ct$ [ $_list:tl$ ] >> ]
     | [ "object"; cst = V (OPT class_self_type);
         csf = V (LIST0 [ csi = class_sig_item; ";" → csi ]); "end" →
-          <:class_type< object $_opt:cst$ $_list:csf$ end >> ]
+          <:class_type< object $_opt:cst$ $_list:csf$ end >>
+      | x = NEXT -> x
+      ]
     | "simple"
       [ li = extended_longident; "."; i = V LIDENT → <:class_type< $longid:li$ . $_lid:i$ >>
       | i = V LIDENT → <:class_type< $_lid:i$ >>
-      | "("; ct = SELF; ")" → ct
+      | "("; ct = class_type; ")" → ct
       | e = alg_extension -> <:class_type< [% $_extension:e$ ] >>
  ] ]
   ;
@@ -1422,9 +1452,9 @@ END;
       ] ]
   ;
   expr: LEVEL "simple"
-    [ [ "("; e = SELF; ":"; t = ctyp; ":>"; t2 = ctyp; ")" →
+    [ [ "("; e = expr; ":"; t = ctyp; ":>"; t2 = ctyp; ")" →
           <:expr< ($e$ : $t$ :> $t2$ ) >>
-      | "("; e = SELF; ":>"; t = ctyp; ")" → <:expr< ($e$ :> $t$) >>
+      | "("; e = expr; ":>"; t = ctyp; ")" → <:expr< ($e$ :> $t$) >>
       | "{<"; fel = V (LIST0 field_expr SEP ";"); ">}" →
           <:expr< {< $_list:fel$ >} >> ] ]
   ;
@@ -1525,7 +1555,6 @@ END;
       | p = patt_option_label →
           let _ = warning_deprecated_since_6_00 loc in
           p
-      | x = NEXT -> x
       ] ]
   ;
   ipatt_tcon_opt_eq_patt:
@@ -1634,3 +1663,5 @@ END;
 END ;
 |foo} ;
 ];
+
+value pa e s = s |> Stream.of_string |> Grammar.Entry.parse e ;

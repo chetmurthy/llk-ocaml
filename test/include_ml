@@ -8,22 +8,22 @@
 #require "bos";;
 #require "str";;
 
-
+(*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
-(*
+ *)
 #require "camlp5.pa_r";;
 Pcaml.inter_phrases := Some ";\n";;
- *)
-
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
 
 (*
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+ *)
+
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
- *)
+
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -146,59 +146,43 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
  *)
 
 
-#load "original_rtest.cmo";;
+#load "revised_rtest.cmo";;
 #require "camlp5.pr_official";;
 #load "papr_test_matrix.cmo";;
-#load "llko2official_test.cmo" ;;
-open Original_rtest ;;
-open Llko2official_test ;;
-#trace Original.F.implem ;;
-#trace Original.F.str_item ;;
-#trace Original.F.str_item__0001;;
-#trace Original.F.str_item__0001__268 ;;
-#trace Original.F.first_let_binding ;;
-#trace Original.F.first_type_decl ;;
-#trace Original.F.type_kind ;;
-#trace Original.F.type_kind_regexp ;;
-#trace Original.F.constructor_declaration ;;
-#trace Original.F.rest_constructor_declaration ;;
-#trace Original.F.cons_ident ;;
-#trace Original.F.ctyp_ident ;;
-#trace Original.F.fun_binding ;;
-#trace Original.F.ctyp ;;
-#trace Original.F.ctyp__0003 ;;
-#trace Original.F.expr_longident ;;
-#trace Original.F.expr ;;
-#trace Original.F.paren_module_expr ;;
-#trace Original.F.module_expr ;;
-#trace Original.F.longident ;;
-#trace Original.F.longident__0002 ;;
-#trace Original.F.longident__0001__227 ;;
-#trace Original.F.type_extension ;;
-#trace Original.F.str_item__0001__271 ;;
-#trace Original.F.extended_longident ;;
-#trace Original.F.extended_longident__0002 ;;
-#trace Original.F.extended_longident__0001__203 ;;
-#trace Original.F.str_item__0001__271_regexp ;;
-#trace Original.F.poly_type ;;
-#trace Original.F.sig_item ;;
-#trace Original.F.module_type ;;
-#trace Original.F.expr__0020 ;;
-#trace Original.F.ext_attributes ;;
-#trace Original.F.expr__0020__198 ;;
-#trace Original.F.class_signature ;;
-#trace Original.F.class_sig_item ;;
-#trace Original.F.ext_opt ;;
-#trace Original.F.class_description ;;
-#trace Original.F.alg_attributes_no_anti ;;
-#trace Original.F.class_type_parameters ;;
-#trace Original.F.class_type ;;
-#trace Original.F.class_type__0001 ;;
-#trace Original.F.class_type__0001__166 ;;
-#trace Original.F.class_type__0001__339 ;;
-#trace Original.F.letop_binding ;;
-
-
+#load "llkr2official_test.cmo" ;;
+open Revised_rtest ;;
+open Llkr2official_test ;;
+#trace Revised.F.implem ;;
+#trace Revised.F.str_item ;;
+#trace Revised.F.module_expr ;;
+#trace Revised.F.module_type ;;
+#trace Revised.F.expr ;;
+#trace Revised.F.patt ;;
+#trace Revised.F.ipatt ;;
+#trace Revised.F.paren_ipatt ;;
+#trace Revised.F.sequence ;;
+#trace Revised.F.attribute_body ;;
+#trace Revised.F.attribute_body__95 ;;
+#trace Revised.F.attribute_signature ;;
+#trace Revised.F.class_declaration ;;
+#trace Revised.F.class_type_parameters ;;
+#trace Revised.F.class_fun_binding ;;
+#trace Revised.F.class_expr ;;
+#trace Revised.F.class_expr_simple ;;
+#trace Revised.F.type_decl ;;
+#trace Revised.F.type_patt ;;
+#trace Revised.F.type_parameter ;;
+#trace Revised.F.ctyp ;;
+#trace Revised.F.let_binding ;;
+#trace Revised.F.extended_longident ;;
+#trace Revised.F.longident ;;
+#trace Revised.F.fun_def ;;
+(*
+#trace Revised.F.ctyp__0009 ;;
+ *)
+#trace Revised.F.ctyp__0004 ;;
+#trace Revised.F.ctyp__0002 ;;
+#trace Revised.F.ctyp__0002__115 ;;
 (*
 #load "regexp_test.cmo";;
 open Regexp_test ;;

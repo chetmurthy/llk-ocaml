@@ -17,44 +17,10 @@ llko2official_test.cmx : \
     papr_test_matrix.cmx \
     original_rtest.cmx
 llkr2official_test.cmo : \
+    revised_rtest.cmo \
     papr_test_matrix.cmo
 llkr2official_test.cmx : \
-    papr_test_matrix.cmx
-o2official_test.cmo : \
-    papr_test_matrix.cmo
-o2official_test.cmx : \
-    papr_test_matrix.cmx
-original_rtest.cmo :
-original_rtest.cmx :
-papr_test_matrix.cmo :
-papr_test_matrix.cmx :
-r2official_test.cmo : \
-    papr_test_matrix.cmo
-r2official_test.cmx : \
-    papr_test_matrix.cmx
-revised_rtest.cmo :
-revised_rtest.cmx :
-external_otest.cmo :
-external_otest.cmx :
-infer_otest.cmo :
-infer_otest.cmx :
-regexp_otest.cmo :
-regexp_otest.cmx :
-self_otest.cmo :
-self_otest.cmx :
-simple_otest.cmo :
-simple_otest.cmx :
-bug_fifo_rtest.cmo :
-bug_fifo_rtest.cmx :
-llko2official_test.cmo : \
-    papr_test_matrix.cmo \
-    original_rtest.cmo
-llko2official_test.cmx : \
-    papr_test_matrix.cmx \
-    original_rtest.cmx
-llkr2official_test.cmo : \
-    papr_test_matrix.cmo
-llkr2official_test.cmx : \
+    revised_rtest.cmx \
     papr_test_matrix.cmx
 o2official_test.cmo : \
     papr_test_matrix.cmo
