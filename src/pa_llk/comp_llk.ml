@@ -156,7 +156,7 @@ module CompilingGrammar = struct
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     ; errors : mutable list error_t
-    ; preceding_symbol: mutable list (Name.t * a_symbol)
+    ; preceding_symbols: mutable list (Name.t * list a_symbol)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -170,7 +170,7 @@ module CompilingGrammar = struct
                 ; firsts = SM.mt
                 ; follows = SM.mt
                 ; errors = []
-                ; preceding_symbol = []
+                ; preceding_symbols = []
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -252,10 +252,10 @@ module CompilingGrammar = struct
   value set_alphabet cg l = (snd cg).gram_alphabet := l ;
   value alphabet cg = (snd cg).gram_alphabet ;
 
-  value set_preceding_symbol cg (name, s) =
-    (snd cg).preceding_symbol := [(name,s)::(snd cg).preceding_symbol] ;
-  value preceding_symbol cg name =
-    match List.assoc name (snd cg).preceding_symbol with [
+  value set_preceding_symbols cg (name, s) =
+    (snd cg).preceding_symbols := [(name,s)::(snd cg).preceding_symbols] ;
+  value preceding_symbols cg name =
+    match List.assoc name (snd cg).preceding_symbols with [
         x -> Some x
       | exception Not_found -> None
       ] ;
@@ -1765,45 +1765,45 @@ module S6LambdaLift = struct
 
 open FreeLids ;
 
-value rec lift_rules cg acc esig rl = { (rl) with au_rules = List.map (lift_rule cg acc esig) rl.au_rules }
+value rec lift_rules cg acc e0 left_syms rl = { (rl) with au_rules = List.map (lift_rule cg acc e0 left_syms) rl.au_rules }
 
-and lift_rule cg acc esig r =
+and lift_rule cg acc e0 left_syms r =
   let (_, revps) = List.fold_left (fun (stkpat, revps) ps ->
-    let ps = lift_psymbol cg acc esig stkpat ps in
+    let ps = lift_psymbol cg acc e0 stkpat ps in
     let stkpat = match ps.ap_patt with [ None -> stkpat | Some p -> [p :: stkpat] ] in
     (stkpat, [ps :: revps])
   ) ([], []) r.ar_psymbols in
   { (r) with ar_psymbols = List.rev revps }
 
-and lift_psymbol cg acc esig stkpat ps =
-  { (ps) with ap_symb = lift_symbol cg acc esig stkpat ps.ap_symb }
+and lift_psymbol cg acc e0 stkpat ps =
+  { (ps) with ap_symb = lift_symbol cg acc e0 stkpat ps.ap_symb }
 
-and lift_symbol cg acc ((ename, eformals) as esig) revpats = fun [
-    ASflag loc s -> ASflag loc (lift_symbol cg acc esig revpats s)
+and lift_symbol cg acc e0 revpats = fun [
+    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc esig revpats s) None
+     ASlist loc lml (lift_symbol cg acc e0 revpats s) None
   | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc esig revpats s) (Some (lift_symbol cg acc esig revpats s2, b))
+     ASlist loc lml (lift_symbol cg acc e0 revpats s) (Some (lift_symbol cg acc e0 revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg acc esig revpats s)
+  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg acc esig revpats s1) (lift_symbol cg acc esig revpats s2) e
+     ASleft_assoc loc (lift_symbol cg acc e0 revpats s1) (lift_symbol cg acc e0 revpats s2) e
 
   | ASrules loc rl ->
-     let formals = eformals @ (List.rev revpats) in
+     let formals = e0.ae_formals @ (List.rev revpats) in
      let ids_of_rl = free_lids_of_a_rules rl in
      let formals =
        formals
      |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) ids_of_rl) in
      let actuals = formals2actuals cg formals in
-     let new_ename = CG.fresh_name cg ename in
+     let new_ename = CG.fresh_name cg e0.ae_name in
      let new_e = {
          ae_loc = rl.au_loc
        ; ae_name = new_ename
@@ -1817,20 +1817,20 @@ and lift_symbol cg acc ((ename, eformals) as esig) revpats = fun [
 
   | ASself _ _ as s -> s
   | AStok _ _ _ as s -> s
-  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc esig revpats s)
-  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc esig revpats s) sl
+  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 revpats s)
+  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 revpats s) sl
 ]
 ;
 
-value lift_level cg acc esig l = { (l) with al_rules = lift_rules cg acc esig l.al_rules } ;
+value lift_level cg acc e0 l = { (l) with al_rules = lift_rules cg acc e0 l.al_rules } ;
 
-value lift_levels cg acc esig ll = do {
+value lift_levels cg acc e0 ll = do {
     assert (1 = List.length ll) ;
-    List.map (lift_level cg acc esig) ll
+    List.map (lift_level cg acc e0) ll
 }    
 ;
 value lift_entry cg acc e =
-  let ll = lift_levels cg acc (e.ae_name, e.ae_formals) e.ae_levels in
+  let ll = lift_levels cg acc e e.ae_levels in
   { (e) with ae_levels = ll }
 ;
   
@@ -2873,9 +2873,26 @@ value compute_follow (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_i
       }
     ]
 ;
+
+value compile_top_entry cg e =
+  let loc = e.ae_loc in
+  let n = Name.print e.ae_name in
+  let msg = Fmt.(str "illegal begin of %s" (Name.root e.ae_name)) in
+  let rhs = <:expr< fun __strm__ ->
+                    try
+                      F . $n$ __strm__
+                    with Stream.Failure -> raise (Stream.Error $str:msg$) >> in
+  let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
+  (<:patt< $lid:n$ >>, rhs, <:vala< [] >>)
+;
 value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg)  =
 let _ = compute_follow cg in
   let fdefs = compile_entries cg el in
+  let top_defs =
+    (CG.g cg).gram_exports
+    |> List.map (fun n ->
+           compile_top_entry cg (CG.gram_entry cg n)
+         ) in
   let token_patterns =
     all_tokens el @ (
       (CG.gram_regexps cg)
@@ -2918,6 +2935,9 @@ let _ = compute_follow cg in
  module F = struct
    open Pa_llk_runtime.Llk_runtime ;
    value rec $list:fdefs$ ;
+ end ;
+ module Top = struct
+   value $list:top_defs$ ;
  end ;
  open Plexing ;
  do { $list:token_actions$ } ;

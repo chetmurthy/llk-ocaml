@@ -79,7 +79,7 @@ llko2official_test.cmo: llko2official_test.ml papr_test_matrix.cmi
 papr_test_matrix.cmi papr_test_matrix.cmo: papr_test_matrix.ml
 	$(OCAMLFIND) ocamlc $(OCAMLCFLAGS) -package $(PACKAGES),camlp5.macro -syntax camlp5r -c $<
 
-.PRECIOUS: %_otest.cmo %_rtest.cmo
+.PRECIOUS: %test.cmo %test.cmo %test.exe
 
 clean::
 	rm -rf *.cm* *.ppo* *.exe _build
