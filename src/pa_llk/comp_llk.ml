@@ -156,6 +156,7 @@ module CompilingGrammar = struct
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     ; errors : mutable list error_t
+    ; preceding_symbol: mutable list (Name.t * a_symbol)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -169,6 +170,7 @@ module CompilingGrammar = struct
                 ; firsts = SM.mt
                 ; follows = SM.mt
                 ; errors = []
+                ; preceding_symbol = []
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -249,6 +251,14 @@ module CompilingGrammar = struct
 
   value set_alphabet cg l = (snd cg).gram_alphabet := l ;
   value alphabet cg = (snd cg).gram_alphabet ;
+
+  value set_preceding_symbol cg (name, s) =
+    (snd cg).preceding_symbol := [(name,s)::(snd cg).preceding_symbol] ;
+  value preceding_symbol cg name =
+    match List.assoc name (snd cg).preceding_symbol with [
+        x -> Some x
+      | exception Not_found -> None
+      ] ;
 end ;
 module CG = CompilingGrammar ;
 
