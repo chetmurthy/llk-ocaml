@@ -1768,33 +1768,33 @@ open FreeLids ;
 value rec lift_rules cg acc e0 left_syms rl = { (rl) with au_rules = List.map (lift_rule cg acc e0 left_syms) rl.au_rules }
 
 and lift_rule cg acc e0 left_syms r =
-  let (_, revps) = List.fold_left (fun (stkpat, revps) ps ->
-    let ps = lift_psymbol cg acc e0 stkpat ps in
+  let (_, revps, left_syms) = List.fold_left (fun (stkpat, revps, left_syms) ps ->
+    let ps = lift_psymbol cg acc e0 left_syms stkpat ps in
     let stkpat = match ps.ap_patt with [ None -> stkpat | Some p -> [p :: stkpat] ] in
-    (stkpat, [ps :: revps])
-  ) ([], []) r.ar_psymbols in
+    (stkpat, [ps :: revps], left_syms@[ps.ap_symb])
+  ) ([], [], []) r.ar_psymbols in
   { (r) with ar_psymbols = List.rev revps }
 
-and lift_psymbol cg acc e0 stkpat ps =
-  { (ps) with ap_symb = lift_symbol cg acc e0 stkpat ps.ap_symb }
+and lift_psymbol cg acc e0 left_syms stkpat ps =
+  { (ps) with ap_symb = lift_symbol cg acc e0 left_syms stkpat ps.ap_symb }
 
-and lift_symbol cg acc e0 revpats = fun [
-    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 revpats s)
+and lift_symbol cg acc e0 left_syms revpats = fun [
+    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 left_syms revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc e0 revpats s) None
+     ASlist loc lml (lift_symbol cg acc e0 left_syms revpats s) None
   | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc e0 revpats s) (Some (lift_symbol cg acc e0 revpats s2, b))
+     ASlist loc lml (lift_symbol cg acc e0 left_syms revpats s) (Some (lift_symbol cg acc e0 left_syms revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 revpats s)
+  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 left_syms revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg acc e0 revpats s1) (lift_symbol cg acc e0 revpats s2) e
+     ASleft_assoc loc (lift_symbol cg acc e0 left_syms revpats s1) (lift_symbol cg acc e0 left_syms revpats s2) e
 
   | ASrules loc rl ->
      let formals = e0.ae_formals @ (List.rev revpats) in
@@ -1803,30 +1803,32 @@ and lift_symbol cg acc e0 revpats = fun [
        formals
      |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) ids_of_rl) in
      let actuals = formals2actuals cg formals in
-     let new_ename = CG.fresh_name cg e0.ae_name in
-     let new_e = {
+     let new_ename = CG.fresh_name cg e0.ae_name in do {
+       CG.set_preceding_symbols cg (new_ename, left_syms) ;
+       let new_e = {
          ae_loc = rl.au_loc
        ; ae_name = new_ename
        ; ae_pos = None
        ; ae_formals = formals
        ; ae_levels = [{al_loc = rl.au_loc; al_label = None ; al_assoc = None ; al_rules = rl}]
        } in do {
-        Std.push acc new_e ;
-        ASnterm rl.au_loc new_ename actuals None
-      }
+         Std.push acc new_e ;
+         ASnterm rl.au_loc new_ename actuals None
+       }
+     }
 
   | ASself _ _ as s -> s
   | AStok _ _ _ as s -> s
-  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 revpats s)
-  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 revpats s) sl
+  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 left_syms revpats s)
+  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 left_syms revpats s) sl
 ]
 ;
 
-value lift_level cg acc e0 l = { (l) with al_rules = lift_rules cg acc e0 l.al_rules } ;
+value lift_level cg acc e0 left_syms l = { (l) with al_rules = lift_rules cg acc e0 left_syms l.al_rules } ;
 
 value lift_levels cg acc e0 ll = do {
     assert (1 = List.length ll) ;
-    List.map (lift_level cg acc e0) ll
+    List.map (lift_level cg acc e0 []) ll
 }    
 ;
 value lift_entry cg acc e =
@@ -2412,7 +2414,7 @@ value tokens_to_match_branches loc i toks =
   in specific_branches @ rest_branches @ anti_branches
 ;
 
-value match_nest_branches cg ename i (fi, fo, r) =
+value match_nest_branches cg e i (fi, fo, r) =
   let loc = r.ar_loc in
   let raw_tokens =
     TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
@@ -2420,26 +2422,33 @@ value match_nest_branches cg ename i (fi, fo, r) =
     if Follow.nullable fi && TS.mt = fo then
       [(<:patt< _ >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)]
     else [] in
-  (tokens_to_match_branches loc i raw_tokens) @ nullable_branch
+  ((tokens_to_match_branches loc i raw_tokens) @ nullable_branch, raw_tokens)
 ;
 
-value build_match_nest loc cg ename fi_fo_rule_list =
-  let branches =
+value build_match_nest loc cg e fi_fo_rule_list =
+  let branches_fifo_list =
     fi_fo_rule_list
-    |> List.mapi (match_nest_branches cg ename)
-    |> List.concat in
+    |> List.mapi (match_nest_branches cg e) in
+  let branches = branches_fifo_list |> List.concat_map fst  in
+  let fifo = branches_fifo_list |> List.concat_map snd in
+  let fifotxt =
+    fifo
+    |> List.map PSyn.token
+    |> PSyn.disjunction
+    |> PSyn.print in
   let (null_branches, normal_branches) =
     Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
   let null_branches = match null_branches with [
         [] -> [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
       | [_] as l -> l
       | _ ->  do {
-         CG.add_failure cg (CG.adjust_loc cg loc) ename "internal error in build_match_nest: entry has more than one NULL branch" ;
+         CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "internal error in build_match_nest: entry has more than one NULL branch" ;
          failwith "caught"
         }
       ] in
   let branches = normal_branches @ null_branches in
-  <:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >>
+  (<:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >>,
+   fifotxt)
 ;
 
 value compile1a_branch cg ename i (fi, fo, r) =
@@ -2487,7 +2496,7 @@ value compile1a_entry cg e = do {
       failwith "caught"
     }
     else () ;
-    let match_nest = build_match_nest loc cg ename fi_fo_rule_list in
+    let (match_nest, fifotxt) = build_match_nest loc cg e fi_fo_rule_list in
     let matcher_name = (Name.print ename)^"_matcher" in
     let branches =
       fi_fo_rule_list
@@ -2503,7 +2512,7 @@ value compile1a_entry cg e = do {
          let branches = branches @ [
                (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
              ] in
-         <:expr< fun __strm__ -> match $lid:matcher_name$ __strm__ with [ $list:branches$ ] >> ]
+         <:expr< fun __strm__ -> match ($lid:matcher_name$ __strm__) [@llk.first_follow $str:fifotxt$ ;] with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)
