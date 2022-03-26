@@ -76,6 +76,7 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 #install_printer pp_str_item ;;
 #install_printer pp_sig_item ;;
 
+#require "camlp5.extend" ;;
 #require "pa_llk_compiler" ;;
 #require "pa_llk_runtime" ;;
 open Parse_gram ;;

@@ -96,3 +96,13 @@ value clone_stream strm =
       ]
   in [: crec 1 :]
 ;
+
+value must_parse ~{msg} pa strm =
+  try pa strm
+  with [
+      Stream.Failure ->
+      let open Printexc in
+       let rbt = get_raw_backtrace() in
+      raise_with_backtrace (Stream.Error msg) rbt
+    ]
+;

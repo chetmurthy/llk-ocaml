@@ -6,9 +6,10 @@ module Interp = struct
 value g = Grammar.gcreate (Plexer.gmake ());
 value etop1 = Grammar.Entry.create g "etop1";
 value etop2 = Grammar.Entry.create g "etop2";
+value etop3 = Grammar.Entry.create g "etop3";
 
 EXTEND
-  GLOBAL: etop1 etop2 ;
+  GLOBAL: etop1 etop2 etop3 ;
   etop1: [ [
             FLAG "foo" ; x = e -> x
           | FLAG "foo" ; x = e2 -> x
@@ -19,10 +20,14 @@ EXTEND
           | "foo" ; x = e2 -> x
           | "foo" ; x = e3 ; y = e4 -> y
           ] ];
+  etop3: [ [
+            "foo" ; x = e5 ; "bar" -> x
+          ] ];
   e: [ [ n = INT -> n ] ] ;
   e2: [ [ n = UIDENT -> n ] ] ;
   e3: [ [ -> () ] ] ;
   e4: [ [ n = FLOAT -> n ] ] ;
+  e5: [ [ n = INT -> Some n | -> None ] ] ;
 
 END ;
 end ;
@@ -30,7 +35,7 @@ end ;
 [@@@llk
 {foo|
 GRAMMAR Error1:
-  EXPORT: etop1 etop2 ;
+  EXPORT: etop1 etop2 etop3 ;
   etop1: [ [
             FLAG "foo" ; x = e -> x
           | FLAG "foo" ; x = e2 -> x
@@ -41,10 +46,15 @@ GRAMMAR Error1:
           | "foo" ; x = e2 -> x
           | "foo" ; x = e3 ; y = e4 -> y
           ] ];
+  etop3: [ [
+            "foo" ; x = e5 ; "bar" -> x
+          ] ];
+
   e: [ [ n = INT -> n ] ] ;
   e2: [ [ n = UIDENT -> n ] ] ;
   e3: [ [ -> () ] ] ;
   e4: [ [ n = FLOAT -> n ] ] ;
+  e5: [ [ n = INT -> Some n | -> None ] ] ;
 END;
 
 |foo};
@@ -76,12 +86,12 @@ value tests = "simple" >::: [
       "Error1" >:: (fun _ -> do {
         assert_raises_exn_pattern "[e] or [e2] or [e3] expected (in [etop1])"
           (fun () -> pa Interp.etop1 {foo|foo a|foo})
-      ; assert_raises_exn_pattern {foo|""|foo}
+      ; assert_raises_exn_pattern {foo|[x = e] or [x = e2] or [x = e3] expected after [FLAG 'foo'] (in [etop1])|foo}
           (fun () -> pa Error1.etop1 {foo|foo a|foo})
 
       ; assert_raises_exn_pattern "[e] or [e2] or [e3] expected after 'foo' (in [etop2])"
           (fun () -> (pa Interp.etop2 {foo|foo a|foo}))
-      ; assert_raises_exn_pattern {foo|""|foo}
+      ; assert_raises_exn_pattern {foo|[x = e] or [x = e2] or [x = e3] expected after ['foo'] (in [etop2])|foo}
           (fun () -> (pa Error1.etop2 {foo|foo a|foo}))
 
       ; assert_raises_exn_pattern "illegal begin of etop1"
@@ -93,6 +103,11 @@ value tests = "simple" >::: [
           (fun () -> (pa Interp.etop2 {foo|bar|foo}))
       ; assert_raises_exn_pattern "illegal begin of etop2"
           (fun () -> (pa Error1.etop2 {foo|bar|foo}))
+
+      ; assert_raises_exn_pattern "[e5] expected after 'foo' (in [etop3])"
+          (fun () -> (pa Interp.etop3 {foo|foo goo|foo}))
+      ; assert_raises_exn_pattern "[x = e5] expected after ['foo'] (in [etop3])"
+          (fun () -> (pa Error1.etop3 {foo|foo goo|foo}))
 
       })
 ]

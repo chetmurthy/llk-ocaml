@@ -156,7 +156,7 @@ module CompilingGrammar = struct
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     ; errors : mutable list error_t
-    ; preceding_symbols: mutable list (Name.t * list a_symbol)
+    ; preceding_psymbols: mutable list (Name.t * list a_psymbol)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -170,7 +170,7 @@ module CompilingGrammar = struct
                 ; firsts = SM.mt
                 ; follows = SM.mt
                 ; errors = []
-                ; preceding_symbols = []
+                ; preceding_psymbols = []
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -252,10 +252,10 @@ module CompilingGrammar = struct
   value set_alphabet cg l = (snd cg).gram_alphabet := l ;
   value alphabet cg = (snd cg).gram_alphabet ;
 
-  value set_preceding_symbols cg (name, s) =
-    (snd cg).preceding_symbols := [(name,s)::(snd cg).preceding_symbols] ;
-  value preceding_symbols cg name =
-    match List.assoc name (snd cg).preceding_symbols with [
+  value set_preceding_psymbols cg (name, s) =
+    (snd cg).preceding_psymbols := [(name,s)::(snd cg).preceding_psymbols] ;
+  value preceding_psymbols cg name =
+    match List.assoc name (snd cg).preceding_psymbols with [
         x -> Some x
       | exception Not_found -> None
       ] ;
@@ -310,7 +310,7 @@ value infer_kinds cg loc s kinds =
       | AStok loc "QUESTIONIDENTCOLON" _ -> ["?:"]
       | AStok loc "TILDEIDENT" _ -> ["~"]
       | AStok loc "TILDEIDENTCOLON" _ -> ["~:"]
-      | _ -> raise_failwithf (CG.adjust_loc cg loc) "cannot infer antiquotation kind for symbol %s" (Pr.symbol Pprintf.empty_pc s)
+      | _ -> raise_failwithf (CG.adjust_loc cg loc) "cannot infer antiquotation kind for symbol %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s)
       ]
 ;
 
@@ -978,7 +978,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
                                equal_a_symbol last_symbol (fst (Std.sep_last r.ar_psymbols)).ap_symb)) then
                raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s RIGHTA level does not have identical last symbols\n%s"
                  (Name.print ename)
-                 (Pr.entry Pprintf.empty_pc e)
+                 (Pr.entry ~{squote=False} Pprintf.empty_pc e)
              else () ;
              match last_symbol with [
                  ASnterm _ name _ None when name = ename -> ()
@@ -1280,7 +1280,7 @@ and symbol cg = fun [
     | (ASlist loc lml elem_s sepb_opt) as s ->
        let felem = symbol cg elem_s in
        if TS.mem None felem then
-         raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" (Pr.symbol Pprintf.empty_pc s)
+         raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s)
        else 
          match (lml, sepb_opt) with [
              (LML_1, None) -> felem
@@ -1634,7 +1634,7 @@ and fifo_symbol cg ff = fun [
      let fi_vala = First.symbol cg s0 in
      fifo_concat cg loc ~{if_nullable=True} fi_vala ff
 
-  | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" (Pr.symbol Pprintf.empty_pc s)
+  | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s)
 ]
 
 and fifo_rule cg ff r =
@@ -1765,36 +1765,36 @@ module S6LambdaLift = struct
 
 open FreeLids ;
 
-value rec lift_rules cg acc e0 left_syms rl = { (rl) with au_rules = List.map (lift_rule cg acc e0 left_syms) rl.au_rules }
+value rec lift_rules cg acc e0 left_psyms rl = { (rl) with au_rules = List.map (lift_rule cg acc e0 left_psyms) rl.au_rules }
 
-and lift_rule cg acc e0 left_syms r =
-  let (_, revps, left_syms) = List.fold_left (fun (stkpat, revps, left_syms) ps ->
-    let ps = lift_psymbol cg acc e0 left_syms stkpat ps in
+and lift_rule cg acc e0 left_psyms r =
+  let (_, revps, left_psyms) = List.fold_left (fun (stkpat, revps, left_psyms) ps ->
+    let ps = lift_psymbol cg acc e0 left_psyms stkpat ps in
     let stkpat = match ps.ap_patt with [ None -> stkpat | Some p -> [p :: stkpat] ] in
-    (stkpat, [ps :: revps], left_syms@[ps.ap_symb])
+    (stkpat, [ps :: revps], left_psyms@[ps])
   ) ([], [], []) r.ar_psymbols in
   { (r) with ar_psymbols = List.rev revps }
 
-and lift_psymbol cg acc e0 left_syms stkpat ps =
-  { (ps) with ap_symb = lift_symbol cg acc e0 left_syms stkpat ps.ap_symb }
+and lift_psymbol cg acc e0 left_psyms stkpat ps =
+  { (ps) with ap_symb = lift_symbol cg acc e0 left_psyms stkpat ps.ap_symb }
 
-and lift_symbol cg acc e0 left_syms revpats = fun [
-    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 left_syms revpats s)
+and lift_symbol cg acc e0 left_psyms revpats = fun [
+    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 left_psyms revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc e0 left_syms revpats s) None
+     ASlist loc lml (lift_symbol cg acc e0 left_psyms revpats s) None
   | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc e0 left_syms revpats s) (Some (lift_symbol cg acc e0 left_syms revpats s2, b))
+     ASlist loc lml (lift_symbol cg acc e0 left_psyms revpats s) (Some (lift_symbol cg acc e0 left_psyms revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 left_syms revpats s)
+  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 left_psyms revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg acc e0 left_syms revpats s1) (lift_symbol cg acc e0 left_syms revpats s2) e
+     ASleft_assoc loc (lift_symbol cg acc e0 left_psyms revpats s1) (lift_symbol cg acc e0 left_psyms revpats s2) e
 
   | ASrules loc rl ->
      let formals = e0.ae_formals @ (List.rev revpats) in
@@ -1804,7 +1804,7 @@ and lift_symbol cg acc e0 left_syms revpats = fun [
      |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) ids_of_rl) in
      let actuals = formals2actuals cg formals in
      let new_ename = CG.fresh_name cg e0.ae_name in do {
-       CG.set_preceding_symbols cg (new_ename, left_syms) ;
+       CG.set_preceding_psymbols cg (new_ename, left_psyms) ;
        let new_e = {
          ae_loc = rl.au_loc
        ; ae_name = new_ename
@@ -1819,16 +1819,20 @@ and lift_symbol cg acc e0 left_syms revpats = fun [
 
   | ASself _ _ as s -> s
   | AStok _ _ _ as s -> s
-  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 left_syms revpats s)
-  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 left_syms revpats s) sl
+  | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 left_psyms revpats s)
+  | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 left_psyms revpats s) sl
 ]
 ;
 
-value lift_level cg acc e0 left_syms l = { (l) with al_rules = lift_rules cg acc e0 left_syms l.al_rules } ;
+value lift_level cg acc e0 left_psyms l = { (l) with al_rules = lift_rules cg acc e0 left_psyms l.al_rules } ;
 
 value lift_levels cg acc e0 ll = do {
     assert (1 = List.length ll) ;
-    List.map (lift_level cg acc e0 []) ll
+    let left_psyms = match CG.preceding_psymbols cg e0.ae_name with [
+          Some x -> x
+        | None -> []
+        ] in
+    List.map (lift_level cg acc e0 left_psyms) ll
 }    
 ;
 value lift_entry cg acc e =
@@ -2194,7 +2198,7 @@ value report_compilation_errors cg msg = do {
            let fi = CG.first cg e.ae_name in
            let fo = CG.follow cg e.ae_name in
            Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-                  (Pr.entry Pprintf.empty_pc e)
+                  (Pr.entry ~{squote=False} Pprintf.empty_pc e)
                   (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
            )
          ) ;
@@ -2218,16 +2222,32 @@ value report_compilation_errors cg msg = do {
 
 open Exparser ;
 
-value rec compile1_symbol cg loc ename s =
+value expected_psymbols_msg e left_psymbols psl = do {
+  assert ([] <> psl) ;
+  let left_txt = Pr.rule_psymbols ~{squote=True} Pprintf.empty_pc left_psymbols in
+  let psl_txt = String.concat "] or [" (List.map (Pr.psymbol ~{squote=True} Pprintf.empty_pc) psl) in
+  Fmt.(str "[%s] expected after [%s] (in [%s])"
+         (String.escaped psl_txt)
+         (String.escaped left_txt)
+         (Name.root e.ae_name)
+  )
+}
+;
+
+value illegal_begin_msg e fifotxt =
+  Fmt.(str "illegal begin of %s (legal tokens: %s)" (Name.print e.ae_name) (String.escaped fifotxt))
+;
+
+value rec compile1_symbol cg loc e s =
   match s with [
       ASflag loc s -> do {
-        let s_body = compile1_symbol cg loc ename s in
+        let s_body = compile1_symbol cg loc e s in
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
         <:expr< parse_flag $s_body$ >>
       }
 
     | ASopt loc s -> do {
-        let s_body = compile1_symbol cg loc ename s in
+        let s_body = compile1_symbol cg loc e s in
         <:expr< parse_opt $s_body$ >>
        }
 
@@ -2256,31 +2276,31 @@ value rec compile1_symbol cg loc ename s =
           None, <:expr< __x__ >>)]))
 
     | ASlist loc LML_0 elem None ->
-       let elem = compile1_symbol cg loc ename elem in
+       let elem = compile1_symbol cg loc e elem in
        <:expr< parse_list0 $elem$ >>
 
     | ASlist loc LML_1 elem None ->
-       let elem = compile1_symbol cg loc ename elem in
+       let elem = compile1_symbol cg loc e elem in
        <:expr< parse_list1 $elem$ >>
 
     | ASlist loc LML_0 elem (Some (sep, False)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
+       let elem = compile1_symbol cg loc e elem in
+       let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list0_with_sep $elem$ $sep$ >>
 
     | ASlist loc LML_1 elem (Some (sep, False)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
+       let elem = compile1_symbol cg loc e elem in
+       let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list1_with_sep $elem$ $sep$ >>
 
     | ASlist loc LML_0 elem (Some (sep, True)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
+       let elem = compile1_symbol cg loc e elem in
+       let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >>
 
     | ASlist loc LML_1 elem (Some (sep, True)) ->
-       let elem = compile1_symbol cg loc ename elem in
-       let sep = compile1_symbol cg loc ename sep in
+       let elem = compile1_symbol cg loc e elem in
+       let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >>
 
 
@@ -2289,21 +2309,27 @@ value rec compile1_symbol cg loc ename s =
  *)       
 
     | s -> do {
-        CG.add_failuref cg (CG.adjust_loc cg loc) ename "compile1_symbol: %s" (Pr.symbol Pprintf.empty_pc s) ;
+        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "compile1_symbol: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s) ;
         failwith "caught"
       }
     ]
 
-and compile1_psymbol cg loc ename ps =
+and compile1_psymbol cg loc e must_parse left_psymbols ps =
+  let must exp =
+    if must_parse then
+      let msg = expected_psymbols_msg e left_psymbols [ps] in
+      <:expr< Pa_llk_runtime.Llk_runtime.must_parse ~{msg= $str:String.escaped msg$ } $exp$ >>
+    else exp
+  in
   let patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
   match ps.ap_symb with [
       ASflag loc s -> do {
-        let s_body = compile1_symbol cg loc ename s in
-        (SpNtr loc patt <:expr< parse_flag $s_body$ >>, SpoNoth)
+        let s_body = compile1_symbol cg loc e s in
+        (SpNtr loc patt (must <:expr< parse_flag $s_body$ >>), SpoNoth)
        }
     | ASopt loc s -> do {
-        let s_body = compile1_symbol cg loc ename s in
-        (SpNtr loc patt <:expr< parse_opt $s_body$ >>, SpoNoth)
+        let s_body = compile1_symbol cg loc e s in
+        (SpNtr loc patt (must <:expr< parse_opt $s_body$ >>), SpoNoth)
        }
     | ASkeyw  loc kws when ps.ap_patt = None ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
@@ -2313,12 +2339,12 @@ and compile1_psymbol cg loc ename ps =
        ((SpTrm loc <:patt< ("", ($str:kws$ as $patt$)) >> <:vala<  None >>), SpoNoth)
 
     | ASnterm loc nt actuals None when CG.exists_entry cg nt ->
-       let e = Expr.applist <:expr< $lid:Name.print nt$ >> actuals in
-        (SpNtr loc patt e, SpoNoth)
+       let exp = Expr.applist <:expr< $lid:Name.print nt$ >> actuals in
+        (SpNtr loc patt (must exp), SpoNoth)
 
     | ASnterm loc nt [] None when CG.exists_external_ast cg nt ->
-       let e = <:expr< Grammar.Entry.parse_token_stream $lid:Name.print nt$ >> in
-        (SpNtr loc patt e, SpoNoth)
+       let exp = <:expr< Grammar.Entry.parse_token_stream $lid:Name.print nt$ >> in
+        (SpNtr loc patt (must exp), SpoNoth)
 
     | AStok loc cls None ->
        (* <:expr< parser [ [: `($str:cls$, __x__) :] -> __x__ ] >> *)
@@ -2331,15 +2357,15 @@ and compile1_psymbol cg loc ename ps =
            | _ -> <:patt< ($str:String.escaped tok$ as $patt$) >> ] in
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
 
-    | ASleft_assoc loc lhs restrhs e ->
-       let lhs = compile1_symbol cg loc ename lhs in
-       let restrhs = compile1_symbol cg loc ename restrhs in
-       let e = <:expr< parse_left_assoc $lhs$ $restrhs$ $e$ >> in
-        (SpNtr loc patt e, SpoNoth)
+    | ASleft_assoc loc lhs restrhs exp ->
+       let lhs = compile1_symbol cg loc e lhs in
+       let restrhs = compile1_symbol cg loc e restrhs in
+       let exp = <:expr< parse_left_assoc $lhs$ $restrhs$ $exp$ >> in
+        (SpNtr loc patt (must exp), SpoNoth)
 
     | ASlist _ _ _ _ as s ->
-       let e = compile1_symbol cg loc ename s in
-       (SpNtr loc patt e, SpoNoth)
+       let exp = compile1_symbol cg loc e s in
+       (SpNtr loc patt (must exp), SpoNoth)
 
     | ASvala loc elem anti_kinds ->
        let kinds_list_expr =
@@ -2347,33 +2373,33 @@ and compile1_psymbol cg loc ename ps =
          |> List.concat_map (fun k -> [k; "_"^k])
          |> List.map (fun k -> <:expr< $str:k$ >>)
          |> Ppxutil.convert_up_list_expr loc in
-       let elem = compile1_symbol cg loc ename elem in
-       let e = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
-       (SpNtr loc patt e, SpoNoth)
+       let elem = compile1_symbol cg loc e elem in
+       let exp = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
+       (SpNtr loc patt (must exp), SpoNoth)
 
     | s -> do {
-        CG.add_failuref cg (CG.adjust_loc cg (loc_of_a_symbol s)) ename "compile1_psymbol: %s" (Pr.symbol Pprintf.empty_pc s) ;
+        CG.add_failuref cg (CG.adjust_loc cg (loc_of_a_symbol s)) e.ae_name "compile1_psymbol: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s) ;
         failwith "caught"
       }
     ]
 ;
 
-value compile1_psymbols cg loc ename psl =
-  let rec crec = fun [
-        [{ap_symb=ASregexp _ _} :: t] -> crec t
-      | [{ap_symb=ASinfer _ _} :: t] -> crec t
+value compile1_psymbols cg loc e psl =
+  let rec crec must lefts = fun [
+        [({ap_symb=ASregexp _ _} as ps) :: t] -> crec must (lefts@[ps]) t
+      | [({ap_symb=ASinfer _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [] -> []
-      | [h ::t] -> [compile1_psymbol cg loc ename h :: crec t]
-      ] in crec psl
+      | [h ::t] -> [compile1_psymbol cg loc e must lefts h :: crec True (lefts@[h]) t]
+      ] in crec False (match CG.preceding_psymbols cg e.ae_name with [ Some x -> x | None -> []]) psl
 ;
 
-value compile1_rule cg ename r =
+value compile1_rule cg e r =
   let loc = r.ar_loc in
   let r = match r with [
         {ar_action = None ; ar_psymbols=[{ap_patt=None; ap_symb=ASkeyw _ kw}]} ->
         { (r) with ar_action = Some <:expr< $str:kw$ >> }
       | r -> r ] in
-  let spc_list = compile1_psymbols cg loc ename r.ar_psymbols in
+  let spc_list = compile1_psymbols cg loc e r.ar_psymbols in
   let action = match r.ar_action with [ None -> <:expr< () >> | Some a -> a ] in
   let freelids = FreeLids.free_lids_of_expr action in
   if List.mem "loc" freelids then
@@ -2414,7 +2440,7 @@ value tokens_to_match_branches loc i toks =
   in specific_branches @ rest_branches @ anti_branches
 ;
 
-value match_nest_branches cg e i (fi, fo, r) =
+value match_nest_branches (cg : CG.t) (e : a_entry) i (fi, fo, r) =
   let loc = r.ar_loc in
   let raw_tokens =
     TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
@@ -2425,7 +2451,7 @@ value match_nest_branches cg e i (fi, fo, r) =
   ((tokens_to_match_branches loc i raw_tokens) @ nullable_branch, raw_tokens)
 ;
 
-value build_match_nest loc cg e fi_fo_rule_list =
+value build_match_nest loc (cg : CG.t) (e : a_entry) fi_fo_rule_list =
   let branches_fifo_list =
     fi_fo_rule_list
     |> List.mapi (match_nest_branches cg e) in
@@ -2435,12 +2461,21 @@ value build_match_nest loc cg e fi_fo_rule_list =
     fifo
     |> List.map PSyn.token
     |> PSyn.disjunction
-    |> PSyn.print
-    |> String.escaped in
+    |> PSyn.print in
   let (null_branches, normal_branches) =
     Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
   let null_branches = match null_branches with [
-        [] -> [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
+        [] ->
+        (match CG.preceding_psymbols cg e.ae_name with [
+             None ->
+             [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
+           | Some left_syms ->
+              let psl =
+                fi_fo_rule_list
+                |> List.map (fun (_, _, r) -> List.hd r.ar_psymbols) in
+              let msg = expected_psymbols_msg e left_syms psl in
+              [(<:patt< _ >>, <:vala< None >>, <:expr< raise (Stream.Error $str:msg$) >>)]
+           ])
       | [_] as l -> l
       | _ ->  do {
          CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "internal error in build_match_nest: entry has more than one NULL branch" ;
@@ -2452,9 +2487,9 @@ value build_match_nest loc cg e fi_fo_rule_list =
    fifotxt)
 ;
 
-value compile1a_branch cg ename i (fi, fo, r) =
+value compile1a_branch cg e i (fi, fo, r) =
   let loc = r.ar_loc in
-  let body = compile1_rule cg ename r in
+  let body = compile1_rule cg e r in
   (<:patt< $int:string_of_int i$ >>, <:vala< None >>, body)
 ;
 
@@ -2501,7 +2536,7 @@ value compile1a_entry cg e = do {
     let matcher_name = (Name.print ename)^"_matcher" in
     let branches =
       fi_fo_rule_list
-    |> List.mapi (compile1a_branch cg ename) in
+    |> List.mapi (compile1a_branch cg e) in
     let rhs =
       match branches with [
         [(_,_,e)] -> e
@@ -2513,7 +2548,7 @@ value compile1a_entry cg e = do {
          let branches = branches @ [
                (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
              ] in
-         <:expr< fun __strm__ -> match ($lid:matcher_name$ __strm__) [@llk.first_follow $str:fifotxt$ ;] with [ $list:branches$ ] >> ]
+         <:expr< fun __strm__ -> match ($lid:matcher_name$ __strm__) [@llk.first_follow $str:String.escaped fifotxt$ ;] with [ $list:branches$ ] >> ]
     in
     let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
     [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)
@@ -2762,7 +2797,7 @@ value compile1b_entry cg e =
   let predictor_name = (Name.print ename)^"_regexp" in
   let branches = 
     rl
-    |> List.mapi (compile1b_branch cg ename) in
+    |> List.mapi (compile1b_branch cg e) in
   let branches =
     branches
     |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
@@ -2805,8 +2840,8 @@ value compile_sp_entry cg e = do {
   assert (List.length nonsp_rl = 1) ;
   assert (sp_rl <> []) ;
   let fallback = match List.hd nonsp_rl with [
-        {ar_psymbols = psl ; ar_action = Some e} as r ->
-        <:expr< $compile1_rule cg ename r$ __strm__ >>
+        {ar_psymbols = psl ; ar_action = Some _} as r ->
+        <:expr< $compile1_rule cg e r$ __strm__ >>
 
       | _ -> assert False
       ] in
@@ -2814,8 +2849,8 @@ value compile_sp_entry cg e = do {
       match r with [
           {ar_psymbols=[{ap_loc=loc; ap_symb=ASsyntactic _ s} :: t]} ->
           let r' = {(r) with ar_psymbols = t} in
-          let body = compile1_rule cg ename r' in
-          let spred_expr = compile1_symbol cg loc ename s in
+          let body = compile1_rule cg e r' in
+          let spred_expr = compile1_symbol cg loc e s in
           <:expr<
             if try do { ignore ($spred_expr$ (clone_stream __strm__)) ; True }
                       with [ (Stream.Failure | Stream.Error _) -> False ] then
