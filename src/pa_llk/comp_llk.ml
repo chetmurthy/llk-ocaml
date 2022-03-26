@@ -2435,7 +2435,8 @@ value build_match_nest loc cg e fi_fo_rule_list =
     fifo
     |> List.map PSyn.token
     |> PSyn.disjunction
-    |> PSyn.print in
+    |> PSyn.print
+    |> String.escaped in
   let (null_branches, normal_branches) =
     Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
   let null_branches = match null_branches with [
