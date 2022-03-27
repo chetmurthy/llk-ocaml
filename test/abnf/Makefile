@@ -30,6 +30,7 @@ abnflexer.cmx: abnflexer.ml
 	$(OCAMLFIND) ocamlopt $(DEBUG) -package $(PACKAGES) -syntax camlp5o -c $<
 
 abnf.cmo: abnf.ml
+	$(NOT_OCAMLFIND) preprocess -package $(PACKAGES),camlp5.pr_r -syntax camlp5r -ppopt -llk-report-verbose $< > $<.ppo.ml
 	$(OCAMLFIND) ocamlc $(DEBUG) -package $(PACKAGES) -syntax camlp5r -c $<
 
 abnf.cmx: abnf.ml
