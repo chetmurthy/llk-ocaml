@@ -247,9 +247,6 @@ REGEXPS:
   check_type_binder =
         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          (tyvar tyvar * | ($list | $_list)) "." ;
-
-  check_v_lident_colon = (LIDENT | $lid | $_lid) ":" ;
-  check_dot_v_uident = "." ($uid | $_uid | UIDENT) ;
 END;
 
 external e_phony : PREDICTION empty ;
@@ -1550,7 +1547,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Core types *)
   longident:
     [ LEFTA
-      [ me1 = SELF; check_dot_v_uident ; "."; i = V UIDENT "uid" →
+      [ me1 = SELF; ([ "." ; V UIDENT "uid" ])? ;  "."; i = V UIDENT "uid" →
           let i = vala_map uident_True_True_ i in
           <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" →
@@ -1561,7 +1558,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   extended_longident:
     [ LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
-      | me1 = SELF; check_dot_v_uident; "."; i = V UIDENT "uid" →
+      | me1 = SELF; ([ "." ; V UIDENT "uid" ])? ; "."; i = V UIDENT "uid" →
           let i = vala_map uident_True_True_ i in
           <:extended_longident< $longid:me1$ . $_uid:i$ >>
       ]
@@ -1962,7 +1959,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   (* Labels *)
   ctyp: AFTER "arrow"
     [ NONA
-      [ check_v_lident_colon ; i = V LIDENT; ":"; t = SELF -> <:ctyp< ~$_:i$: $t$ >>
+      [ ([ V LIDENT ; ":" ])? ; i = V LIDENT; ":"; t = SELF -> <:ctyp< ~$_:i$: $t$ >>
       | i = V QUESTIONIDENTCOLON; t = SELF -> <:ctyp< ?$_:i$: $t$ >>
       | i = V QUESTIONIDENT; ":"; t = SELF -> <:ctyp< ?$_:i$: $t$ >>
       | "?" ; i = V LIDENT ; ":"; t = SELF -> <:ctyp< ?$_:i$: $t$ >>

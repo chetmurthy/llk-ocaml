@@ -2017,6 +2017,8 @@ value rec infer_symbol cg stk ename = fun [
         | x -> (x, True)
      ])
 
+  | ASsyntactic _ _ -> (PSyn.epsilon, False)
+
   | ASleft_assoc _ s _ _ ->
      let (re, _) = infer_symbol cg stk ename s in
      (re, False)
