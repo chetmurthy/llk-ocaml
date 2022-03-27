@@ -21,11 +21,12 @@ RML = bug_fifo_rtest.ml  original_rtest.ml  revised_rtest.ml \
 	error_rtest.ml
 
 OML = external_otest.ml  regexp_otest.ml  simple_otest.ml \
-	infer_otest.ml	   self_otest.ml error_rtest.ml
+	infer_otest.ml	   self_otest.ml
 
 
 test:: $(TESTS)
 	$(MAKE) -C calc all test
+	$(MAKE) -C abnf all test
 
 all: simple_otest.exe regexp_otest.exe external_otest.exe infer_otest.exe self_otest.exe bug_fifo_rtest.exe revised_rtest.exe original_rtest.exe r2official_test.exe o2official_test.exe llkr2official_test.exe llko2official_test.exe error_otest.exe
 
@@ -85,10 +86,13 @@ papr_test_matrix.cmi papr_test_matrix.cmo: papr_test_matrix.ml
 clean::
 	rm -rf *.cm* *.ppo* *.exe _build
 	$(MAKE) -C calc clean
+	$(MAKE) -C abnf clean
 
 depend::
 	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5o $(OML) >> .depend.NEW
 	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5r $(RML) >> .depend.NEW
 	mv .depend.NEW .depend
+	$(MAKE) -C calc depend
+	$(MAKE) -C abnf depend
 
 -include .depend

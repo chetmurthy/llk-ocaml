@@ -1,5 +1,15 @@
-error_otest.cmo :
-error_otest.cmx :
+error_rtest.cmo :
+error_rtest.cmx :
+external_otest.cmo :
+external_otest.cmx :
+infer_otest.cmo :
+infer_otest.cmx :
+regexp_otest.cmo :
+regexp_otest.cmx :
+self_otest.cmo :
+self_otest.cmx :
+simple_otest.cmo :
+simple_otest.cmx :
 external_otest.cmo :
 external_otest.cmx :
 infer_otest.cmo :
@@ -12,6 +22,8 @@ simple_otest.cmo :
 simple_otest.cmx :
 bug_fifo_rtest.cmo :
 bug_fifo_rtest.cmx :
+error_rtest.cmo :
+error_rtest.cmx :
 llko2official_test.cmo : \
     papr_test_matrix.cmo \
     original_rtest.cmo
