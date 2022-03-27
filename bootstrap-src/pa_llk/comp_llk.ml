@@ -28,6 +28,12 @@ value entry_location e = e.ae_loc ;
 type token = Llk_regexps.PatternBaseToken.t == [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ]
 ;
 
+value print_token_option = fun [
+    None -> "eps"
+|   Some t -> PatternBaseToken.print t
+]
+;
+
 module Ctr = struct
   type t = ref int ;
   value mk () = ref 0 ;
@@ -1165,6 +1171,29 @@ value exec (({gram_entries=el}, _) as cg) = do {
 
 end ;
 
+module CheckNoSelfNext = struct
+
+value check_no_self_next cg e =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASself loc _ | ASnext loc _ ->
+          raise_failwithf (CG.adjust_loc cg loc) "CheckNoSelfNext(%s): internal error: leftover SELF/NEXT found" (Name.print e.ae_name)
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
+  ignore (dt.migrate_a_entry dt e)
+;
+
+value exec (({gram_entries=el}, _) as cg) = do {
+  List.iter (check_no_self_next cg) el ;
+  cg
+}
+;
+
+end ;
+
 module S5LeftFactorize = struct
 
 value extract_left_factors1 rl =
@@ -1674,7 +1703,13 @@ value exec0 cg ~{tops} el = do {
 }
 ;
 
-value exec ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
+value exec1 ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
+
+value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg) = do {
+  exec0 cg ~{tops=expl} el ;
+  cg
+}
+;
 
 end ;
 
@@ -1770,22 +1805,22 @@ and lift_psymbol cg acc e0 left_psyms stkpat ps =
   { (ps) with ap_symb = lift_symbol cg acc e0 left_psyms stkpat ps.ap_symb }
 
 and lift_symbol cg acc e0 left_psyms revpats = fun [
-    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 left_psyms revpats s)
+    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 [] revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc e0 left_psyms revpats s) None
+     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) None
   | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc e0 left_psyms revpats s) (Some (lift_symbol cg acc e0 left_psyms revpats s2, b))
+     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) (Some (lift_symbol cg acc e0 [] revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 left_psyms revpats s)
+  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 [] revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg acc e0 left_psyms revpats s1) (lift_symbol cg acc e0 left_psyms revpats s2) e
+     ASleft_assoc loc (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
 
   | ASrules loc rl ->
      let formals = e0.ae_formals @ (List.rev revpats) in
@@ -2017,6 +2052,8 @@ value rec infer_symbol cg stk ename = fun [
         | x -> (x, True)
      ])
 
+  | ASsyntactic _ _ -> (PSyn.epsilon, False)
+
   | ASleft_assoc _ s _ _ ->
      let (re, _) = infer_symbol cg stk ename s in
      (re, False)
@@ -2168,12 +2205,6 @@ value disjoint cg loc ll =
          && drec (TS.union h acc) t
       ] in
   drec TS.mt ll
-;
-
-value print_token_option = fun [
-    None -> "eps"
-|   Some t -> PatternBaseToken.print t
-]
 ;
 
 value report_verbose = ref False ;
@@ -2532,8 +2563,7 @@ value compile1a_entry cg e = do {
     |> List.mapi (compile1a_branch cg e) in
     let rhs =
       match branches with [
-        [(_,_,e)] -> e
-      | [] -> <:expr< fun __strm__ -> raise Stream.Failure >>
+        [] -> <:expr< fun __strm__ -> raise Stream.Failure >>
       | _ ->
          let branches =
            branches
@@ -2984,6 +3014,28 @@ let _ = compute_follow cg in
 ;
 end ;
 
+module Dump = struct
+
+value exec msg cg = do {
+  Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->
+         let fi = CG.first cg e.ae_name in
+         let fo = CG.follow cg e.ae_name in
+         Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
+                Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
+                (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+         )
+       ) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  prerr_string Pr.(top ~{pctxt=errmsg} Pprintf.empty_pc (CG.g cg)) ;
+  Fmt.(pf stderr "\n================================================================\n%!") ;
+  cg
+}
+;
+end ;
+
 module Top = struct
 open Parse_gram ;
 
@@ -3027,6 +3079,7 @@ value precedence loc ?{bootstrap=False} s =
   |> coalesce loc ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> S3Precedence.exec
+  |> CheckNoSelfNext.exec
 ;
 
 value empty_entry_elim loc ?{bootstrap=False} s =
@@ -3068,13 +3121,15 @@ value first loc ?{bootstrap=False} s =
 value follow loc ?{bootstrap=False} ~{tops} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
-  |> Follow.exec ~{tops=tops}
+  |> Follow.exec1 ~{tops=tops}
 ;
 
 value codegen loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
+  |> Follow.exec
+  |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
 

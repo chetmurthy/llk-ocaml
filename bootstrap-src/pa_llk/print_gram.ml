@@ -34,9 +34,16 @@ value bar_before elem pc x = pprintf pc "| %p" elem x;
 value semi_after elem pc x = pprintf pc "%p;" elem x;
 value action expr pc a = expr pc a;
 
-value label pc =
+value qs pctxt pc s =
+    if pctxt.squote then
+      pprintf pc "'%s'" s
+    else
+      pprintf pc "\"%s\"" s
+;
+
+value label pctxt pc =
   fun
-  [ Some s -> pprintf pc "\"%s\"" s
+  [ Some s -> pprintf pc "%p" (qs pctxt) s
   | None -> pprintf pc "" ]
 ;
 
@@ -47,13 +54,13 @@ value assoc pc = fun [
   ]
 ;
 
-value position pc = fun [
+value position pctxt pc = fun [
     POS_FIRST -> pprintf pc " FIRST"
   | POS_LAST -> pprintf pc " LAST"
-  | POS_BEFORE n -> pprintf pc " BEFORE \"%s\"" n
-  | POS_AFTER n -> pprintf pc " AFTER \"%s\"" n
-  | POS_LIKE n -> pprintf pc " LIKE \"%s\"" n
-  | POS_LEVEL n -> pprintf pc " LEVEL \"%s\"" n
+  | POS_BEFORE n -> pprintf pc " BEFORE %p" (qs pctxt) n
+  | POS_AFTER n -> pprintf pc " AFTER %p" (qs pctxt) n
+  | POS_LIKE n -> pprintf pc " LIKE %p" (qs pctxt) n
+  | POS_LEVEL n -> pprintf pc " LEVEL %p" (qs pctxt) n
   ]
 ;
 
@@ -69,10 +76,11 @@ value entry_actuals ~{pctxt=pctxt} pc l =
   pprintf pc "[%p]" (plist expr 0) (pair_with "," l)
 ;
 
-value rec string_list pc =
-  fun
-  [ [s :: sl] -> pprintf pc " \"%s\"%p" s string_list sl
-  | [] -> pprintf pc "" ]
+value rec string_list pctxt pc = fun [
+  [] -> pprintf pc ""
+| sl ->
+   pprintf pc " %p" (plist (qs pctxt) 0) (pair_with " " sl)
+]
 ;
 
 value pr_option pf pc = fun [
@@ -81,7 +89,7 @@ value pr_option pf pc = fun [
 ]
 ;
 
-value rec rule~{pctxt} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
+value rec rule ~{pctxt} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
   let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
   let patt = if pctxt.full then patt else (fun pc _ -> pprintf pc "<patt>") in
   match (sl, a) with [
@@ -152,7 +160,9 @@ and pattern ~{pctxt} pc p =
   | p ->
       pprintf pc "@[<1>(%p)@]" patt p ]
 
-and symbol~{pctxt} pc = fun [
+and symbol~{pctxt} pc =
+  let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
+  fun [
       ASlist _ lml symb None ->
        pprintf pc "LIST%s@;%p" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
     | ASlist _ lml symb (Some (sep,b)) ->
@@ -173,7 +183,7 @@ and symbol~{pctxt} pc = fun [
        pprintf pc "FLAG@;%p" (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASvala _ sy sl ->
-       pprintf pc "V @[<2>%p%p@]" (simple_symbol ~{pctxt=pctxt}) sy string_list sl
+       pprintf pc "V @[<2>%p%p@]" (simple_symbol ~{pctxt=pctxt}) sy (string_list pctxt) sl
     | sy -> (simple_symbol ~{pctxt=pctxt}) pc sy
     ]
 
@@ -188,7 +198,10 @@ and simple_symbol~{pctxt} pc sy =
     pprintf pc "%s%p" (Name.print id) (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
   | ASnterm _ id args (Some lev) ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-     pprintf pc "%s%p LEVEL \"%s\"" (Name.print id) (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt lev
+     pprintf pc "%s%p LEVEL %p"
+       (Name.print id)
+       (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
+       (qs pctxt) lev
   | ASself _ args ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
      pprintf pc "SELF%p" (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
@@ -204,18 +217,10 @@ and simple_symbol~{pctxt} pc sy =
          pprintf pc "[ %p ]"
            (vlist2 (rule ~{pctxt=pctxt} False) (bar_before (rule ~{pctxt=pctxt} False))) rl.au_rules)
 
-  | ASkeyw _ s ->
-     if pctxt.squote then
-       pprintf pc "'%s'" s
-     else
-       pprintf pc "\"%s\"" s
-
+  | ASkeyw _ s -> qs pctxt pc s
   | AStok _ cls None -> pprintf pc "%s" cls
   | AStok _ cls (Some constv) ->
-     if pctxt.squote then
-       pprintf pc "%s '%s'" cls constv
-     else
-       pprintf pc "%s \"%s\"" cls constv
+       pprintf pc "%s %p" cls (qs pctxt) constv
 
   | ASsyntactic _ sym ->
        pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
@@ -227,7 +232,7 @@ and simple_symbol~{pctxt} pc sy =
 and preceding_psymbols ~{pctxt} pc = fun [
       [] -> pprintf pc ""
     | psl ->
-       pprintf pc "(* PRECEDING: [%p] *)" (plist (psymbol ~{pctxt=pctxt}) 0) (pair_with "; " psl)
+       pprintf pc "(* PRECEDING: [%p] *)@;" (plist (psymbol ~{pctxt=pctxt}) 0) (pair_with "; " psl)
     ]      
 
 and entry ~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll ; ae_preceding_psymbols = preceding_psl } ->
@@ -252,11 +257,11 @@ and entry ~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae
     in
     let formals_opt = match formals with [ [] -> None | l -> Some l ] in
     comm_bef pc.ind loc ^
-      pprintf pc "@[<b>%s%p:%p@;%p@;[ %p ]@ ;@]"
+      pprintf pc "@[<b>%s%p:%p@;%p[ %p ]@ ;@]"
         (Name.print name)
         (pr_option (entry_formals ~{pctxt=pctxt})) formals_opt
         (preceding_psymbols ~{pctxt=pctxt}) preceding_psl
-        (pr_option position) pos 
+        (pr_option (position pctxt)) pos 
         (vlist2 (level ~{pctxt=pctxt} force_vertic) (bar_before (level ~{pctxt=pctxt} force_vertic))) ll      
 
 and level ~{pctxt=pctxt} force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
@@ -271,9 +276,9 @@ and level ~{pctxt=pctxt} force_vertic pc {al_label = lab; al_assoc=ass; al_rules
       pprintf pc "@[<b>%p@;[ %p ]@]"
         (fun pc ->
            fun
-           [ (Some _, None) -> label pc lab
+           [ (Some _, None) -> label pctxt pc lab
            | (None, Some _) -> (pr_option assoc) pc ass
-            | (Some _, Some _) -> pprintf pc "%p %p" label lab (pr_option assoc) ass
+            | (Some _, Some _) -> pprintf pc "%p %p" (label pctxt) lab (pr_option assoc) ass
             | _ -> assert False ])
         (lab, ass)
         (vlist2 (rule ~{pctxt=pctxt} force_vertic) (bar_before (rule ~{pctxt=pctxt} force_vertic))) rl ]
@@ -371,25 +376,26 @@ value pr_regexp_asts pc l =
   ]
 ;
 
-value longident_lident pc (lio, id) =
+value longident_lident pctxt pc (lio, id) =
+  let longident = if pctxt.full then longident else (fun pc _ -> pprintf pc "<longident>") in
   match lio with
   [ None -> pprintf pc "%s" (Pcaml.unvala id)
   | Some li -> pprintf pc "%p.%s" longident (Pcaml.unvala li) (Pcaml.unvala id)
   ]
 ;
-value pr_extend pc = fun [
+value pr_extend ~{pctxt} pc = fun [
     None -> pprintf pc ""
-  | Some lili -> pprintf pc "EXTEND %p ;" longident_lident lili
+  | Some lili -> pprintf pc "EXTEND %p ;" (longident_lident pctxt) lili
 ]
 ;
 
 value top ?{pctxt=normal} pc g =
   pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@;%p@]@ END;\n" g.gram_id
-    pr_extend g.gram_extend
+    (pr_extend ~{pctxt=pctxt}) g.gram_extend
     pr_exports g.gram_exports
     pr_regexp_asts g.gram_regexp_asts
     pr_externals g.gram_external_asts
-    (vlist (entry ~{pctxt=normal})) g.gram_entries
+    (vlist (entry ~{pctxt=pctxt})) g.gram_entries
 ;
 
 end ;
