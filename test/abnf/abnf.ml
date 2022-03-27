@@ -139,7 +139,6 @@ Pretty.line_length.val := 100 ;
 if not Sys.interactive.val then
 try
     let l = parse_rulelist (Stream.of_channel stdin) in do {
-      let print_int pc n = pprintf pc "%d" n in
       printf "%s" (Pr.rulelist Pprintf.empty_pc l)
     }
 with [ Ploc.Exc loc exc ->

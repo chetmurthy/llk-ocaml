@@ -28,6 +28,12 @@ value entry_location e = e.ae_loc ;
 type token = Llk_regexps.PatternBaseToken.t == [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ]
 ;
 
+value print_token_option = fun [
+    None -> "eps"
+|   Some t -> PatternBaseToken.print t
+]
+;
+
 module Ctr = struct
   type t = ref int ;
   value mk () = ref 0 ;
@@ -1674,7 +1680,13 @@ value exec0 cg ~{tops} el = do {
 }
 ;
 
-value exec ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
+value exec1 ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
+
+value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg) = do {
+  exec0 cg ~{tops=expl} el ;
+  cg
+}
+;
 
 end ;
 
@@ -2170,12 +2182,6 @@ value disjoint cg loc ll =
          && drec (TS.union h acc) t
       ] in
   drec TS.mt ll
-;
-
-value print_token_option = fun [
-    None -> "eps"
-|   Some t -> PatternBaseToken.print t
-]
 ;
 
 value report_verbose = ref False ;
@@ -2989,6 +2995,17 @@ module Dump = struct
 
 value exec msg cg = do {
   Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->
+         let fi = CG.first cg e.ae_name in
+         let fo = CG.follow cg e.ae_name in
+         Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
+                Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
+                (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+         )
+       ) ;
+  Fmt.(pf stderr "================================================================\n") ;
   prerr_string Pr.(top ~{pctxt=errmsg} Pprintf.empty_pc (CG.g cg)) ;
   Fmt.(pf stderr "\n================================================================\n%!") ;
   cg
@@ -3080,13 +3097,14 @@ value first loc ?{bootstrap=False} s =
 value follow loc ?{bootstrap=False} ~{tops} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
-  |> Follow.exec ~{tops=tops}
+  |> Follow.exec1 ~{tops=tops}
 ;
 
 value codegen loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
+  |> Follow.exec
   |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
