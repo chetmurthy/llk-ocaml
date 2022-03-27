@@ -9,5 +9,6 @@ module Name = struct
   ]
   ;
   value pp pps n = Fmt.(pf pps "%s" (print n)) ;
+  value root (s, _) = s ;
 end
 ;

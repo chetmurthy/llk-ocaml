@@ -47,7 +47,9 @@ and a_entry =
     ae_name : Name.t;
     ae_pos : option a_position;
     ae_formals : list patt ;
-    ae_levels : list a_level }
+    ae_levels : list a_level ;
+    ae_preceding_psymbols : list a_psymbol
+  }
 and a_level =
   { al_loc : loc;
     al_label : option string;
