@@ -1751,7 +1751,7 @@ value free_lids_of_patt e =
   }
 ;
 
-value free_lids_of_a_rules rs =
+value free_lids_of =
   let acc = ref [] in
   let pushe e =
     e |> free_lids_of_expr |> List.iter (Std.push acc) in
@@ -1776,11 +1776,21 @@ value free_lids_of_a_rules rs =
   } in
   let dt = { (dt) with migrate_a_rule = migrate_a_rule
                      ; migrate_a_symbol = migrate_a_symbol } in
-  do {
+  let of_a_rules rs = do {
+    acc.val := [] ;
     ignore (dt.migrate_a_rules dt rs) ;
     acc.val |> List.sort_uniq Stdlib.compare
-  }
+  } in
+  let of_a_symbol s = do {
+    acc.val := [] ;
+    ignore (dt.migrate_a_symbol dt s) ;
+    acc.val |> List.sort_uniq Stdlib.compare
+  } in
+  (of_a_rules, of_a_symbol)
 ;
+
+  value free_lids_of_a_rules = (fst free_lids_of) ;
+  value free_lids_of_a_symbol = (snd free_lids_of) ;
 
 end ;
 
@@ -1877,7 +1887,135 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 end ;
 
 
-module S7SeparateSyntactic = struct
+module S7LiftLists = struct
+  (** in each entry, replace all LIST symbols with a new entry;
+
+   LIST0 sym ->
+
+   entry: [ [ x = sym ; y = entry -> [x :: y]
+            | -> [] ] ] ;
+
+   LIST1 sym ->
+
+   entry: [ [ x = sym ; y = LIST0 sym -> [x :: y] ] ] ;
+
+   *)
+
+open FreeLids ;
+
+(** lift_lists
+
+    This will lift out *outermost* LIST symbols, replacing them
+    with ASnterm symbols.
+
+    As we recurse down, we build up an env of freevars, and at the point
+    we find a LIST symbol, we intersect with free-lids of the symbol, to
+    get the formals of the new entry.
+ *)
+
+value lift_lists cg acc e =
+  let open Llk_migrate in
+  let dt = make_dt [] in
+  let fallback_migrate_a_entry = dt.migrate_a_entry in
+  let migrate_a_entry dt e =
+    let dt = {(dt) with aux = e.ae_formals} in
+    fallback_migrate_a_entry dt e in
+
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASlist loc LML_0 s0 None ->
+        let new_ename = CG.fresh_name cg e.ae_name in
+        let formals = dt.aux in
+        let freevars = free_lids_of_a_symbol s0 in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+        let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+        let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+        let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
+                     ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
+                                   ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>;
+                                     ap_symb=ASnterm loc new_ename actuals None}]} in
+        let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = []} in
+        let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
+        let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
+        let new_e = {
+            ae_name = new_ename
+          ; ae_loc = loc
+          ; ae_pos = None
+          ; ae_formals = formals
+          ; ae_preceding_psymbols = []
+          ; ae_levels = [level]
+          } in
+        let new_e = dt.migrate_a_entry dt new_e in
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_ename actuals None
+        }
+
+      | ASlist loc LML_1 s0 None ->
+        let new_ename = CG.fresh_name cg e.ae_name in
+        let formals = dt.aux in
+        let freevars = free_lids_of_a_symbol s0 in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+        let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+        let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+        let s' = ASlist loc LML_0 s0 None in
+        let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
+                     ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
+                                   ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>;
+                                     ap_symb=s'}]} in
+        let rules = {au_loc=loc; au_rules=[rule0]} in
+        let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
+        let new_e = {
+            ae_name = new_ename
+          ; ae_loc = loc
+          ; ae_pos = None
+          ; ae_formals = formals
+          ; ae_preceding_psymbols = []
+          ; ae_levels = [level]
+          } in
+        let new_e = dt.migrate_a_entry dt new_e in
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_ename actuals None
+        }
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+
+  let fallback_migrate_a_psymbols = dt.migrate_a_psymbols in
+  let migrate_a_psymbols dt psl = match psl with [
+        [] -> []
+      | [h :: t] ->
+         let dt' = match h.ap_patt with [
+               None -> dt
+             | Some p -> {(dt) with aux = dt.aux@[p]}
+             ] in
+         [ dt.migrate_a_psymbol dt h :: dt'.migrate_a_psymbols dt' t]
+      ] in
+  let dt = {(dt) with
+             migrate_a_entry = migrate_a_entry
+           ; migrate_a_psymbols = migrate_a_psymbols
+           ; migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value exec0 cg el =
+  let acc = ref [] in
+  let el = List.map (lift_lists cg acc) el in
+  el @ acc.val
+;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S8SeparateSyntactic = struct
   (** in each entry, separate entries with some rules that start
       with syntactic predicates and some that do not, into two entries,
       one with syntactic predicates, and the other without.
@@ -2859,7 +2997,7 @@ value compile_sp_entry cg e = do {
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S7SeparateSyntactic.is_syntactic_predicate_rule rl in
+  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S8SeparateSyntactic.is_syntactic_predicate_rule rl in
   assert (List.length nonsp_rl = 1) ;
   assert (sp_rl <> []) ;
   let fallback = match List.hd nonsp_rl with [
@@ -2891,7 +3029,7 @@ value compile_sp_entry cg e = do {
 ;
 
 value compile_entry cg e =
-  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S7SeparateSyntactic.is_syntactic_predicate_rule then
+  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S8SeparateSyntactic.is_syntactic_predicate_rule then
     compile_sp_entry cg e
   else
     compile1_entry cg e
@@ -3106,10 +3244,16 @@ value lambda_lift loc ?{bootstrap=False} s =
   |> SortEntries.exec
 ;
 
-value separate_syntactic loc ?{bootstrap=False} s =
+value lift_lists loc ?{bootstrap=False} s =
   s
   |> lambda_lift loc ~{bootstrap=bootstrap}
-  |> S7SeparateSyntactic.exec
+  |> S7LiftLists.exec
+;
+
+value separate_syntactic loc ?{bootstrap=False} s =
+  s
+  |> lift_lists loc ~{bootstrap=bootstrap}
+  |> S8SeparateSyntactic.exec
 ;
 
 value first loc ?{bootstrap=False} s =

@@ -106,6 +106,7 @@ end
           ; a_rule
           ; a_rules
           ; a_psymbol
+          ; a_psymbols
           ; a_symbol
           ]
         }

@@ -60,8 +60,9 @@ and a_rules =
     au_rules : list a_rule }
 and a_rule =
   { ar_loc : loc;
-    ar_psymbols : list a_psymbol;
+    ar_psymbols : a_psymbols;
     ar_action : option expr }
+and a_psymbols = list a_psymbol
 and a_psymbol =
   { ap_loc : loc;
     ap_patt : option patt;
