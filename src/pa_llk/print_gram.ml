@@ -224,7 +224,13 @@ and simple_symbol~{pctxt} pc sy =
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 
-and entry~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
+and preceding_psymbols ~{pctxt} pc = fun [
+      [] -> pprintf pc ""
+    | psl ->
+       pprintf pc "(* PRECEDING: [%p] *)" (plist (psymbol ~{pctxt=pctxt}) 0) (pair_with "; " psl)
+    ]      
+
+and entry ~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll ; ae_preceding_psymbols = preceding_psl } ->
     let force_vertic =
       if flag_equilibrate_cases.val then
         let has_vertic =
@@ -246,7 +252,11 @@ and entry~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_
     in
     let formals_opt = match formals with [ [] -> None | l -> Some l ] in
     comm_bef pc.ind loc ^
-      pprintf pc "@[<b>%s%p:%p@;[ %p ]@ ;@]" (Name.print name) (pr_option (entry_formals ~{pctxt=pctxt})) formals_opt (pr_option position) pos 
+      pprintf pc "@[<b>%s%p:%p@;%p@;[ %p ]@ ;@]"
+        (Name.print name)
+        (pr_option (entry_formals ~{pctxt=pctxt})) formals_opt
+        (preceding_psymbols ~{pctxt=pctxt}) preceding_psl
+        (pr_option position) pos 
         (vlist2 (level ~{pctxt=pctxt} force_vertic) (bar_before (level ~{pctxt=pctxt} force_vertic))) ll      
 
 and level ~{pctxt=pctxt} force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =

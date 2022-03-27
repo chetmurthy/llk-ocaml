@@ -80,7 +80,13 @@ EXTEND
     [ [ n = LIDENT;
         formals = [ "[" ; l = LIST1 patt SEP "," ; "]" -> l | -> [] ] ;
         ":"; pos = OPT position; ll = level_list ->
-          {ae_loc = loc; ae_formals = formals ; ae_name = Name.mk n; ae_pos = pos; ae_levels = ll}
+          {ae_loc = loc
+          ; ae_formals = formals
+          ; ae_name = Name.mk n
+          ; ae_pos = pos
+          ; ae_levels = ll
+          ; ae_preceding_psymbols = []
+          }
       ] ]
   ;
   position:

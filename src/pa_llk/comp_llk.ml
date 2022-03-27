@@ -156,7 +156,6 @@ module CompilingGrammar = struct
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     ; errors : mutable list error_t
-    ; preceding_psymbols: mutable list (Name.t * list a_psymbol)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -170,7 +169,6 @@ module CompilingGrammar = struct
                 ; firsts = SM.mt
                 ; follows = SM.mt
                 ; errors = []
-                ; preceding_psymbols = []
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -251,14 +249,6 @@ module CompilingGrammar = struct
 
   value set_alphabet cg l = (snd cg).gram_alphabet := l ;
   value alphabet cg = (snd cg).gram_alphabet ;
-
-  value set_preceding_psymbols cg (name, s) =
-    (snd cg).preceding_psymbols := [(name,s)::(snd cg).preceding_psymbols] ;
-  value preceding_psymbols cg name =
-    match List.assoc name (snd cg).preceding_psymbols with [
-        x -> Some x
-      | exception Not_found -> None
-      ] ;
 end ;
 module CG = CompilingGrammar ;
 
@@ -1042,6 +1032,7 @@ value passthru_entry cg e from_name to_name =
   let formals = e.ae_formals in
   let actuals = formals2actuals cg e.ae_formals in
   {ae_loc = loc; ae_name = from_name; ae_formals = formals ; ae_pos = None;
+   ae_preceding_psymbols = [];
    ae_levels =
      [{al_loc = loc; al_label = None; al_assoc = None;
        al_rules =
@@ -1804,13 +1795,13 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
      |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) ids_of_rl) in
      let actuals = formals2actuals cg formals in
      let new_ename = CG.fresh_name cg e0.ae_name in do {
-       CG.set_preceding_psymbols cg (new_ename, left_psyms) ;
        let new_e = {
          ae_loc = rl.au_loc
        ; ae_name = new_ename
        ; ae_pos = None
        ; ae_formals = formals
        ; ae_levels = [{al_loc = rl.au_loc; al_label = None ; al_assoc = None ; al_rules = rl}]
+       ; ae_preceding_psymbols = left_psyms
        } in do {
          Std.push acc new_e ;
          ASnterm rl.au_loc new_ename actuals None
@@ -1828,10 +1819,7 @@ value lift_level cg acc e0 left_psyms l = { (l) with al_rules = lift_rules cg ac
 
 value lift_levels cg acc e0 ll = do {
     assert (1 = List.length ll) ;
-    let left_psyms = match CG.preceding_psymbols cg e0.ae_name with [
-          Some x -> x
-        | None -> []
-        ] in
+    let left_psyms = e0.ae_preceding_psymbols in
     List.map (lift_level cg acc e0 left_psyms) ll
 }    
 ;
@@ -2394,7 +2382,7 @@ value compile1_psymbols cg loc e psl =
       | [({ap_symb=ASinfer _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [] -> []
       | [h ::t] -> [compile1_psymbol cg loc e must lefts h :: crec True (lefts@[h]) t]
-      ] in crec False (match CG.preceding_psymbols cg e.ae_name with [ Some x -> x | None -> []]) psl
+      ] in crec False e.ae_preceding_psymbols psl
 ;
 
 value compile1_rule cg e r =
@@ -2470,10 +2458,10 @@ value build_match_nest loc (cg : CG.t) (e : a_entry) fi_fo_rule_list =
     Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
   let null_branches = match null_branches with [
         [] ->
-        (match CG.preceding_psymbols cg e.ae_name with [
-             None | Some [] ->
+        (match e.ae_preceding_psymbols with [
+             [] ->
              [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
-           | Some left_syms ->
+           | left_syms ->
               let psl =
                 fi_fo_rule_list
                 |> List.map (fun (_, _, r) ->
