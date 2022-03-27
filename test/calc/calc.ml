@@ -39,32 +39,27 @@ value loc_of_stmt = fun [
 ;
 
 value g = Grammar.gcreate lexer;
-value expr = Grammar.Entry.create g "expression";
-value stmt = Grammar.Entry.create g "statement";
-value stmts = Grammar.Entry.create g "statements";
-value stmts_eoi = Grammar.Entry.create g "statements_eoi";
 
 value loc_strip_comment loc = Ploc.with_comment loc "" ;
 
-
-value check_id_coloneq =
-  Grammar.Entry.of_parser g "check_id_coloneq"
-    (fun strm ->
-       match Stream.npeek 2 strm with
-       [ [("IDENT", _); ("", ":=")] -> ()
-       | _ -> raise Stream.Failure ])
-;
-
-EXTEND
-  GLOBAL: expr stmt stmts stmts_eoi check_id_coloneq ;
+[@@@llk
+{foo|
+GRAMMAR Calc:
+  EXTEND g ;
+  EXPORT: expr stmt stmts stmts_eoi ;
+  REGEXPS:
+    check_id_coloneq = IDENT ":=" ;
+  END ;
   expr:
-    [ [ x = expr; "+"; y = expr -> BINOP (loc_strip_comment loc) ADD x y
-      | x = expr; "-"; y = expr -> BINOP (loc_strip_comment loc) SUB x y ]
-    | [ x = expr; "*"; y = expr -> BINOP (loc_strip_comment loc) MUL x y
-      | x = expr; "/"; y = expr -> BINOP (loc_strip_comment loc) DIV x  y ]
-    | [ "-" ; x = expr -> UNOP loc MINUS x
-      | "+" ; x = expr -> UNOP loc PLUS x ]
-    | [ x = INT -> INT loc (int_of_string x)
+    [ LEFTA [ x = SELF; "+"; y = SELF -> BINOP (loc_strip_comment loc) ADD x y
+      | x = SELF; "-"; y = SELF -> BINOP (loc_strip_comment loc) SUB x y ]
+    | LEFTA [ x = SELF; "*"; y = SELF -> BINOP (loc_strip_comment loc) MUL x y
+      | x = SELF; "/"; y = SELF -> BINOP (loc_strip_comment loc) DIV x  y ]
+    | NONA [ "-" ; x = NEXT -> UNOP loc MINUS x
+      | "+" ; x = NEXT -> UNOP loc PLUS x 
+      | x = NEXT -> x
+      ]
+    | NONA [ x = INT -> INT loc (int_of_string x)
       | x = IDENT -> VAR loc x
       | "("; x = expr; ")" -> x
       ]
@@ -78,11 +73,14 @@ EXTEND
   stmts : [ [ l = LIST1 stmt SEP ";" -> l ] ] ;
   stmts_eoi : [ [ l = stmts ; EOI -> l ] ] ;
 END;
+|foo};
+] ;
 
-value parse_expr = Grammar.Entry.parse expr ;
-value parse_stmt = Grammar.Entry.parse stmt ;
-value parse_stmts = Grammar.Entry.parse stmts ;
-value parse_stmts_eoi = Grammar.Entry.parse stmts_eoi ;
+
+value parse_expr = Grammar.Entry.parse Calc.expr ;
+value parse_stmt = Grammar.Entry.parse Calc.stmt ;
+value parse_stmts = Grammar.Entry.parse Calc.stmts ;
+value parse_stmts_eoi = Grammar.Entry.parse Calc.stmts_eoi ;
 
 value pr_expr = Eprinter.make "expr";
 value pr_stmt = Eprinter.make "stmt";
