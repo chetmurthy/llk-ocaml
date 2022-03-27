@@ -213,14 +213,9 @@ REGEXPS:
   check_colon = ":" ;
   check_eps = eps ;
   check_phony_list = $list | $_list ;
-  check_new_type_extended = "(" "type" LIDENT+ ")" ;
   check_lbracket = "[" ;
   check_lbrace = "{" ;
   check_lbracketbar = "[|" ;
-  check_lparen_rparen = "(" ")" ;
-  check_lparen_type = "(" "type" ;
-  check_v_uident_coloneq = ($uid | $_uid | UIDENT) ":=" ;
-  check_v_uident_eq = ($uid | $_uid | UIDENT) "=" ;
   check_type_decl =
          let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
@@ -240,13 +235,8 @@ REGEXPS:
          type_parameters v_longident_lident "+="
   ;
   check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
-  check_cons_ident = (UIDENT | $uid | $_uid) | "true" | "false" | "[" "]" | "(" ")" | "(" "::" ")" ;
 
   check_constr_decl = UIDENT [^ "." "("] | "true" | "false" | "|" | "[" "]";
-  check_lident_colon = LIDENT ":" ;
-  check_type_binder =
-        let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
-         (tyvar tyvar * | ($list | $_list)) "." ;
 END;
 
 external e_phony : PREDICTION empty ;
@@ -445,7 +435,7 @@ external p_phony : PREDICTION empty ;
     | LEFTA [ me1 = SELF; "."; me2 = SELF -> <:module_expr< $me1$ . $me2$ >> ]
     | LEFTA [
         me1 = SELF; me2 = paren_module_expr -> <:module_expr< $me1$ $me2$ >>
-      | me1 = SELF; check_lparen_rparen ; "("; ")" -> <:module_expr< $me1$ (struct end) >>
+      | me1 = SELF; INFER 2 ; "("; ")" -> <:module_expr< $me1$ (struct end) >>
       ]
     | [ i = mod_expr_ident -> i
       | me = paren_module_expr -> me
@@ -488,7 +478,7 @@ external p_phony : PREDICTION empty ;
   ;
 
   type_binder_opt: [ [
-    check_type_binder ; ls = V (LIST1 typevar) ; "." -> ls
+    ([ LIST1 typevar ; "."])? ; ls = V (LIST1 typevar) ; "." -> ls
   | check_eps -> <:vala< [] >>
   ] ]
   ;
@@ -658,7 +648,7 @@ external p_phony : PREDICTION empty ;
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-include"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< include $mt$ $_itemattrs:attrs$ >> ext
 
-      | "module"; check_v_uident_coloneq ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
+      | "module"; INFER 2 ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
         <:sig_item< module $_uid:i$ := $longid:li$ $_itemattrs:attrs$ >>
 
       | "module"; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
@@ -668,7 +658,7 @@ external p_phony : PREDICTION empty ;
           let h = (i, mt, item_attrs) in
           sig_item_to_inline <:sig_item< module $flag:rf$ $list:[h::t]$ >> ext
 
-      | "module"; (ext,alg_attrs) = ext_attributes; check_v_uident_eq ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
+      | "module"; (ext,alg_attrs) = ext_attributes; INFER 2 ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
 (*
 MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
@@ -790,7 +780,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           expr_to_inline <:expr< fun [ $_list:l$ ] >> ext attrs
 
       | "fun"; (ext,attrs) = ext_attributes;
-        check_new_type_extended ; "("; "type"; l = LIST1 LIDENT ; ")" ; (eo, e) = fun_def ->
+        ([ "("; "type"; LIST1 LIDENT ; ")" ])? ; "("; "type"; l = LIST1 LIDENT ; ")" ; (eo, e) = fun_def ->
           if eo <> None then failwith "new-type cannot have when-clause"
           else
             let e = List.fold_right (fun id e ->
@@ -1133,7 +1123,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   rest_fun_binding:
     [ "top"
       [ 
-        check_new_type_extended ; "("; "type"; l = LIST1 LIDENT ; ")" ; e = fun_binding ->
+        ([ "("; "type"; LIST1 LIDENT ; ")" ])? ; "("; "type"; l = LIST1 LIDENT ; ")" ; e = fun_binding ->
         List.fold_right (fun id e ->
             <:expr< fun [(type $lid:id$) -> $e$] >>)
           l e
@@ -1145,7 +1135,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   fun_binding:
     [ "top"
       [ 
-        check_new_type_extended ; "("; "type"; l = LIST1 LIDENT ; ")" ; e = SELF ->
+        ([ "("; "type"; LIST1 LIDENT ; ")" ])? ; "("; "type"; l = LIST1 LIDENT ; ")" ; e = SELF ->
         List.fold_right (fun id e ->
             <:expr< fun [(type $lid:id$) -> $e$] >>)
           l e
@@ -1232,7 +1222,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         <:patt< $longid:li$ >>
       | _ -> <:patt< $longid:li$ . $p$ >>
       ]
-    | li = longident ; check_lparen_type ; "("; "type";
+    | li = longident ; INFER 2 ; "("; "type";
       loc_ids = V (LIST1 [ s = LIDENT -> (loc,s) ]) ; ")" → 
       <:patt< $longid:li$ (type $_list:loc_ids$ ) >>
     | li = longident → <:patt< $longid:li$ >>
@@ -1485,7 +1475,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "of"; cdrec = record_type ; alg_attrs = alg_attributes ->
           (<:vala< [] >>, Ploc.VaVal [cdrec], <:vala< None >>, alg_attrs)
 
-      | ":"; check_type_binder ; ls = LIST1 typevar ; "." ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
+      | ":"; ([ LIST1 typevar ; "." ])? ; ls = LIST1 typevar ; "." ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
           (<:vala< ls >>, cal, <:vala< Some t >>, alg_attrs)
       | ":" ; cal = V (LIST1 (ctyp LEVEL "apply") SEP "*"); "->"; t = ctyp ; alg_attrs = alg_attributes ->
           (<:vala< [] >>, cal, <:vala< Some t >>, alg_attrs)
@@ -1921,7 +1911,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | f = field -> [f] ] ]
   ;
   field:
-    [ [ check_lident_colon ; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
+    [ [ INFER 2 ; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (Some lab, t, alg_attrs)
       | t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (None, t, alg_attrs)
@@ -1934,14 +1924,14 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   poly_type:
     [ [ "type"; nt = LIST1 LIDENT; "."; ct = ctyp ->
           <:ctyp< type $list:nt$ . $ct$ >>
-      | check_type_binder ; tpl = LIST1 typevar; "."; t2 = ctyp ->
+      | ([ LIST1 typevar ; "." ])? ; tpl = LIST1 typevar; "."; t2 = ctyp ->
           <:ctyp< ! $list:tpl$ . $t2$ >>
       | t = ctyp -> t ] ]
   ;
   poly_type_below_alg_attribute:
     [ [ "type"; nt = LIST1 LIDENT; "."; ct = ctyp ->
           <:ctyp< type $list:nt$ . $ct$ >>
-      | check_type_binder ; tpl = LIST1 typevar; "."; t2 = ctyp ->
+      | ([ LIST1 typevar ; "." ])? ; tpl = LIST1 typevar; "."; t2 = ctyp ->
           <:ctyp< ! $list:tpl$ . $t2$ >>
       | t = ctyp LEVEL "below_alg_attribute" -> t ] ]
   ;
