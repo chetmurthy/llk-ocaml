@@ -19,7 +19,7 @@ abnf.opt: abnflexer.cmx abnf.cmx
 	$(OCAMLFIND) ocamlopt $(DEBUG) -package $(PACKAGES) -linkpkg -syntax camlp5r $^ -o $@
 
 test:: all
-	echo '1+1 ; 1 - 1; 1 + (2 * 3)' | ./abnf
+	cat examples/iri.abnf | ./abnf
 
 .SUFFIXES: .mll .ml .cmo .cmx
 

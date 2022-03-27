@@ -171,11 +171,11 @@ open Simple_otest ;;
 
 #load "external_test.cmo";;
 open External_test ;;
-
+ *)
 #directory "abnf" ;;
 #load "abnflexer.cmo";;
 #load "abnf.cmo";;
- *)
+
 
 (*
 ;;; Local Variables: ***
