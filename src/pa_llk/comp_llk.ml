@@ -1171,6 +1171,29 @@ value exec (({gram_entries=el}, _) as cg) = do {
 
 end ;
 
+module CheckNoSelfNext = struct
+
+value check_no_self_next cg e =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASself loc _ | ASnext loc _ ->
+          raise_failwithf (CG.adjust_loc cg loc) "CheckNoSelfNext(%s): internal error: leftover SELF/NEXT found" (Name.print e.ae_name)
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
+  ignore (dt.migrate_a_entry dt e)
+;
+
+value exec (({gram_entries=el}, _) as cg) = do {
+  List.iter (check_no_self_next cg) el ;
+  cg
+}
+;
+
+end ;
+
 module S5LeftFactorize = struct
 
 value extract_left_factors1 rl =
@@ -3056,6 +3079,7 @@ value precedence loc ?{bootstrap=False} s =
   |> coalesce loc ~{bootstrap=bootstrap}
   |> CheckLexical.exec
   |> S3Precedence.exec
+  |> CheckNoSelfNext.exec
 ;
 
 value empty_entry_elim loc ?{bootstrap=False} s =
