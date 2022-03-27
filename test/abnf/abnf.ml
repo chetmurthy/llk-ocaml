@@ -83,3 +83,68 @@ GRAMMAR Abnf:
 END;
 |foo};
 ] ;
+
+value parse_rulelist = Grammar.Entry.parse Abnf.rulelist ;
+
+
+module Pr = struct
+open Pretty ;
+open Prtools ;
+
+value pair_with s l = List.map (fun g -> (g, s)) l ;
+
+
+value opt f pc x = match x with [ None -> pprintf pc "" | Some x -> pprintf pc "%p" f x ] ;
+
+value rec rulelist pc rl =
+  pprintf pc "@[<b>%p@]@ " (vlist rule) rl
+
+and rule pc (id, b, e) =
+  pprintf pc "%s = %s%p@;" id (if b then "/ " else "") alternation e
+
+and alternation pc = fun [
+      ALT l ->
+      pprintf pc "%p" (plist concatenation 0) (pair_with "/ " l)
+    ]
+
+and concatenation pc = fun [
+      CONC l ->
+      pprintf pc "%p" (plist repetition 0) (pair_with " " l)
+    ]
+
+and repetition pc (r, e) = pprintf pc "%p%p" repeat_opt r element e
+
+and repeat_opt pc x = opt repeat_ pc x
+
+and repeat_ pc (nopt, mopt) =
+  pprintf pc "%p*%p" int_opt nopt int_opt mopt
+
+and int_opt pc x = opt (fun pc n -> pprintf pc "%s" n) pc x
+
+and element pc = fun [
+      ID s -> pprintf pc "%s" s
+    | GROUP a -> pprintf pc "(%p)" alternation a
+    | OPTION a -> pprintf pc "[%p]" alternation a
+    | STRING s -> pprintf pc "\"%s\"" s
+    | NUMBER n -> pprintf pc "%s" n
+    | PROSE s -> pprintf pc "%s" s
+    ]
+;
+end ;
+
+open Printf;
+
+Pretty.line_length.val := 100 ;
+
+if not Sys.interactive.val then
+try
+    let l = parse_rulelist (Stream.of_channel stdin) in do {
+      let print_int pc n = pprintf pc "%d" n in
+      printf "%s" (Pr.rulelist Pprintf.empty_pc l)
+    }
+with [ Ploc.Exc loc exc ->
+    Fmt.(pf stderr "%s%a@.%!" (Ploc.string_of_location loc) exn exc)
+  | exc -> Fmt.(pf stderr "%a@.%!" exn exc)
+]
+else ()
+;

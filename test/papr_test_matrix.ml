@@ -303,7 +303,7 @@ value x = 1;
      r_output = OK {foo|class t = object  end[@"foo"];
 |foo}
     };
-    {name="alg_attribute13"; implem = True ;
+    {name="alg_attribute13'"; implem = True ;
      exclude=[];
      o_input = OK"class type ['a ] t = object end [@foo]" ;
      official_input = OK"class type ['a ] t = object end [@foo]" ;
@@ -5475,13 +5475,13 @@ END
     ])
 ;
 
-value r2r pa pp opa () = List.map (i2test ~{kind="r2r"} pa pp opa r_input KIND_Revised ) test_matrix ;
-value r2o pa pp opa () = List.map (i2test ~{kind="r2o"} pa pp opa r_input KIND_Original ) test_matrix ;
-value o2r pa pp opa () = List.map (i2test ~{kind="o2r"} pa pp opa o_input KIND_Revised ) test_matrix ;
-value o2o pa pp opa () = List.map (i2test ~{kind="o2o"} pa pp opa o_input KIND_Original ) test_matrix ;
-value o2official pa pp opa () = List.map (i2test ~{kind="o2official"} pa pp opa o_input KIND_Official ) test_matrix ;
-value r2official pa pp opa () = List.map (i2test ~{kind="r2official"} pa pp opa r_input KIND_Official ) test_matrix ;
-value official2official pa pp opa () = List.map (i2test ~{kind="official2official"} pa pp opa official_input KIND_Official ) test_matrix ;
+value r2r pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="r2r"} pa pp opa r_input KIND_Revised ) test_matrix ;
+value r2o pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="r2o"} pa pp opa r_input KIND_Original ) test_matrix ;
+value o2r pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="o2r"} pa pp opa o_input KIND_Revised ) test_matrix ;
+value o2o pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="o2o"} pa pp opa o_input KIND_Original ) test_matrix ;
+value o2official pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="o2official"} pa pp opa o_input KIND_Official ) test_matrix ;
+value r2official pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="r2official"} pa pp opa r_input KIND_Official ) test_matrix ;
+value official2official pa pp opa ?{test_matrix=test_matrix} () = List.map (i2test ~{kind="official2official"} pa pp opa official_input KIND_Official ) test_matrix ;
 
 (*
 ;;; Local Variables: ***

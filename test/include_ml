@@ -8,22 +8,23 @@
 #require "bos";;
 #require "str";;
 
-
+(*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
-(*
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
  *)
 
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
 
 (*
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+ *)
+
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
- *)
+
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -93,19 +94,19 @@ let pp_regexp_ast e = Fmt.(pf stdout "<:regexp_ast< %s >>" (Pr.pr_regexp_ast Ppr
 let pp_regexp e = Fmt.(pf stdout "<:regexp< %s >>" (PSyn.print e)) ;;
 #install_printer pp_regexp ;;
 
-let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" Pr.(entry ~pctxt:normal Pprintf.empty_pc e)) ;;
+let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" Pr.(entry ~pctxt:errmsg Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
 
-let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" Pr.(level ~pctxt:normal false Pprintf.empty_pc e)) ;;
+let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" Pr.(level ~pctxt:errmsg false Pprintf.empty_pc e)) ;;
 #install_printer pp_a_level ;;
 
-let pp_a_symbol e = Fmt.(pf stdout "<:symbol<%s>>" Pr.(symbol ~pctxt:normal Pprintf.empty_pc e)) ;;
+let pp_a_symbol e = Fmt.(pf stdout "<:symbol<%s>>" Pr.(symbol ~pctxt:errmsg Pprintf.empty_pc e)) ;;
 #install_printer pp_a_symbol ;;
 
-let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" Pr.(psymbol ~pctxt:normal Pprintf.empty_pc e)) ;;
+let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" Pr.(psymbol ~pctxt:errmsg Pprintf.empty_pc e)) ;;
 #install_printer pp_a_psymbol ;;
 
-let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" Pr.(rule ~pctxt:normal true Pprintf.empty_pc e)) ;;
+let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" Pr.(rule ~pctxt:errmsg true Pprintf.empty_pc e)) ;;
 #install_printer pp_a_rule ;;
 
 let pp_cg (cg : CG.t) = Fmt.(pf stdout "<cg>") ;;
@@ -157,20 +158,24 @@ X.BEval.OutputDfa.(dump ~rexlabels:false stdout (dfa re)) ;;
 #load "llkr2official_test.cmo" ;;
 open Revised_rtest ;;
 open Llkr2official_test ;;
-
+ *)
+(*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
 
 #load "error_rtest.cmo";;
 open Error_rtest ;;
- *)
+
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
- *)
 
+#directory "abnf" ;;
+#load "abnflexer.cmo";;
+#load "abnf.cmo";;
+ *)
 
 (*
 ;;; Local Variables: ***

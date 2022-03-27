@@ -1770,22 +1770,22 @@ and lift_psymbol cg acc e0 left_psyms stkpat ps =
   { (ps) with ap_symb = lift_symbol cg acc e0 left_psyms stkpat ps.ap_symb }
 
 and lift_symbol cg acc e0 left_psyms revpats = fun [
-    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 left_psyms revpats s)
+    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 [] revpats s)
   | ASkeyw _ _ as s -> s
 
   | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc e0 left_psyms revpats s) None
+     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) None
   | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc e0 left_psyms revpats s) (Some (lift_symbol cg acc e0 left_psyms revpats s2, b))
+     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) (Some (lift_symbol cg acc e0 [] revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 left_psyms revpats s)
+  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 [] revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg acc e0 left_psyms revpats s1) (lift_symbol cg acc e0 left_psyms revpats s2) e
+     ASleft_assoc loc (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
 
   | ASrules loc rl ->
      let formals = e0.ae_formals @ (List.rev revpats) in
@@ -2534,8 +2534,7 @@ value compile1a_entry cg e = do {
     |> List.mapi (compile1a_branch cg e) in
     let rhs =
       match branches with [
-        [(_,_,e)] -> e
-      | [] -> <:expr< fun __strm__ -> raise Stream.Failure >>
+        [] -> <:expr< fun __strm__ -> raise Stream.Failure >>
       | _ ->
          let branches =
            branches
@@ -2986,6 +2985,17 @@ let _ = compute_follow cg in
 ;
 end ;
 
+module Dump = struct
+
+value exec msg cg = do {
+  Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
+  prerr_string Pr.(top ~{pctxt=errmsg} Pprintf.empty_pc (CG.g cg)) ;
+  Fmt.(pf stderr "\n================================================================\n%!") ;
+  cg
+}
+;
+end ;
+
 module Top = struct
 open Parse_gram ;
 
@@ -3077,6 +3087,7 @@ value codegen loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
+  |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
 
