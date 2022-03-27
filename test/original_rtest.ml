@@ -214,88 +214,6 @@ REGEXPS:
   check_eps = eps ;
   check_phony_list = $list | $_list ;
   check_new_type_extended = "(" "type" LIDENT+ ")" ;
-
-  check_infix_operator0 = 
-      INFIXOP0 
-    | "!=" 
-    | "<>" 
-    | "=" 
-    | "<" 
-    | ">" 
-    | "||" 
-    | "or" 
-    | "&" 
-    | "&&" 
-    | "$"
-    ;
-  check_infix_operator1 =
-      INFIXOP1 
-    | "@" 
-    | "^" 
-    ;
-  check_additive_operator2 =
-      "+" 
-    | "+=" 
-    | "-" 
-    | "+." 
-    | "-." 
-    ;
-  check_infix_operator2 =
-      INFIXOP2 
-    | check_additive_operator2
-    ;
-  check_infix_operator3 =
-      INFIXOP3
-    | "lor" 
-    | "lxor" 
-    | "mod" 
-    | "land" 
-    | "*" 
-    | "/" 
-    | "%" 
-    ;
-  check_infix_operator4 =
-      INFIXOP4 
-    | "asr" 
-    | "lsl" 
-    | "lsr" 
-    | "**" 
-    ;
-  check_prefix_operator =
-      PREFIXOP 
-    | "!" 
-    ;
-  check_infix_operator =
-      check_infix_operator0 
-    | check_infix_operator1 
-    | check_infix_operator2 
-    | check_infix_operator3 
-    | check_infix_operator4 
-    | ":=" 
-    ;
-  check_operator =
-      check_prefix_operator 
-    | check_infix_operator 
-    | HASHOP 
-    | LETOP 
-    | ANDOP 
-    | "::" 
-    | DOTOP "(" ")" 
-    | DOTOP "(" ")" "<-" 
-    | DOTOP "(" ";" ".." ")" 
-    | DOTOP "(" ";" ".." ")" "<-" 
-
-    | DOTOP "{" "}" 
-    | DOTOP "{" "}" "<-" 
-    | DOTOP "{" ";" ".." "}" 
-    | DOTOP "{" ";" ".." "}" "<-" 
-
-    | DOTOP "[" "]" 
-    | DOTOP "[" "]" "<-" 
-    | DOTOP "[" ";" ".." "]" 
-    | DOTOP "[" ";" ".." "]" "<-" 
-    ;
-  check_operator_rparen = check_operator ")" ;
   check_lbracket = "[" ;
   check_lbrace = "{" ;
   check_lbracketbar = "[|" ;
@@ -325,9 +243,6 @@ REGEXPS:
   check_cons_ident = (UIDENT | $uid | $_uid) | "true" | "false" | "[" "]" | "(" ")" | "(" "::" ")" ;
 
   check_constr_decl = UIDENT [^ "." "("] | "true" | "false" | "|" | "[" "]";
-
-  check_val_ident = LIDENT | "(" check_operator_rparen ;
-  check_lparen_operator_rparen = "(" check_operator_rparen ;
   check_lident_colon = LIDENT ":" ;
   check_type_binder =
         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
@@ -434,6 +349,7 @@ external p_phony : PREDICTION empty ;
       op = operator ; ")" -> op
     ] ]
     ;
+  lp_operator_rp: [ [ "(" ; op = operator_rparen -> op ] ] ;
   (* This is copied from parser.mly (nonterminal "single_attr_id") in the ocaml 4.10.0 distribution. *)
   kwd_attribute_id:
   [ [ s = [ "and" | "as" | "assert" | "begin" | "class" | "constraint" | "do" | "done"
@@ -907,7 +823,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
           let el = Pcaml.vala_map get_seq e in
           expr_to_inline <:expr< for $i$ = $e1$ $_to:df$ $e2$ do { $_list:el$ } >> ext attrs
-      | "for"; (ext,attrs) = ext_attributes; check_lparen_operator_rparen ; "("; i = operator_rparen; "="; e1 = SELF; df = V direction_flag "to";
+      | "for"; (ext,attrs) = ext_attributes; (lp_operator_rp)? ; "("; i = operator_rparen; "="; e1 = SELF; df = V direction_flag "to";
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
           let i = Ploc.VaVal i in
           let el = Pcaml.vala_map get_seq e in
@@ -1017,7 +933,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     | "." LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
-      | e1 = SELF; "."; "("; check_operator_rparen ; op = operator_rparen ->
+      | e1 = SELF; "."; (lp_operator_rp)? ; "("; op = operator_rparen ->
           if op = "::" then
             Ploc.raise loc (Failure ".(::) (dot paren colon colon paren) cannot appear except after longident")
           else
@@ -1081,7 +997,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:expr< (module $me$ : $mt$) >>
       | "("; "module"; me = module_expr; ")" ->
           <:expr< (module $me$) >>
-      | "("; check_operator_rparen ; op = operator_rparen ->
+      | (lp_operator_rp)? ; "("; op = operator_rparen ->
         if op = "::" then
           <:expr< $uid:op$ >>
         else
@@ -1098,14 +1014,14 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   let_binding:
     [ [ alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident ; check_and_in ->
+        (val_ident)? ; p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
 
       | alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; e = colon_fun_binding ;
+        (val_ident)? ; p = val_ident; e = colon_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1115,7 +1031,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         (p, e, attrs)
 
       | alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; e = rest_fun_binding ;
+        (val_ident)? ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
@@ -1133,19 +1049,19 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ] ]
   ;
   first_let_binding:
-    [ [ check_val_ident ; p = val_ident ; check_and_in ->
+    [ [ (val_ident)? ; p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< [] >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
-      | check_val_ident ; p = val_ident; e = colon_fun_binding ;
+      | (val_ident)? ; p = val_ident; e = colon_fun_binding ;
         item_attrs = item_attributes ->
         let (p,e) = match e with [
           <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
         | _ -> (p,e)
         ] in
         (p, e, item_attrs)
-      | check_val_ident ; p = val_ident; e = rest_fun_binding ;
+      | (val_ident)? ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
       | check_eps ; p = patt; "="; e = expr ;
@@ -1158,13 +1074,13 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   and_let_binding:
     [ [ "and"; alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident ; check_and_in ->
+        (val_ident)? ; p = val_ident ; check_and_in ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; e = colon_fun_binding ;
+        (val_ident)? ; p = val_ident; e = colon_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1173,7 +1089,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         ] in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; e = rest_fun_binding ;
+        (val_ident)? ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
@@ -1190,8 +1106,8 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       ] ]
   ;
   letop_binding:
-    [ [ check_val_ident ; p = val_ident; e = fun_binding -> (p, e)
-      | check_val_ident ; p = val_ident ->
+    [ [ (val_ident)? ; p = val_ident; e = fun_binding -> (p, e)
+      | (val_ident)? ; p = val_ident ->
          match p with [
              <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>)
            | _ -> failwith "letop punning: binder must be a lowercase ident (variable)"
@@ -1292,7 +1208,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   expr_longident:
     [
       [ li = longident ; check_eps -> <:expr< $longid:li$ >>
-      | li = longident ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
+      | li = longident ; "." ; (lp_operator_rp)? ; "("; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
@@ -1407,7 +1323,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "{"; lpl = V lbl_patt_list "list"; "}" ->
           <:patt< { $_list:lpl$ } >>
       | "("; ")" -> <:patt< $uid:"()"$ >>
-      | "("; check_operator_rparen ; op = operator_rparen -> 
+      | (lp_operator_rp)? ; "("; op = operator_rparen -> 
           if op = "::" then
             <:patt< $uid:op$ >>
           else
