@@ -1105,7 +1105,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           ]
 
       | alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; check_colon ; e = fun_binding ;
+        check_val_ident ; p = val_ident; e = colon_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1115,7 +1115,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         (p, e, attrs)
 
       | alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; check_eps ; e = fun_binding ;
+        check_val_ident ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
@@ -1138,14 +1138,14 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< [] >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
-      | check_val_ident ; p = val_ident; check_colon; e = fun_binding ;
+      | check_val_ident ; p = val_ident; e = colon_fun_binding ;
         item_attrs = item_attributes ->
         let (p,e) = match e with [
           <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
         | _ -> (p,e)
         ] in
         (p, e, item_attrs)
-      | check_val_ident ; p = val_ident; check_eps; e = fun_binding ;
+      | check_val_ident ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
       | check_eps ; p = patt; "="; e = expr ;
@@ -1164,7 +1164,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
           ]
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; check_colon ; e = fun_binding ;
+        check_val_ident ; p = val_ident; e = colon_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         let (p,e) = match e with [
@@ -1173,7 +1173,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         ] in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        check_val_ident ; p = val_ident; check_eps ; e = fun_binding ;
+        check_val_ident ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
@@ -1208,6 +1208,25 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           <:patt< $uid:op$ >>
         else
           <:patt< $lid:op$ >>
+      ] ]
+  ;
+  colon_fun_binding:
+    [ "top"
+      [ 
+        ":"; t = poly_type; "="; e = expr -> <:expr< ($e$ : $t$) >>
+      | ":"; t = poly_type; ":>"; t2 = poly_type ; "="; e = expr -> <:expr< ( ( $e$ : $t$ ) :> $t2$ ) >>
+      ] ]
+  ;
+  rest_fun_binding:
+    [ "top"
+      [ 
+        check_new_type_extended ; "("; "type"; l = LIST1 LIDENT ; ")" ; e = fun_binding ->
+        List.fold_right (fun id e ->
+            <:expr< fun [(type $lid:id$) -> $e$] >>)
+          l e
+      | p = patt LEVEL "simple"; e = fun_binding -> <:expr< fun $p$ -> $e$ >>
+      | "="; e = expr -> <:expr< $e$ >>
+      | ":>"; t = poly_type; "="; e = expr -> <:expr< ($e$ :> $t$) >>
       ] ]
   ;
   fun_binding:
