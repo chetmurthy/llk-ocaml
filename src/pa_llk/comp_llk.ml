@@ -310,7 +310,7 @@ value infer_kinds cg loc s kinds =
       | AStok loc "QUESTIONIDENTCOLON" _ -> ["?:"]
       | AStok loc "TILDEIDENT" _ -> ["~"]
       | AStok loc "TILDEIDENTCOLON" _ -> ["~:"]
-      | _ -> raise_failwithf (CG.adjust_loc cg loc) "cannot infer antiquotation kind for symbol %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s)
+      | _ -> raise_failwithf (CG.adjust_loc cg loc) "cannot infer antiquotation kind for symbol %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
       ]
 ;
 
@@ -978,7 +978,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
                                equal_a_symbol last_symbol (fst (Std.sep_last r.ar_psymbols)).ap_symb)) then
                raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s RIGHTA level does not have identical last symbols\n%s"
                  (Name.print ename)
-                 (Pr.entry ~{squote=False} Pprintf.empty_pc e)
+                 Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
              else () ;
              match last_symbol with [
                  ASnterm _ name _ None when name = ename -> ()
@@ -1280,7 +1280,7 @@ and symbol cg = fun [
     | (ASlist loc lml elem_s sepb_opt) as s ->
        let felem = symbol cg elem_s in
        if TS.mem None felem then
-         raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s)
+         raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
        else 
          match (lml, sepb_opt) with [
              (LML_1, None) -> felem
@@ -1634,7 +1634,7 @@ and fifo_symbol cg ff = fun [
      let fi_vala = First.symbol cg s0 in
      fifo_concat cg loc ~{if_nullable=True} fi_vala ff
 
-  | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s)
+  | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
 ]
 
 and fifo_rule cg ff r =
@@ -2198,12 +2198,12 @@ value report_compilation_errors cg msg = do {
            let fi = CG.first cg e.ae_name in
            let fo = CG.follow cg e.ae_name in
            Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-                  (Pr.entry ~{squote=False} Pprintf.empty_pc e)
+                  Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
                   (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
            )
          ) ;
     Fmt.(pf stderr "================================================================\n") ;
-    prerr_string (Pr.top Pprintf.empty_pc (CG.g cg)) ;
+    prerr_string Pr.(top Pprintf.empty_pc (CG.g cg)) ;
   } else () ;
   Fmt.(pf stderr "================================================================\n") ;
   (cg |> CG.errors |> List.rev)
@@ -2222,10 +2222,14 @@ value report_compilation_errors cg msg = do {
 
 open Exparser ;
 
-value expected_psymbols_msg e left_psymbols psl = do {
-  assert ([] <> psl) ;
-  let left_txt = Pr.rule_psymbols ~{squote=True} Pprintf.empty_pc left_psymbols in
-  let psl_txt = String.concat "] or [" (List.map (Pr.psymbol ~{squote=True} Pprintf.empty_pc) psl) in
+value expected_psymbols_msg e left_psymbols ps_opt_l = do {
+  assert ([] <> ps_opt_l) ;
+  let left_txt = Pr.(rule_psymbols ~{pctxt=errmsg} Pprintf.empty_pc left_psymbols) in
+  let pr_ps_opt = fun [
+        None -> "<empty>"
+      | Some ps -> Pr.(psymbol ~{pctxt=errmsg} Pprintf.empty_pc ps)
+      ] in
+  let psl_txt = String.concat "] or [" (List.map pr_ps_opt ps_opt_l) in
   Fmt.(str "[%s] expected after [%s] (in [%s])"
          (String.escaped psl_txt)
          (String.escaped left_txt)
@@ -2309,7 +2313,7 @@ value rec compile1_symbol cg loc e s =
  *)       
 
     | s -> do {
-        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "compile1_symbol: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s) ;
+        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "compile1_symbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s) ;
         failwith "caught"
       }
     ]
@@ -2317,7 +2321,7 @@ value rec compile1_symbol cg loc e s =
 and compile1_psymbol cg loc e must_parse left_psymbols ps =
   let must exp =
     if must_parse then
-      let msg = expected_psymbols_msg e left_psymbols [ps] in
+      let msg = expected_psymbols_msg e left_psymbols [Some ps] in
       <:expr< Pa_llk_runtime.Llk_runtime.must_parse ~{msg= $str:String.escaped msg$ } $exp$ >>
     else exp
   in
@@ -2378,7 +2382,7 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
        (SpNtr loc patt (must exp), SpoNoth)
 
     | s -> do {
-        CG.add_failuref cg (CG.adjust_loc cg (loc_of_a_symbol s)) e.ae_name "compile1_psymbol: %s" (Pr.symbol ~{squote=False} Pprintf.empty_pc s) ;
+        CG.add_failuref cg (CG.adjust_loc cg (loc_of_a_symbol s)) e.ae_name "compile1_psymbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s) ;
         failwith "caught"
       }
     ]
@@ -2467,12 +2471,13 @@ value build_match_nest loc (cg : CG.t) (e : a_entry) fi_fo_rule_list =
   let null_branches = match null_branches with [
         [] ->
         (match CG.preceding_psymbols cg e.ae_name with [
-             None ->
+             None | Some [] ->
              [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
            | Some left_syms ->
               let psl =
                 fi_fo_rule_list
-                |> List.map (fun (_, _, r) -> List.hd r.ar_psymbols) in
+                |> List.map (fun (_, _, r) ->
+                       match r.ar_psymbols with [ [] -> None | [h :: _] -> Some h ]) in
               let msg = expected_psymbols_msg e left_syms psl in
               [(<:patt< _ >>, <:vala< None >>, <:expr< raise (Stream.Error $str:msg$) >>)]
            ])

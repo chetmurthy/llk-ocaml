@@ -15,6 +15,14 @@ open Parse_gram ;
 
 module Pr = struct
 
+type pctxt_t = {
+    squote : bool
+  ; full : bool
+}
+;
+value normal = { squote = False ; full = True } ;
+value errmsg = { squote = True ; full = False } ;
+
 value flag_equilibrate_cases = Pcaml.flag_equilibrate_cases;
 
 value expr = Eprinter.apply_level pr_expr "assign";
@@ -51,11 +59,13 @@ value position pc = fun [
 
 value pair_with s l = List.map (fun g -> (g, s)) l ;
 
-value entry_formals pc l =
+value entry_formals ~{pctxt=pctxt} pc l =
+  let patt = if pctxt.full then patt else (fun pc _ -> pprintf pc "<patt>") in
   pprintf pc "[%p]" (plist patt 0) (pair_with "," l)
 ;
 
-value entry_actuals pc l =
+value entry_actuals ~{pctxt=pctxt} pc l =
+  let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
   pprintf pc "[%p]" (plist expr 0) (pair_with "," l)
 ;
 
@@ -71,7 +81,9 @@ value pr_option pf pc = fun [
 ]
 ;
 
-value rec rule ~{squote} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
+value rec rule~{pctxt} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
+  let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
+  let patt = if pctxt.full then patt else (fun pc _ -> pprintf pc "<patt>") in
   match (sl, a) with [
       ([], None) -> pprintf pc "[ ]"
     | ([], Some a) ->
@@ -83,7 +95,7 @@ value rec rule ~{squote} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
             (fun () ->
               let s =
                 let pc = {(pc) with aft = ""} in
-                pprintf pc "%p →" (hlistl (semi_after (psymbol ~{squote=squote})) (psymbol ~{squote=squote})) sl
+                pprintf pc "%p →" (hlistl (semi_after (psymbol ~{pctxt=pctxt})) (psymbol ~{pctxt=pctxt})) sl
               in
               Some s)
             (fun () -> None)
@@ -97,7 +109,7 @@ value rec rule ~{squote} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
               (fun () ->
                 pprintf pc "%s@;<1 4>%q" s1 (action expr) a "|")
           | None ->
-             pprintf pc "@[<2>%p →@;%q@]" (plist (psymbol ~{squote=squote}) 0) (pair_with ";" sl)
+             pprintf pc "@[<2>%p →@;%q@]" (plist (psymbol ~{pctxt=pctxt}) 0) (pair_with ";" sl)
                (action expr) a "|" ])
     | (sl, None) ->
        (match
@@ -105,7 +117,7 @@ value rec rule ~{squote} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
             (fun () ->
               let s =
                 let pc = {(pc) with aft = ""} in
-                pprintf pc "%p →" (hlistl (semi_after (psymbol ~{squote=squote})) (psymbol ~{squote=squote})) sl
+                pprintf pc "%p →" (hlistl (semi_after (psymbol ~{pctxt=pctxt})) (psymbol ~{pctxt=pctxt})) sl
               in
               Some s)
             (fun () -> None)
@@ -119,18 +131,19 @@ value rec rule ~{squote} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
               (fun () ->
                 pprintf pc "%s" s1)
           | None ->
-             pprintf pc "@[<2>%p@]" (plist (psymbol ~{squote=squote}) 0) (pair_with ";" sl) ])
+             pprintf pc "@[<2>%p@]" (plist (psymbol ~{pctxt=pctxt}) 0) (pair_with ";" sl) ])
     ]
 
-and rule_psymbols ~{squote} pc sl =
-  pprintf pc "%p" (hlistl (semi_after (psymbol ~{squote=squote})) (psymbol ~{squote=squote})) sl
+and rule_psymbols~{pctxt} pc sl =
+  pprintf pc "%p" (hlistl (semi_after (psymbol ~{pctxt=pctxt})) (psymbol ~{pctxt=pctxt})) sl
 
-and psymbol ~{squote} pc { ap_patt= p; ap_symb = s } =
+and psymbol ~{pctxt} pc { ap_patt= p; ap_symb = s } =
   match p with
-  [ None -> symbol ~{squote=squote} pc s
-  | Some p -> pprintf pc "%p =@;%p" pattern p (symbol ~{squote=squote}) s ]
+  [ None -> symbol ~{pctxt=pctxt} pc s
+  | Some p -> pprintf pc "%p =@;%p" (pattern ~{pctxt=pctxt}) p (symbol ~{pctxt=pctxt}) s ]
 
-and pattern pc p =
+and pattern ~{pctxt} pc p =
+  let patt = if pctxt.full then patt else (fun pc _ -> pprintf pc "<patt>") in
   match p with
   [ <:patt< $lid:i$ >> -> pprintf pc "%s" i
   | <:patt< _ >> -> pprintf pc "_"
@@ -139,32 +152,32 @@ and pattern pc p =
   | p ->
       pprintf pc "@[<1>(%p)@]" patt p ]
 
-and symbol ~{squote} pc = fun [
+and symbol~{pctxt} pc = fun [
       ASlist _ lml symb None ->
-       pprintf pc "LIST%s@;%p" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{squote=squote}) symb
+       pprintf pc "LIST%s@;%p" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
     | ASlist _ lml symb (Some (sep,b)) ->
        pprintf pc "LIST%s@;%p@ @[SEP@;%p%s@]" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
-         (simple_symbol ~{squote=squote}) symb
-         (simple_symbol ~{squote=squote}) sep
+         (simple_symbol ~{pctxt=pctxt}) symb
+         (simple_symbol ~{pctxt=pctxt}) sep
          (if b then " OPT_SEP" else "")
 
-    | ASopt _ sym -> pprintf pc "OPT@;%p" (simple_symbol ~{squote=squote}) sym
+    | ASopt _ sym -> pprintf pc "OPT@;%p" (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASleft_assoc _ sym1 sym2 e ->
        pprintf pc "LEFT_ASSOC@;%p@;%p WITH %p"
-         (simple_symbol ~{squote=squote}) sym1
-         (simple_symbol ~{squote=squote}) sym2
+         (simple_symbol ~{pctxt=pctxt}) sym1
+         (simple_symbol ~{pctxt=pctxt}) sym2
          expr e
 
     | ASflag _ sym ->
-       pprintf pc "FLAG@;%p" (simple_symbol ~{squote=squote}) sym
+       pprintf pc "FLAG@;%p" (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASvala _ sy sl ->
-       pprintf pc "V @[<2>%p%p@]" (simple_symbol ~{squote=squote}) sy string_list sl
-    | sy -> (simple_symbol ~{squote=squote}) pc sy
+       pprintf pc "V @[<2>%p%p@]" (simple_symbol ~{pctxt=pctxt}) sy string_list sl
+    | sy -> (simple_symbol ~{pctxt=pctxt}) pc sy
     ]
 
-and simple_symbol ~{squote} pc sy =
+and simple_symbol~{pctxt} pc sy =
   match sy with
   [ ASregexp _ id ->
     pprintf pc "PREDICT %s" (Name.print id)
@@ -172,50 +185,50 @@ and simple_symbol ~{squote} pc sy =
     pprintf pc "INFER %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-    pprintf pc "%s%p" (Name.print id) (pr_option entry_actuals) args_opt
+    pprintf pc "%s%p" (Name.print id) (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
   | ASnterm _ id args (Some lev) ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-     pprintf pc "%s%p LEVEL \"%s\"" (Name.print id) (pr_option entry_actuals) args_opt lev
+     pprintf pc "%s%p LEVEL \"%s\"" (Name.print id) (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt lev
   | ASself _ args ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-     pprintf pc "SELF%p" (pr_option entry_actuals) args_opt
+     pprintf pc "SELF%p" (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
   | ASnext _ args ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
-     pprintf pc "NEXT%p" (pr_option entry_actuals) args_opt
+     pprintf pc "NEXT%p" (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
   | ASrules _ rl ->
      horiz_vertic
        (fun () ->
          pprintf pc "[ %p ]"
-           (hlist2 (rule ~{squote=False} False) (bar_before (rule ~{squote=False} False))) rl.au_rules)
+           (hlist2 (rule ~{pctxt=pctxt} False) (bar_before (rule ~{pctxt=pctxt} False))) rl.au_rules)
        (fun () ->
          pprintf pc "[ %p ]"
-           (vlist2 (rule ~{squote=False} False) (bar_before (rule ~{squote=False} False))) rl.au_rules)
+           (vlist2 (rule ~{pctxt=pctxt} False) (bar_before (rule ~{pctxt=pctxt} False))) rl.au_rules)
 
   | ASkeyw _ s ->
-     if squote then
+     if pctxt.squote then
        pprintf pc "'%s'" s
      else
        pprintf pc "\"%s\"" s
 
   | AStok _ cls None -> pprintf pc "%s" cls
   | AStok _ cls (Some constv) ->
-     if squote then
+     if pctxt.squote then
        pprintf pc "%s '%s'" cls constv
      else
        pprintf pc "%s \"%s\"" cls constv
 
   | ASsyntactic _ sym ->
-       pprintf pc "(%p)?" (symbol ~{squote=squote}) sym
+       pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
 
   | ASlist _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
-      pprintf pc "@[<1>(%p)@]" (symbol ~{squote=squote}) sy
+      pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 
-and entry ~{squote} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
+and entry~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll } ->
     let force_vertic =
       if flag_equilibrate_cases.val then
         let has_vertic =
-          let f = bar_before (bar_before (rule ~{squote=False} False)) pc in
+          let f = bar_before (bar_before (rule ~{pctxt=pctxt} False)) pc in
           List.exists
             (fun lev ->
               List.exists
@@ -233,17 +246,17 @@ and entry ~{squote} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; a
     in
     let formals_opt = match formals with [ [] -> None | l -> Some l ] in
     comm_bef pc.ind loc ^
-      pprintf pc "@[<b>%s%p:%p@;[ %p ]@ ;@]" (Name.print name) (pr_option entry_formals) formals_opt (pr_option position) pos 
-        (vlist2 (level force_vertic) (bar_before (level force_vertic))) ll      
+      pprintf pc "@[<b>%s%p:%p@;[ %p ]@ ;@]" (Name.print name) (pr_option (entry_formals ~{pctxt=pctxt})) formals_opt (pr_option position) pos 
+        (vlist2 (level ~{pctxt=pctxt} force_vertic) (bar_before (level ~{pctxt=pctxt} force_vertic))) ll      
 
-and level force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
+and level ~{pctxt=pctxt} force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
   let rl = rl.au_rules in
   match (lab, ass) with
   [ (None, None) ->
       if rl = [] then pprintf pc "[ ]"
       else
         pprintf pc "@[<2>[ %p ]@]"
-          (vlist2 (rule ~{squote=False} force_vertic) (bar_before (rule ~{squote=False} force_vertic))) rl
+          (vlist2 (rule ~{pctxt=pctxt} force_vertic) (bar_before (rule ~{pctxt=pctxt} force_vertic))) rl
   | _ ->
       pprintf pc "@[<b>%p@;[ %p ]@]"
         (fun pc ->
@@ -253,7 +266,7 @@ and level force_vertic pc {al_label = lab; al_assoc=ass; al_rules=rl} =
             | (Some _, Some _) -> pprintf pc "%p %p" label lab (pr_option assoc) ass
             | _ -> assert False ])
         (lab, ass)
-        (vlist2 (rule ~{squote=False} force_vertic) (bar_before (rule ~{squote=False} force_vertic))) rl ]
+        (vlist2 (rule ~{pctxt=pctxt} force_vertic) (bar_before (rule ~{pctxt=pctxt} force_vertic))) rl ]
   
 ;
 
@@ -360,13 +373,13 @@ value pr_extend pc = fun [
 ]
 ;
 
-value top pc g =
+value top ?{pctxt=normal} pc g =
   pprintf pc "GRAMMAR@;%s:@;@[<b>%p@;%p@;%p@;%p@;%p@]@ END;\n" g.gram_id
     pr_extend g.gram_extend
     pr_exports g.gram_exports
     pr_regexp_asts g.gram_regexp_asts
     pr_externals g.gram_external_asts
-    (vlist (entry ~{squote=False})) g.gram_entries
+    (vlist (entry ~{pctxt=normal})) g.gram_entries
 ;
 
 end ;
