@@ -163,10 +163,14 @@ and pattern ~{pctxt} pc p =
 and symbol~{pctxt} pc =
   let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
   fun [
-      ASlist _ lml symb None ->
-       pprintf pc "LIST%s@;%p" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
-    | ASlist _ lml symb (Some (sep,b)) ->
-       pprintf pc "LIST%s@;%p@ @[SEP@;%p%s@]" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
+      ASlist _ g lml symb None ->
+       pprintf pc "%sLIST%s@;%p"
+         (if g then "GREEDY " else "")
+         (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
+    | ASlist _ g lml symb (Some (sep,b)) ->
+       pprintf pc "%sLIST%s@;%p@ @[SEP@;%p%s@]"
+         (if g then "GREEDY " else "")
+         (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
          (simple_symbol ~{pctxt=pctxt}) symb
          (simple_symbol ~{pctxt=pctxt}) sep
          (if b then " OPT_SEP" else "")
@@ -225,7 +229,7 @@ and simple_symbol~{pctxt} pc sy =
   | ASsyntactic _ sym ->
        pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
 
-  | ASlist _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
+  | ASlist _ _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 

@@ -295,7 +295,7 @@ value infer_kinds cg loc s kinds =
   if kinds <> [] then kinds else
     match s with [
         ASflag _ _ -> ["flag"]
-      | ASlist _ _ _ _ -> ["list"]
+      | ASlist _ _ _ _ _ -> ["list"]
       | ASopt _ _ -> ["opt"]
       | AStok loc "CHAR" _ -> ["chr"]
       | AStok loc "FLOAT" _ -> ["flo"]
@@ -525,8 +525,8 @@ end ;
 value rec check_symbol cg env = fun [
     ASflag _ s -> check_symbol cg env s
   | ASkeyw _ _ -> ()
-  | ASlist _ _ s None -> check_symbol cg env s
-  | ASlist _ _ s (Some (s2, _)) -> do { check_symbol cg env s ; check_symbol cg env s2 }
+  | ASlist _ _ _ s None -> check_symbol cg env s
+  | ASlist _ _ _ s (Some (s2, _)) -> do { check_symbol cg env s ; check_symbol cg env s2 }
 
   | ASnext _ _ -> ()
   | ASnterm _ _ _ _ -> ()
@@ -1302,7 +1302,7 @@ and psymbol cg ps = symbol cg ps.ap_symb
 and symbol cg = fun [
       ASflag _ s -> TS.(union (symbol cg s) (mk[None]))
     | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
-    | (ASlist loc lml elem_s sepb_opt) as s ->
+    | (ASlist loc _ lml elem_s sepb_opt) as s ->
        let felem = symbol cg elem_s in
        if TS.mem None felem then
          raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
@@ -1471,7 +1471,7 @@ and fifo_symbol cg e ff = fun [
 
     | ASkeyw _ kw -> TS.mk[(SPCL kw)]
 
-    | ASlist loc lml s sepopt_opt ->
+    | ASlist loc _ lml s sepopt_opt ->
        (* A. if a LIST has element that is NOT nullable, OR is LIST0,
           then the fifo is just the firsts of that element.
 
@@ -1823,10 +1823,10 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
     ASflag loc s -> ASflag loc (lift_symbol cg acc e0 [] revpats s)
   | ASkeyw _ _ as s -> s
 
-  | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) None
-  | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) (Some (lift_symbol cg acc e0 [] revpats s2, b))
+  | ASlist loc g lml s None ->
+     ASlist loc g lml (lift_symbol cg acc e0 [] revpats s) None
+  | ASlist loc g lml s (Some (s2, b)) ->
+     ASlist loc g lml (lift_symbol cg acc e0 [] revpats s) (Some (lift_symbol cg acc e0 [] revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
@@ -1898,14 +1898,14 @@ module S7LiftLists = struct
    LIST0 sym ->
 
    entry: [ [ x = sym ; y = entry -> [x :: y]
-            | -> [] ] ] ;
+            | check_eps ; -> [] ] ] ;
 
 ================================================================
 
    LIST0 sym SEP sym2 ->
 
    entry: [ [ y = LIST1 sym SEP sym2 -> y
-            | -> [] ] ] ;
+            | check_eps -> [] ] ] ;
 
 ================================================================
 
@@ -1923,16 +1923,16 @@ module S7LiftLists = struct
 
    LIST0 sym SEP sym2 OPT_SEP ->
 
-   entry: [ [ x = sym -> [x]
+   entry: [ [ x = sym ; check_eps -> [x]
             | x = sym ; sym2 ; y = entry -> [x :: y]
-            | -> []
+            | check_eps -> []
             ] ] ;
 
 ================================================================
 
    LIST1 sym SEP sym2 OPT_SEP ->
 
-   entry: [ [ x = sym -> [x]
+   entry: [ [ x = sym ; check_eps -> [x]
             | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
             ] ] ;
 
@@ -1952,8 +1952,8 @@ open FreeLids ;
     get the formals of the new entry.
  *)
 
-value list0_e1 cg (formals, actuals) e = fun [
-  ASlist loc LML_0 s0 None as s ->
+value list0_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 s0 None as s ->
   let new_ename = CG.fresh_name cg e.ae_name in
   let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
@@ -1961,7 +1961,9 @@ value list0_e1 cg (formals, actuals) e = fun [
                ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
                              ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
                                ;ap_symb=ASnterm loc new_ename actuals None}]} in
-  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = []} in
+  let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
+  let rule1_psl = if g then [ps_eps] else [] in
+  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = rule1_psl} in
   let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
   let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
   {
@@ -1975,12 +1977,12 @@ value list0_e1 cg (formals, actuals) e = fun [
 ]
 ;
 
-value list1_e1 cg (formals, actuals) e = fun [
-  ASlist loc LML_1 s0 None as s ->
+value list1_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 s0 None as s ->
   let new_ename = CG.fresh_name cg e.ae_name in
   let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let s' = ASlist loc LML_0 s0 None in
+  let s' = ASlist loc g LML_0 s0 None in
   let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
                ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
                              ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
@@ -1998,124 +2000,99 @@ value list1_e1 cg (formals, actuals) e = fun [
 ]
 ;
 
-value list1sep_e1 cg (formals, actuals) e = fun [
-  ASlist loc LML_1 s0 (Some (s1, False)) as s ->
-  let new_ename1 = CG.fresh_name cg e.ae_name in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let rule0 = {ar_loc=loc
-              ;ar_action= Some <:expr< $lid:new_y$ >>
-              ;ar_psymbols=[{ap_loc=loc; ap_patt=None; ap_symb=s1}
-                           ;{ap_loc=loc; ap_patt= Some <:patt< $lid:new_y$ >>; ap_symb=s0}]} in
-  let rules = {au_loc=loc; au_rules=[rule0]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename1
-  ; ae_loc = loc
+value list1sep_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 sym (Some (sep, False)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  { ae_loc = loc
+  ; ae_name = ename
   ; ae_pos = None
-  ; ae_formals = formals
+  ; ae_formals = []
+  ; ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+        {au_loc = loc;
+         au_rules = [
+             { ar_loc = loc
+             ; ar_psymbols = [
+                 { ap_loc = loc
+                 ; ap_patt = Some <:patt< $lid:x$ >>
+                 ; ap_symb = sym
+                 }
+               ; { ap_loc = loc
+                 ; ap_patt = Some <:patt< $lid:y$ >>
+                 ; ap_symb = ASlist loc g LML_0
+                               (ASrules loc { au_loc = loc
+                                            ; au_rules = [{ ar_loc = loc
+                                                          ; ar_psymbols =[
+                                                              { ap_loc = loc
+                                                              ; ap_patt = None
+                                                              ; ap_symb = sep
+                                                              }
+                                                            ; { ap_loc = loc
+                                                              ; ap_patt = Some <:patt< $lid:y$ >>
+                                                              ; ap_symb = sym
+                                                            }]
+                                                          ; ar_action = Some <:expr< $lid:y$ >>}]})
+                               None
+               }]
+             ; ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>
+             }
+     ]}}]
   ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
-  }
-]
-;
-
-value list1sep_e2 cg (formals, actuals) ~{new_e1} e = fun [
-  ASlist loc LML_1 s0 (Some (s1, False)) as s ->
-  let new_ename = CG.fresh_name cg e.ae_name in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let s' = ASlist loc LML_0 (ASnterm loc new_e1.ae_name actuals None) None in
-  let rule0 = {ar_loc = loc ; ar_action = Some <:expr< $lid:new_y$ >> ;
-               ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>; ap_symb=s'}]} in
-  let rules = {au_loc=loc; au_rules=[rule0]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename
-  ; ae_loc = loc
-  ; ae_pos = None
-  ; ae_formals = formals
-  ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
-  }
-]
-;
-
-value list1sep_e3 cg (formals, actuals) ~{new_e2} e = fun [
-  ASlist loc LML_1 s0 (Some (s1, False)) as s ->
-  let new_ename = CG.fresh_name cg e.ae_name in
-  let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
-               ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
-                             ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
-                               ;ap_symb=ASnterm loc new_e2.ae_name actuals None}]} in
-  let rules = {au_loc=loc; au_rules=[rule0]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename
-  ; ae_loc = loc
-  ; ae_pos = None
-  ; ae_formals = formals
-  ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
   }
 ]
 ;
 
 
-(* [ y = LIST1 sym SEP sym2 -> y ] *)
-value list0sep_e1 cg (formals, actuals) e = fun [
-  ASlist loc LML_0 s0 (Some (s1, False)) as s ->
-  let new_ename1 = CG.fresh_name cg e.ae_name in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let s' = ASlist loc LML_1 s0 (Some (s1, False)) in
-  let rule0 = {ar_loc=loc
-              ;ar_action= Some <:expr< $lid:new_y$ >>
-              ;ar_psymbols=[{ap_loc=loc; ap_patt= Some <:patt< $lid:new_y$ >>; ap_symb=s'}]} in
-  let rules = {au_loc=loc; au_rules=[rule0]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename1
-  ; ae_loc = loc
+value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 sym (Some (sep, False)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let y = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  { ae_loc = loc
+  ; ae_name = ename
   ; ae_pos = None
-  ; ae_formals = formals
+  ; ae_formals = []
+  ; ae_levels =
+      [{ al_loc = loc
+       ; al_label = None
+       ; al_assoc = None
+       ; al_rules =
+           { au_loc = loc
+           ; au_rules =
+               [{ ar_loc = loc
+                ; ar_psymbols = [
+                    { ap_loc = loc
+                    ; ap_patt = Some <:patt< $lid:y$ >>
+                    ; ap_symb = ASlist loc g LML_1 sym (Some (sep, False))
+                  }]
+                ; ar_action = Some <:expr< $lid:y$ >>
+                }
+               ; { ar_loc = loc
+                 ; ar_psymbols = [
+                     { ap_loc = loc
+                     ; ap_patt = None
+                     ; ap_symb = ASregexp loc check_eps
+                   }]
+                 ; ar_action = Some <:expr< [] >>
+               }]
+           }
+       }
+      ]
   ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
   }
 ]
 ;
-
-
-(*    [ [ y = e1 -> y | -> [] ] ] ; *)
-value list0sep_e2 cg (formals, actuals) ~{new_e1} e = fun [
-  ASlist loc LML_0 s0 (Some (s1, False)) as s ->
-  let new_ename1 = CG.fresh_name cg e.ae_name in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let s' = ASnterm loc new_e1.ae_name actuals None in
-  let rule0 = {ar_loc=loc
-              ;ar_action= Some <:expr< $lid:new_y$ >>
-              ;ar_psymbols=[{ap_loc=loc; ap_patt= Some <:patt< $lid:new_y$ >>; ap_symb=s'}]} in
-  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = []} in
-  let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename1
-  ; ae_loc = loc
-  ; ae_pos = None
-  ; ae_formals = formals
-  ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
-  }
-]
-;
-
 
 (*
    entry: [ [ x = sym -> [x]
             | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
             ] ] ;
  *)
-value list1sep_opt_e cg (formals, actuals) e = fun [
-  ASlist loc LML_1 sym (Some (sep, True)) as s ->
+value list1sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 sym (Some (sep, True)) as s ->
   let ename = CG.fresh_name cg e.ae_name in
   let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
@@ -2138,7 +2115,7 @@ value list1sep_opt_e cg (formals, actuals) e = fun [
               {ap_loc = loc; ap_patt = None;
                ap_symb = sep};
               {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
-               ap_symb = ASlist loc LML_0 sym (Some (sep, True))}];
+               ap_symb = ASlist loc g LML_0 sym (Some (sep, True))}];
             ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>}]}}];
     ae_preceding_psymbols = []}
 ]
@@ -2150,8 +2127,8 @@ value list1sep_opt_e cg (formals, actuals) e = fun [
             | -> []
             ] ] ;
  *)
-value list0sep_opt_e cg (formals, actuals) e = fun [
-  ASlist loc LML_0 sym (Some (sep, True)) as s ->
+value list0sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 sym (Some (sep, True)) as s ->
   let ename = CG.fresh_name cg e.ae_name in
   let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
@@ -2181,7 +2158,7 @@ value list0sep_opt_e cg (formals, actuals) e = fun [
 ]
 ;
 
-value lift_lists cg acc e =
+value lift_lists (cg : CG.t) acc e =
   let open Llk_migrate in
   let dt = make_dt [] in
   let fallback_migrate_a_entry = dt.migrate_a_entry in
@@ -2191,7 +2168,7 @@ value lift_lists cg acc e =
 
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
-        ASlist loc LML_0 s0 None as s ->
+        ASlist loc g LML_0 s0 None as s ->
         let formals = dt.aux in
         let freevars = free_lids_of_a_symbol s0 in
         let formals =
@@ -2199,13 +2176,13 @@ value lift_lists cg acc e =
           |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
         let actuals = formals2actuals cg formals in
 
-        let new_e = list0_e1 cg (formals, actuals) e s in
+        let new_e = list0_e cg (formals, actuals) e s in
         do {
           acc.val := [new_e :: acc.val] ;
           ASnterm loc new_e.ae_name actuals None
         }
 
-      | ASlist loc LML_1 s0 None as s ->
+      | ASlist loc g LML_1 s0 None as s ->
         let formals = dt.aux in
         let freevars = free_lids_of_a_symbol s0 in
         let formals =
@@ -2213,13 +2190,13 @@ value lift_lists cg acc e =
           |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
         let actuals = formals2actuals cg formals in
 
-        let new_e = list1_e1 cg (formals, actuals) e s in
+        let new_e = list1_e cg (formals, actuals) e s in
         do {
           acc.val := [new_e :: acc.val] ;
           ASnterm loc new_e.ae_name actuals None
         }
 
-      | ASlist loc LML_1 s0 (Some (s1, False)) as s ->
+      | ASlist loc g LML_1 s0 (Some (s1, False)) as s ->
         let formals = dt.aux in
         let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
         let formals =
@@ -2227,21 +2204,14 @@ value lift_lists cg acc e =
           |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
         let actuals = formals2actuals cg formals in
 
-        (* [ sym2 ; y = sym -> y ] *)
-        let new_e1 = list1sep_e1 cg (formals, actuals) e s in
-
-        (*    entry: [ [ y = LIST0 e1_name -> y ] ] ; *)
-        let new_e2 = list1sep_e2 cg (formals, actuals) ~{new_e1=new_e1} e s in
-
-        (*    entry: [ [ x = sym ; y = e2_name -> [x :: y] ] ] ; *)
-        let new_e3 = list1sep_e3 cg (formals, actuals) ~{new_e2=new_e2} e s in
+        let new_e = list1sep_e cg (formals, actuals) e s in
 
         do {
-          acc.val := [new_e1 ; new_e2 ; new_e3 :: acc.val] ;
-          ASnterm loc new_e3.ae_name actuals None
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
         }
 
-      | ASlist loc LML_0 s0 (Some (s1, False)) as s ->
+      | ASlist loc g LML_0 s0 (Some (s1, False)) as s ->
         let formals = dt.aux in
         let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
         let formals =
@@ -2249,18 +2219,14 @@ value lift_lists cg acc e =
           |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
         let actuals = formals2actuals cg formals in
 
-        (* [ y = LIST1 sym SEP sym2 -> y ] *)
-        let new_e1 = list0sep_e1 cg (formals, actuals) e s in
-
-        (*    [ [ y = e1 -> y | -> [] ] ] ; *)
-        let new_e2 = list0sep_e2 cg (formals, actuals) ~{new_e1=new_e1} e s in
+        let new_e = list0sep_e cg (formals, actuals) e s in
 
         do {
-          acc.val := [new_e1 ; new_e2 :: acc.val] ;
-          ASnterm loc new_e2.ae_name actuals None
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
         }
 
-      | ASlist loc LML_1 s0 (Some (s1, True)) as s ->
+      | ASlist loc g LML_1 s0 (Some (s1, True)) as s ->
         let formals = dt.aux in
         let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
         let formals =
@@ -2275,7 +2241,7 @@ value lift_lists cg acc e =
           ASnterm loc new_e.ae_name actuals None
         }
 
-      | ASlist loc LML_0 s0 (Some (s1, True)) as s ->
+      | ASlist loc g LML_0 s0 (Some (s1, True)) as s ->
         let formals = dt.aux in
         let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
         let formals =
@@ -2478,11 +2444,11 @@ value rec infer_symbol cg stk ename = fun [
       ])
 
   | ASkeyw _ kw -> (PSyn.token (SPCL kw), True)
-  | ASlist _ LML_1 s _ ->
+  | ASlist _ _ LML_1 s _ ->
      let (re, _) = infer_symbol cg stk ename s in
      (re, False)
 
-  | ASlist _ _ _ _ -> (PSyn.epsilon, False)
+  | ASlist _ _ _ _ _ -> (PSyn.epsilon, False)
   | ASnext _ _ -> assert False
   | ASnterm _ nt _ (Some _) -> assert False
   | ASnterm _ nt _ None when not (CG.exists_entry cg nt) -> assert False
@@ -2745,30 +2711,30 @@ value rec compile1_symbol cg loc e s =
         [([((SpTrm loc <:patt< ($str:cls$, ($str:String.escaped tok$ as __x__)) >> <:vala<  None >>), SpoNoth)],
           None, <:expr< __x__ >>)]))
 
-    | ASlist loc LML_0 elem None ->
+    | ASlist loc _ LML_0 elem None ->
        let elem = compile1_symbol cg loc e elem in
        <:expr< parse_list0 $elem$ >>
 
-    | ASlist loc LML_1 elem None ->
+    | ASlist loc _ LML_1 elem None ->
        let elem = compile1_symbol cg loc e elem in
        <:expr< parse_list1 $elem$ >>
 
-    | ASlist loc LML_0 elem (Some (sep, False)) ->
+    | ASlist loc _ LML_0 elem (Some (sep, False)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list0_with_sep $elem$ $sep$ >>
 
-    | ASlist loc LML_1 elem (Some (sep, False)) ->
+    | ASlist loc _ LML_1 elem (Some (sep, False)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list1_with_sep $elem$ $sep$ >>
 
-    | ASlist loc LML_0 elem (Some (sep, True)) ->
+    | ASlist loc _ LML_0 elem (Some (sep, True)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >>
 
-    | ASlist loc LML_1 elem (Some (sep, True)) ->
+    | ASlist loc _ LML_1 elem (Some (sep, True)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >>
@@ -2833,7 +2799,7 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
        let exp = <:expr< parse_left_assoc $lhs$ $restrhs$ $exp$ >> in
         (SpNtr loc patt (must exp), SpoNoth)
 
-    | ASlist _ _ _ _ as s ->
+    | ASlist _ _ _ _ _ as s ->
        let exp = compile1_symbol cg loc e s in
        (SpNtr loc patt (must exp), SpoNoth)
 

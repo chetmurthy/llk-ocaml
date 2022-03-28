@@ -397,7 +397,7 @@ END;
     ;
 
   attribute_id:
-  [ [ l = LIST1 [ i = LIDENT -> i | i = UIDENT -> i ] SEP "." -> (loc, String.concat "." l)
+  [ [ l = GREEDY LIST1 [ i = LIDENT -> i | i = UIDENT -> i ] SEP "." -> (loc, String.concat "." l)
     | s = STRING -> (loc, s)
     ] ]
   ;
@@ -436,15 +436,15 @@ END;
     ] ]
   ;
   item_attributes:
-  [ [ l = V (LIST0 item_attribute) "itemattrs" -> l ]
+  [ [ l = V (GREEDY LIST0 item_attribute) "itemattrs" -> l ]
   ]
   ;
   alg_attributes:
-  [ [ l = V (LIST0 alg_attribute) "algattrs" -> l ]
+  [ [ l = V (GREEDY LIST0 alg_attribute) "algattrs" -> l ]
   ]
   ;
   alg_attributes_no_anti:
-  [ [ l = (LIST0 alg_attribute) -> l ]
+  [ [ l = (GREEDY LIST0 alg_attribute) -> l ]
   ]
   ;
   item_extension:
@@ -569,7 +569,7 @@ END;
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_type< $e1$ [@ $_attribute:attr$ ] >>
-      | e1 = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") →
+      | e1 = SELF; "with"; wcl = V (GREEDY LIST1 with_constr SEP "and") →
           <:module_type< $e1$ with $_list:wcl$ >>
       ]
     | [ "sig"; sg = signature; "end" →

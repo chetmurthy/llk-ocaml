@@ -490,11 +490,11 @@ external p_phony : PREDICTION empty ;
           str_item_to_inline <:str_item< exception $_excon:ec$ $_itemattrs:attrs$ >> ext
 
       | "external"; (ext,alg_attrs) = ext_attributes; i = V LIDENT "lid" ""; ":"; ls = type_binder_opt; t = ctyp; "=";
-        pd = V (LIST1 STRING) ; item_attrs = item_attributes ->
+        pd = V (GREEDY LIST1 STRING) ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-external"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           str_item_to_inline <:str_item< external $_lid:i$ : $_list:ls$ . $t$ = $_list:pd$ $_itemattrs:attrs$ >> ext
       | "external"; (ext,alg_attrs) = ext_attributes; "("; i = operator_rparen; ":"; ls = type_binder_opt; t = ctyp; "=";
-        pd = V (LIST1 STRING) ; item_attrs = item_attributes ->
+        pd = V (GREEDY LIST1 STRING) ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-external"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           str_item_to_inline <:str_item< external $lid:i$ : $_list:ls$ . $t$ = $_list:pd$ $_itemattrs:attrs$ >> ext
       | "include"; (ext,alg_attrs) = ext_attributes; me = module_expr ; item_attrs = item_attributes ->
@@ -614,7 +614,7 @@ external p_phony : PREDICTION empty ;
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_type< $e1$ [@ $_attribute:attr$ ] >>
-      | e1 = SELF; "with"; wcl = V (LIST1 with_constr SEP "and") ->
+      | e1 = SELF; "with"; wcl = V (GREEDY LIST1 with_constr SEP "and") ->
           <:module_type< $e1$ with $_list:wcl$ >> ]
     | [ "sig"; alg_attrs = alg_attributes_no_anti; sg = signature; "end" ->
           module_type_wrap_attrs <:module_type< sig $_list:sg$ end >> alg_attrs

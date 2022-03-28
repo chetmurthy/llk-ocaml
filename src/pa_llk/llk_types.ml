@@ -70,7 +70,7 @@ and a_psymbol =
 and a_symbol =
   [ ASflag of loc and a_symbol
   | ASkeyw of loc and string
-  | ASlist of loc and lmin_len and a_symbol and
+  | ASlist of loc and bool and lmin_len and a_symbol and
       option (a_symbol * bool)
   | ASnext of loc and list expr
   | ASnterm of loc and Name.t and list expr and option string
@@ -108,7 +108,7 @@ value compare_top x y = compare__top (x |> norm_top) (y |> norm_top) ;
 value loc_of_a_symbol = fun [
     ASflag loc _ -> loc
   | ASkeyw loc _ -> loc
-  | ASlist loc _ _ _ -> loc
+  | ASlist loc _ _ _ _ -> loc
   | ASnext loc _ -> loc
   | ASnterm loc _ _ _ -> loc
   | ASregexp loc _ -> loc
@@ -120,5 +120,13 @@ value loc_of_a_symbol = fun [
   | AStok loc _ _ -> loc
   | ASvala loc _ _ -> loc
   | ASsyntactic loc _ -> loc
+  ]
+;
+
+value check_eps = Name.mk "check_eps" ;
+value default_regexps =
+  let open Llk_regexps in
+  [
+    (check_eps, EPS Ploc.dummy)
   ]
 ;

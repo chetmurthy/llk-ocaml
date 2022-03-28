@@ -321,6 +321,45 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR Greedy_LIST0:
+EXPORT: e;
+
+e: [ [ h = e1 -> h ] ];
+e1: [ [ "FOO" ; l1 = e2 ; l2 = LIST0 INT -> (l1, l2) ] ] ;
+e2: [ [ l = GREEDY LIST0 INT -> l ] ] ;
+END;
+
+|foo}
+] ;;
+
+[@@@llk
+{foo|
+GRAMMAR Greedy_LIST1:
+EXPORT: e;
+
+e: [ [ h = e1 -> h ] ];
+e1: [ [ "FOO" ; l1 = e2 ; l2 = LIST0 INT -> (l1, l2) ] ] ;
+e2: [ [ l = GREEDY LIST1 INT -> l ] ] ;
+END;
+
+|foo}
+] ;;
+
+[@@@llk
+{foo|
+GRAMMAR Greedy_LIST1_SEP:
+EXPORT: e;
+
+e: [ [ h = e1 -> h ] ];
+e1: [ [ "FOO" ; l1 = e2 ; l2 = LIST0 INT -> (l1, l2) ] ] ;
+e2: [ [ l = GREEDY LIST1 INT SEP "," -> l ] ] ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true

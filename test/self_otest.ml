@@ -41,7 +41,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           ; gram_id=gid
           ; gram_exports=expl
           ; gram_external_asts=extl
-          ; gram_regexp_asts=rl
+          ; gram_regexp_asts=Llk_types.default_regexps @ rl
           ; gram_entries=el
     } ] ]
   ;
@@ -124,10 +124,10 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   ;
   symbol:
     [ "top" NONA
-      [ UIDENT/"LIST0"; s = SELF; sep = OPT sep_opt_sep ->
-         ASlist (loc, LML_0, s, sep)
-      | UIDENT/"LIST1"; s = SELF; sep = OPT sep_opt_sep ->
-         ASlist (loc, LML_1, s, sep)
+      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = SELF; sep = OPT sep_opt_sep ->
+         ASlist (loc, g, LML_0, s, sep)
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = SELF; sep = OPT sep_opt_sep ->
+         ASlist (loc, g, LML_1, s, sep)
       | UIDENT/"OPT"; s = SELF ->
          ASopt (loc, s)
       | UIDENT/"LEFT_ASSOC"; s1 = SELF ; UIDENT/"ACCUMULATE" ; s2 = SELF ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
