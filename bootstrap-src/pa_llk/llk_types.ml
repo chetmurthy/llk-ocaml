@@ -48,7 +48,8 @@ and a_entry =
     ae_pos : option a_position;
     ae_formals : list patt ;
     ae_levels : list a_level ;
-    ae_preceding_psymbols : list a_psymbol
+    ae_preceding_psymbols : list a_psymbol ;
+    ae_source_symbol : option a_symbol
   }
 and a_level =
   { al_loc : loc;
@@ -60,8 +61,9 @@ and a_rules =
     au_rules : list a_rule }
 and a_rule =
   { ar_loc : loc;
-    ar_psymbols : list a_psymbol;
+    ar_psymbols : a_psymbols;
     ar_action : option expr }
+and a_psymbols = list a_psymbol
 and a_psymbol =
   { ap_loc : loc;
     ap_patt : option patt;
@@ -69,7 +71,7 @@ and a_psymbol =
 and a_symbol =
   [ ASflag of loc and a_symbol
   | ASkeyw of loc and string
-  | ASlist of loc and lmin_len and a_symbol and
+  | ASlist of loc and bool and lmin_len and a_symbol and
       option (a_symbol * bool)
   | ASnext of loc and list expr
   | ASnterm of loc and Name.t and list expr and option string
@@ -107,7 +109,7 @@ value compare_top x y = compare__top (x |> norm_top) (y |> norm_top) ;
 value loc_of_a_symbol = fun [
     ASflag loc _ -> loc
   | ASkeyw loc _ -> loc
-  | ASlist loc _ _ _ -> loc
+  | ASlist loc _ _ _ _ -> loc
   | ASnext loc _ -> loc
   | ASnterm loc _ _ _ -> loc
   | ASregexp loc _ -> loc
@@ -119,5 +121,13 @@ value loc_of_a_symbol = fun [
   | AStok loc _ _ -> loc
   | ASvala loc _ _ -> loc
   | ASsyntactic loc _ -> loc
+  ]
+;
+
+value check_eps = Name.mk "check_eps" ;
+value default_regexps =
+  let open Llk_regexps in
+  [
+    (check_eps, EPS Ploc.dummy)
   ]
 ;

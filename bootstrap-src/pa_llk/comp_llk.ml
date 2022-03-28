@@ -35,13 +35,24 @@ value print_token_option = fun [
 ;
 
 module Ctr = struct
-  type t = ref int ;
-  value mk () = ref 0 ;
+  type t = { it : Hashtbl.t string (ref int) } ;
+  value mk () = { it = Hashtbl.create 23 } ;
+  value find {it=it} s =
+    match Hashtbl.find it s with [
+        x -> x
+      | exception Not_found -> do {
+          let v = ref 1 in
+          Hashtbl.add it s v ;
+          v
+        }
+      ]
+  ;
   value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
-
-  value fresh_name root ctr =
-    let n = next ctr in
-    Name.fresh root n ;
+  value fresh_name root it =
+    let r = find it (fst root) in
+    let n = next r in
+    Name.fresh root n
+  ;
 end ;
 
 module type TOKENSET = sig
@@ -219,8 +230,13 @@ module CompilingGrammar = struct
     SM.lookup nt (snd cg).follows
   };
 
-  value add_follow (cg : t) nt fi =
-    (snd cg).follows := SM.addset (snd cg).follows (nt, fi) ;
+  value trace_follow = ref False ;
+  value watch_follow ((nt : Name.t), (from:string), (ti : TS.t token)) = () ;
+  value add_follow (cg : t) ~{from:string} nt fi = do {
+    watch_follow (nt, from, fi) ;
+    (snd cg).follows := SM.addset (snd cg).follows (nt, fi)
+  }
+  ;
 
 
   value adjust0_loc loc loc' =
@@ -290,7 +306,7 @@ value infer_kinds cg loc s kinds =
   if kinds <> [] then kinds else
     match s with [
         ASflag _ _ -> ["flag"]
-      | ASlist _ _ _ _ -> ["list"]
+      | ASlist _ _ _ _ _ -> ["list"]
       | ASopt _ _ -> ["opt"]
       | AStok loc "CHAR" _ -> ["chr"]
       | AStok loc "FLOAT" _ -> ["flo"]
@@ -520,8 +536,8 @@ end ;
 value rec check_symbol cg env = fun [
     ASflag _ s -> check_symbol cg env s
   | ASkeyw _ _ -> ()
-  | ASlist _ _ s None -> check_symbol cg env s
-  | ASlist _ _ s (Some (s2, _)) -> do { check_symbol cg env s ; check_symbol cg env s2 }
+  | ASlist _ _ _ s None -> check_symbol cg env s
+  | ASlist _ _ _ s (Some (s2, _)) -> do { check_symbol cg env s ; check_symbol cg env s2 }
 
   | ASnext _ _ -> ()
   | ASnterm _ _ _ _ -> ()
@@ -1039,6 +1055,7 @@ value passthru_entry cg e from_name to_name =
   let actuals = formals2actuals cg e.ae_formals in
   {ae_loc = loc; ae_name = from_name; ae_formals = formals ; ae_pos = None;
    ae_preceding_psymbols = [];
+   ae_source_symbol = None;
    ae_levels =
      [{al_loc = loc; al_label = None; al_assoc = None;
        al_rules =
@@ -1297,7 +1314,7 @@ and psymbol cg ps = symbol cg ps.ap_symb
 and symbol cg = fun [
       ASflag _ s -> TS.(union (symbol cg s) (mk[None]))
     | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
-    | (ASlist loc lml elem_s sepb_opt) as s ->
+    | (ASlist loc _ lml elem_s sepb_opt) as s ->
        let felem = symbol cg elem_s in
        if TS.mem None felem then
          raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
@@ -1420,21 +1437,21 @@ value fi2fo cg loc fi = fifo_concat cg loc ~{must=True} fi TS.mt ;
 value watch_follow (nt : Name.t) (ff : TS.t token) = () ;
 
 
-value rec fifo_psymbols cg ff = fun [
+value rec fifo_psymbols cg e ff = fun [
       [] -> ff
-    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg ff t
-    | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg ff t
-    | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg ff t
+    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg e ff t
+    | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg e ff t
+    | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg e ff t
     | [h::t] ->
-       let ft = fifo_psymbols cg ff t in
-       fifo_psymbol cg ft h
+       let ft = fifo_psymbols cg e ff t in
+       fifo_psymbol cg e ft h
        
 ]
 
-and fifo_psymbol cg ff ps =
-  fifo_symbol cg ff ps.ap_symb
+and fifo_psymbol cg e ff ps =
+  fifo_symbol cg e ff ps.ap_symb
 
-(** [fifo_symbol cg ff]
+(** [fifo_symbol cg e ff]
 
     fimap: the result of First.exec, the map from nonterminal to
    FIRST-set mm: mutable map of FOLLOW sets ff: full-follow for the
@@ -1450,13 +1467,13 @@ and fifo_psymbol cg ff ps =
 
  *)
 
-and fifo_symbol cg ff = fun [
+and fifo_symbol cg e ff = fun [
       ASflag loc s | ASopt loc s ->
       (* the fifo of [FLAG s] is always the concat of the FIRST of s
          (minus eps) and the full-follow of [FLAG s], since [FLAG s]
          is nullable.
        *)
-      let _ = fifo_symbol cg ff s in
+      let _ = fifo_symbol cg e ff s in
       let fi_s = First.symbol cg s in do {
         if nullable fi_s then
           raise_failwith (CG.adjust_loc cg loc) "FLAG/OPT must not be nullable"
@@ -1466,7 +1483,7 @@ and fifo_symbol cg ff = fun [
 
     | ASkeyw _ kw -> TS.mk[(SPCL kw)]
 
-    | ASlist loc lml s sepopt_opt ->
+    | ASlist loc _ lml s sepopt_opt ->
        (* A. if a LIST has element that is NOT nullable, OR is LIST0,
           then the fifo is just the firsts of that element.
 
@@ -1494,7 +1511,7 @@ and fifo_symbol cg ff = fun [
 
            let _ = 
              let ff = fifo_concat cg loc ~{must=True} fi_s ff in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            fifo_concat cg loc ~{if_nullable=True} fi_s ff
 
@@ -1514,11 +1531,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = (fifo_concat cg loc ~{if_nullable=True} fi_s (fifo_concat cg loc fi_s2 ff)) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            fifo_concat cg loc ~{if_nullable=True} fi_s (TS.union (fi2fo cg loc fi_s2) ff)
 
@@ -1539,11 +1556,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            fifo_concat cg loc ~{if_nullable=True} fi_s (TS.union (fi2fo cg loc fi_s2) ff)
 
@@ -1557,7 +1574,7 @@ and fifo_symbol cg ff = fun [
          | (LML_0, None) ->
            let _ = 
              let ff = fifo_concat cg loc ~{must=True} fi_s ff in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            fifo_concat cg loc ~{must=True} fi_s ff
 
@@ -1577,11 +1594,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = (fifo_concat cg loc ~{if_nullable=True} fi_s (fifo_concat cg loc fi_s2 ff)) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff)
 
@@ -1601,11 +1618,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff)
 
@@ -1614,7 +1631,7 @@ and fifo_symbol cg ff = fun [
   | ASnext loc _ | ASself loc _ -> raise_failwithf (CG.adjust_loc cg loc) "fifo_symbol: internal error: NEXT should not occur here"
   | ASnterm loc nt _ _ as s when CG.exists_entry cg nt -> do {
         watch_follow nt ff ;
-        CG.add_follow cg nt ff ;
+        CG.add_follow cg ~{from=Name.print e.ae_name} nt ff ;
         let fi_s = First.symbol cg s in
         fifo_concat cg loc ~{if_nullable=True} fi_s ff
       }
@@ -1634,22 +1651,22 @@ and fifo_symbol cg ff = fun [
 
      let _ =
        let ff = TS.(union (fi2fo cg loc fi_s2) ff) in
-       fifo_symbol cg ff s1 in
+       fifo_symbol cg e ff s1 in
 
      let _ =
        let ff = TS.(union (fi2fo cg loc fi_s2) ff) in
-       fifo_symbol cg ff s2 in
+       fifo_symbol cg e ff s2 in
 
      fifo_concat cg loc ~{if_nullable=True} fi_s1
        (fifo_concat cg loc ~{if_nullable=True} fi_s2 ff)
 
   | ASrules loc rs ->
-     fifo_rules cg ff rs
+     fifo_rules cg e ff rs
 
   | AStok loc cls tokopt -> TS.mk [CLS cls tokopt]
 
   | ASvala loc s sl as s0 ->
-     let _ = fifo_symbol cg ff s in
+     let _ = fifo_symbol cg e ff s in
 
      let fi_vala = First.symbol cg s0 in
      fifo_concat cg loc ~{if_nullable=True} fi_vala ff
@@ -1657,20 +1674,20 @@ and fifo_symbol cg ff = fun [
   | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
 ]
 
-and fifo_rule cg ff r =
-  fifo_psymbols cg ff r.ar_psymbols
+and fifo_rule cg e ff r =
+  fifo_psymbols cg e ff r.ar_psymbols
 
-and fifo_rules cg ff rs =
+and fifo_rules cg e ff rs =
   let loc = rs.au_loc in
   let rl = rs.au_rules in
   let fi_rs = rl |> List.map (First.rule cg) |> TS.unionl in do {
     rl |> List.iter (fun r ->
-              ignore (fifo_rule cg ff r)) ;
+              ignore (fifo_rule cg e ff r)) ;
     fifo_concat cg loc ~{if_nullable=True} fi_rs ff
   }
 
-and fifo_level cg ff lev =
-  fifo_rules  cg ff lev.al_rules
+and fifo_level cg e ff lev =
+  fifo_rules  cg e ff lev.al_rules
 ;
 
 value comp1_entry cg e =
@@ -1678,7 +1695,7 @@ try
   let ll = e.ae_levels in do {
   assert (1 = List.length ll) ;
   let e_ff = CG.follow cg e.ae_name in
-  ignore (fifo_level cg e_ff (List.hd ll))
+  ignore (fifo_level cg e e_ff (List.hd ll))
 }
 with First.ExternalEntry _ -> ()
 ;
@@ -1698,7 +1715,7 @@ value rec comprec el cg = do {
 value exec0 cg ~{tops} el = do {
   ignore (First.exec0 cg el) ;
   tops |> List.iter (fun t ->
-              CG.add_follow cg t [CLS "EOI" None]) ;
+              CG.add_follow cg ~{from="entrypoint"} t [CLS "EOI" None]) ;
   comprec el cg
 }
 ;
@@ -1751,7 +1768,7 @@ value free_lids_of_patt e =
   }
 ;
 
-value free_lids_of_a_rules rs =
+value free_lids_of =
   let acc = ref [] in
   let pushe e =
     e |> free_lids_of_expr |> List.iter (Std.push acc) in
@@ -1776,11 +1793,21 @@ value free_lids_of_a_rules rs =
   } in
   let dt = { (dt) with migrate_a_rule = migrate_a_rule
                      ; migrate_a_symbol = migrate_a_symbol } in
-  do {
+  let of_a_rules rs = do {
+    acc.val := [] ;
     ignore (dt.migrate_a_rules dt rs) ;
     acc.val |> List.sort_uniq Stdlib.compare
-  }
+  } in
+  let of_a_symbol s = do {
+    acc.val := [] ;
+    ignore (dt.migrate_a_symbol dt s) ;
+    acc.val |> List.sort_uniq Stdlib.compare
+  } in
+  (of_a_rules, of_a_symbol)
 ;
+
+  value free_lids_of_a_rules = (fst free_lids_of) ;
+  value free_lids_of_a_symbol = (snd free_lids_of) ;
 
 end ;
 
@@ -1808,10 +1835,10 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
     ASflag loc s -> ASflag loc (lift_symbol cg acc e0 [] revpats s)
   | ASkeyw _ _ as s -> s
 
-  | ASlist loc lml s None ->
-     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) None
-  | ASlist loc lml s (Some (s2, b)) ->
-     ASlist loc lml (lift_symbol cg acc e0 [] revpats s) (Some (lift_symbol cg acc e0 [] revpats s2, b))
+  | ASlist loc g lml s None ->
+     ASlist loc g lml (lift_symbol cg acc e0 [] revpats s) None
+  | ASlist loc g lml s (Some (s2, b)) ->
+     ASlist loc g lml (lift_symbol cg acc e0 [] revpats s) (Some (lift_symbol cg acc e0 [] revpats s2, b))
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
@@ -1822,7 +1849,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASleft_assoc loc s1 s2 e ->
      ASleft_assoc loc (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
 
-  | ASrules loc rl ->
+  | ASrules loc rl as s ->
      let formals = e0.ae_formals @ (List.rev revpats) in
      let ids_of_rl = free_lids_of_a_rules rl in
      let formals =
@@ -1837,6 +1864,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
        ; ae_formals = formals
        ; ae_levels = [{al_loc = rl.au_loc; al_label = None ; al_assoc = None ; al_rules = rl}]
        ; ae_preceding_psymbols = left_psyms
+       ; ae_source_symbol = Some s
        } in do {
          Std.push acc new_e ;
          ASnterm rl.au_loc new_ename actuals None
@@ -1877,7 +1905,418 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 end ;
 
 
-module S7SeparateSyntactic = struct
+module S7LiftLists = struct
+  (** in each entry, replace all LIST symbols with a new entry;
+
+   LIST0 sym ->
+
+   entry: [ [ x = sym ; y = entry -> [x :: y]
+            | check_eps ; -> [] ] ] ;
+
+================================================================
+
+   LIST0 sym SEP sym2 ->
+
+   entry: [ [ y = LIST1 sym SEP sym2 -> y
+            | check_eps -> [] ] ] ;
+
+================================================================
+
+   LIST1 sym ->
+
+   entry: [ [ x = sym ; y = LIST0 sym -> [x :: y] ] ] ;
+
+================================================================
+
+   LIST1 sym SEP sym2 ->
+
+   entry: [ [ x = sym ; y = LIST0 [ sym2 ; y = sym -> y ] -> [x :: y] ] ] ;
+
+================================================================
+
+   LIST0 sym SEP sym2 OPT_SEP ->
+
+   entry: [ [ x = sym ; check_eps -> [x]
+            | x = sym ; sym2 ; y = entry -> [x :: y]
+            | check_eps -> []
+            ] ] ;
+
+================================================================
+
+   LIST1 sym SEP sym2 OPT_SEP ->
+
+   entry: [ [ x = sym ; check_eps -> [x]
+            | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
+            ] ] ;
+
+================================================================
+
+   *)
+
+open FreeLids ;
+
+(** lift_lists
+
+    This will lift out *outermost* LIST symbols, replacing them
+    with ASnterm symbols.
+
+    As we recurse down, we build up an env of freevars, and at the point
+    we find a LIST symbol, we intersect with free-lids of the symbol, to
+    get the formals of the new entry.
+ *)
+
+value list0_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 s0 None as s ->
+  let new_ename = CG.fresh_name cg e.ae_name in
+  let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
+               ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
+                             ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
+                               ;ap_symb=ASnterm loc new_ename actuals None}]} in
+  let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
+  let rule1_psl = if g then [ps_eps] else [] in
+  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = rule1_psl} in
+  let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
+  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
+  {
+    ae_name = new_ename
+  ; ae_loc = loc
+  ; ae_pos = None
+  ; ae_formals = formals
+  ; ae_preceding_psymbols = []
+  ; ae_levels = [level]
+  ; ae_source_symbol = Some s
+  }
+]
+;
+
+value list1_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 s0 None as s ->
+  let new_ename = CG.fresh_name cg e.ae_name in
+  let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let s' = ASlist loc g LML_0 s0 None in
+  let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
+               ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
+                             ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
+                               ;ap_symb=s'}]} in
+  let rules = {au_loc=loc; au_rules=[rule0]} in
+  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
+  {
+    ae_name = new_ename
+  ; ae_loc = loc
+  ; ae_pos = None
+  ; ae_formals = formals
+  ; ae_preceding_psymbols = []
+  ; ae_levels = [level]
+  ; ae_source_symbol = Some s
+  }
+]
+;
+
+value list1sep_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 sym (Some (sep, False)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  { ae_loc = loc
+  ; ae_name = ename
+  ; ae_pos = None
+  ; ae_formals = []
+  ; ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+        {au_loc = loc;
+         au_rules = [
+             { ar_loc = loc
+             ; ar_psymbols = [
+                 { ap_loc = loc
+                 ; ap_patt = Some <:patt< $lid:x$ >>
+                 ; ap_symb = sym
+                 }
+               ; { ap_loc = loc
+                 ; ap_patt = Some <:patt< $lid:y$ >>
+                 ; ap_symb = ASlist loc g LML_0
+                               (ASrules loc { au_loc = loc
+                                            ; au_rules = [{ ar_loc = loc
+                                                          ; ar_psymbols =[
+                                                              { ap_loc = loc
+                                                              ; ap_patt = None
+                                                              ; ap_symb = sep
+                                                              }
+                                                            ; { ap_loc = loc
+                                                              ; ap_patt = Some <:patt< $lid:y$ >>
+                                                              ; ap_symb = sym
+                                                            }]
+                                                          ; ar_action = Some <:expr< $lid:y$ >>}]})
+                               None
+               }]
+             ; ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>
+             }
+     ]}}]
+  ; ae_preceding_psymbols = []
+  ; ae_source_symbol = Some s
+  }
+]
+;
+
+
+value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 sym (Some (sep, False)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let y = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  { ae_loc = loc
+  ; ae_name = ename
+  ; ae_pos = None
+  ; ae_formals = []
+  ; ae_levels =
+      [{ al_loc = loc
+       ; al_label = None
+       ; al_assoc = None
+       ; al_rules =
+           { au_loc = loc
+           ; au_rules =
+               [{ ar_loc = loc
+                ; ar_psymbols = [
+                    { ap_loc = loc
+                    ; ap_patt = Some <:patt< $lid:y$ >>
+                    ; ap_symb = ASlist loc g LML_1 sym (Some (sep, False))
+                  }]
+                ; ar_action = Some <:expr< $lid:y$ >>
+                }
+               ; { ar_loc = loc
+                 ; ar_psymbols = [
+                     { ap_loc = loc
+                     ; ap_patt = None
+                     ; ap_symb = ASregexp loc check_eps
+                   }]
+                 ; ar_action = Some <:expr< [] >>
+               }]
+           }
+       }
+      ]
+  ; ae_preceding_psymbols = []
+  ; ae_source_symbol = Some s
+  }
+]
+;
+
+(*
+   entry: [ [ x = sym -> [x]
+            | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
+            ] ] ;
+ *)
+value list1sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 sym (Some (sep, True)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+
+  {ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
+   ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+         {au_loc = loc;
+          au_rules =
+            [{ar_loc = loc;
+              ar_psymbols =
+                [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                              ap_symb = sym}];
+              ar_action = Some <:expr< [$lid:x$] >>};
+              {ar_loc = loc;
+               ar_psymbols =
+                 [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                               ap_symb = sym};
+                  {ap_loc = loc; ap_patt = None;
+                   ap_symb = sep};
+                  {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
+                                                               ap_symb = ASlist loc g LML_0 sym (Some (sep, True))}];
+               ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>}]}}]
+   ; ae_preceding_psymbols = []
+   ; ae_source_symbol = Some s
+  }
+]
+;
+
+(*
+   entry: [ [ x = sym -> [x]
+            | x = sym ; sym2 ; y = entry -> [x :: y]
+            | -> []
+            ] ] ;
+ *)
+value list0sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 sym (Some (sep, True)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  
+  {ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
+   ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+         {au_loc = loc;
+          au_rules =
+            [{ar_loc = loc;
+              ar_psymbols =
+                [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                              ap_symb = sym}];
+              ar_action = Some <:expr< [$lid:x$] >>};
+              {ar_loc = loc;
+               ar_psymbols =
+                 [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                               ap_symb = sym};
+                  {ap_loc = loc; ap_patt = None;
+                   ap_symb = sep};
+                  {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
+                                                               ap_symb = ASnterm loc ename [] None}];
+               ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>};
+               {ar_loc = loc; ar_psymbols = []; ar_action = Some <:expr< [] >>}]}}]
+   ; ae_preceding_psymbols = []
+   ; ae_source_symbol = Some s
+  }
+]
+;
+
+value lift_lists1 (cg : CG.t) acc e =
+  let open Llk_migrate in
+  let dt = make_dt [] in
+  let fallback_migrate_a_entry = dt.migrate_a_entry in
+  let migrate_a_entry dt e =
+    let dt = {(dt) with aux = e.ae_formals} in
+    {(e) with ae_levels = List.map (dt.migrate_a_level dt) e.ae_levels} in
+
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASlist loc g LML_0 s0 None as s ->
+        let formals = dt.aux in
+        let freevars = free_lids_of_a_symbol s0 in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list0_e cg (formals, actuals) e s in
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc g LML_1 s0 None as s ->
+        let formals = dt.aux in
+        let freevars = free_lids_of_a_symbol s0 in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list1_e cg (formals, actuals) e s in
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc g LML_1 s0 (Some (s1, False)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list1sep_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc g LML_0 s0 (Some (s1, False)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list0sep_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc g LML_1 s0 (Some (s1, True)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list1sep_opt_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc g LML_0 s0 (Some (s1, True)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list0sep_opt_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+
+  let fallback_migrate_a_psymbols = dt.migrate_a_psymbols in
+  let migrate_a_psymbols dt psl = match psl with [
+        [] -> []
+      | [h :: t] ->
+         let dt' = match h.ap_patt with [
+               None -> dt
+             | Some p -> {(dt) with aux = dt.aux@[p]}
+             ] in
+         [ dt.migrate_a_psymbol dt h :: dt'.migrate_a_psymbols dt' t]
+      ] in
+  let dt = {(dt) with
+             migrate_a_entry = migrate_a_entry
+           ; migrate_a_psymbols = migrate_a_psymbols
+           ; migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value lift_lists cg e =
+  let acc = ref [] in
+  let e = lift_lists1 cg acc e in
+  (e, acc.val)
+;
+
+value rec exec1_entry (cg : CG.t) e =
+  let (e, newel) = lift_lists cg e in
+  [e :: List.concat_map (exec1_entry cg) newel]
+;
+
+value exec0 cg el =
+  List.concat_map (exec1_entry cg) el
+;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S8SeparateSyntactic = struct
   (** in each entry, separate entries with some rules that start
       with syntactic predicates and some that do not, into two entries,
       one with syntactic predicates, and the other without.
@@ -2031,11 +2470,11 @@ value rec infer_symbol cg stk ename = fun [
       ])
 
   | ASkeyw _ kw -> (PSyn.token (SPCL kw), True)
-  | ASlist _ LML_1 s _ ->
+  | ASlist _ _ LML_1 s _ ->
      let (re, _) = infer_symbol cg stk ename s in
      (re, False)
 
-  | ASlist _ _ _ _ -> (PSyn.epsilon, False)
+  | ASlist _ _ _ _ _ -> (PSyn.epsilon, False)
   | ASnext _ _ -> assert False
   | ASnterm _ nt _ (Some _) -> assert False
   | ASnterm _ nt _ None when not (CG.exists_entry cg nt) -> assert False
@@ -2298,30 +2737,30 @@ value rec compile1_symbol cg loc e s =
         [([((SpTrm loc <:patt< ($str:cls$, ($str:String.escaped tok$ as __x__)) >> <:vala<  None >>), SpoNoth)],
           None, <:expr< __x__ >>)]))
 
-    | ASlist loc LML_0 elem None ->
+    | ASlist loc _ LML_0 elem None ->
        let elem = compile1_symbol cg loc e elem in
        <:expr< parse_list0 $elem$ >>
 
-    | ASlist loc LML_1 elem None ->
+    | ASlist loc _ LML_1 elem None ->
        let elem = compile1_symbol cg loc e elem in
        <:expr< parse_list1 $elem$ >>
 
-    | ASlist loc LML_0 elem (Some (sep, False)) ->
+    | ASlist loc _ LML_0 elem (Some (sep, False)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list0_with_sep $elem$ $sep$ >>
 
-    | ASlist loc LML_1 elem (Some (sep, False)) ->
+    | ASlist loc _ LML_1 elem (Some (sep, False)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list1_with_sep $elem$ $sep$ >>
 
-    | ASlist loc LML_0 elem (Some (sep, True)) ->
+    | ASlist loc _ LML_0 elem (Some (sep, True)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list0_with_sep_opt_trailing $elem$ $sep$ >>
 
-    | ASlist loc LML_1 elem (Some (sep, True)) ->
+    | ASlist loc _ LML_1 elem (Some (sep, True)) ->
        let elem = compile1_symbol cg loc e elem in
        let sep = compile1_symbol cg loc e sep in
        <:expr< parse_list1_with_sep_opt_trailing $elem$ $sep$ >>
@@ -2386,7 +2825,7 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
        let exp = <:expr< parse_left_assoc $lhs$ $restrhs$ $exp$ >> in
         (SpNtr loc patt (must exp), SpoNoth)
 
-    | ASlist _ _ _ _ as s ->
+    | ASlist _ _ _ _ _ as s ->
        let exp = compile1_symbol cg loc e s in
        (SpNtr loc patt (must exp), SpoNoth)
 
@@ -2859,7 +3298,7 @@ value compile_sp_entry cg e = do {
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S7SeparateSyntactic.is_syntactic_predicate_rule rl in
+  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S8SeparateSyntactic.is_syntactic_predicate_rule rl in
   assert (List.length nonsp_rl = 1) ;
   assert (sp_rl <> []) ;
   let fallback = match List.hd nonsp_rl with [
@@ -2891,7 +3330,7 @@ value compile_sp_entry cg e = do {
 ;
 
 value compile_entry cg e =
-  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S7SeparateSyntactic.is_syntactic_predicate_rule then
+  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S8SeparateSyntactic.is_syntactic_predicate_rule then
     compile_sp_entry cg e
   else
     compile1_entry cg e
@@ -3017,6 +3456,7 @@ end ;
 module Dump = struct
 
 value exec msg cg = do {
+  let pctxt = if Codegen.report_verbose.val then Pr.normal else Pr.errmsg in
   Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
   Fmt.(pf stderr "================================================================\n") ;
   (CG.gram_entries cg)
@@ -3024,12 +3464,12 @@ value exec msg cg = do {
          let fi = CG.first cg e.ae_name in
          let fo = CG.follow cg e.ae_name in
          Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-                Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
+                Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
                 (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
          )
        ) ;
   Fmt.(pf stderr "================================================================\n") ;
-  prerr_string Pr.(top ~{pctxt=errmsg} Pprintf.empty_pc (CG.g cg)) ;
+  prerr_string Pr.(top ~{pctxt=pctxt} Pprintf.empty_pc (CG.g cg)) ;
   Fmt.(pf stderr "\n================================================================\n%!") ;
   cg
 }
@@ -3106,10 +3546,32 @@ value lambda_lift loc ?{bootstrap=False} s =
   |> SortEntries.exec
 ;
 
-value separate_syntactic loc ?{bootstrap=False} s =
+value lift_lists loc ?{bootstrap=False} s =
   s
   |> lambda_lift loc ~{bootstrap=bootstrap}
-  |> S7SeparateSyntactic.exec
+  |> S7LiftLists.exec
+  |> Dump.exec "After S7LiftLists"
+;
+
+value left_factorize2 loc ?{bootstrap=False} s =
+  s
+  |> lift_lists loc ~{bootstrap=bootstrap}
+  |> S5LeftFactorize.exec
+;
+
+value lambda_lift2 loc ?{bootstrap=False} s =
+  s
+  |> left_factorize2 loc ~{bootstrap=bootstrap}
+  |> CheckLexical.exec
+  |> S6LambdaLift.exec
+  |> CheckLexical.exec
+  |> SortEntries.exec
+;
+
+value separate_syntactic loc ?{bootstrap=False} s =
+  s
+  |> lambda_lift2 loc ~{bootstrap=bootstrap}
+  |> S8SeparateSyntactic.exec
 ;
 
 value first loc ?{bootstrap=False} s =

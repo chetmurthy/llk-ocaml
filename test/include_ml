@@ -8,23 +8,23 @@
 #require "bos";;
 #require "str";;
 
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
-
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
 
 (*
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
  *)
 
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
-
+ *)
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;

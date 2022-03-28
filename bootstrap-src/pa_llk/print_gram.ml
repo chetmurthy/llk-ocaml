@@ -163,10 +163,14 @@ and pattern ~{pctxt} pc p =
 and symbol~{pctxt} pc =
   let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
   fun [
-      ASlist _ lml symb None ->
-       pprintf pc "LIST%s@;%p" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
-    | ASlist _ lml symb (Some (sep,b)) ->
-       pprintf pc "LIST%s@;%p@ @[SEP@;%p%s@]" (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
+      ASlist _ g lml symb None ->
+       pprintf pc "%sLIST%s@;%p"
+         (if g then "GREEDY " else "")
+         (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
+    | ASlist _ g lml symb (Some (sep,b)) ->
+       pprintf pc "%sLIST%s@;%p@ @[SEP@;%p%s@]"
+         (if g then "GREEDY " else "")
+         (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
          (simple_symbol ~{pctxt=pctxt}) symb
          (simple_symbol ~{pctxt=pctxt}) sep
          (if b then " OPT_SEP" else "")
@@ -225,7 +229,7 @@ and simple_symbol~{pctxt} pc sy =
   | ASsyntactic _ sym ->
        pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
 
-  | ASlist _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
+  | ASlist _ _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 
@@ -234,8 +238,16 @@ and preceding_psymbols ~{pctxt} pc = fun [
     | psl ->
        pprintf pc "(* PRECEDING: [%p] *)@;" (plist (psymbol ~{pctxt=pctxt}) 0) (pair_with "; " psl)
     ]      
+and source_symbol ~{pctxt} pc = fun [
+      None -> pprintf pc ""
+    | Some s ->
+       pprintf pc "(* SOURCE: [%p] *)@;" (symbol ~{pctxt=pctxt}) s
+    ]      
 
-and entry ~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll ; ae_preceding_psymbols = preceding_psl } ->
+and entry ~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae_pos=pos ; ae_levels=ll
+                             ; ae_preceding_psymbols = preceding_psl
+                             ; ae_source_symbol = ss
+                           } ->
     let force_vertic =
       if flag_equilibrate_cases.val then
         let has_vertic =
@@ -257,10 +269,11 @@ and entry ~{pctxt} pc =fun { ae_loc=loc; ae_formals = formals ; ae_name=name; ae
     in
     let formals_opt = match formals with [ [] -> None | l -> Some l ] in
     comm_bef pc.ind loc ^
-      pprintf pc "@[<b>%s%p:%p@;%p[ %p ]@ ;@]"
+      pprintf pc "@[<b>%s%p:%p@;%p@;%p[ %p ]@ ;@]"
         (Name.print name)
         (pr_option (entry_formals ~{pctxt=pctxt})) formals_opt
         (preceding_psymbols ~{pctxt=pctxt}) preceding_psl
+        (source_symbol ~{pctxt=pctxt}) ss
         (pr_option (position pctxt)) pos 
         (vlist2 (level ~{pctxt=pctxt} force_vertic) (bar_before (level ~{pctxt=pctxt} force_vertic))) ll      
 

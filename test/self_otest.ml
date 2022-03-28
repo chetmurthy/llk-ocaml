@@ -138,7 +138,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | s = NEXT -> s
       ]
     | "vala"
-      [ UIDENT/"V"; s = NEXT; al = LIST0 STRING ->
+      [ UIDENT/"V"; s = NEXT; al = GREEDY LIST0 STRING ->
           ASvala (loc, s, al)
       | s = NEXT -> s
       ]

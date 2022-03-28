@@ -21,9 +21,9 @@ REGEXPS:
   check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
 END;
 
-external expr : PREDICTION LIDENT | "(" | "[" | "{" ;
-external expr_LEVEL_simple : PREDICTION LIDENT | "(" | "[" | "{" ;
-external patt : PREDICTION LIDENT | "(" | "[" | "{" ;
+external expr : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
+external expr_LEVEL_simple : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
+external patt : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
 external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $_lid ;
 
   bootstrapped_top:
@@ -138,7 +138,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | s = NEXT -> s
       ]
     | "vala"
-      [ UIDENT/"V"; s = SELF; al = LIST0 STRING ->
+      [ UIDENT/"V"; s = SELF; al = GREEDY LIST0 STRING ->
           ASvala (loc, s, al)
       | s = NEXT -> s
       ]
