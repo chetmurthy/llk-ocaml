@@ -62,19 +62,19 @@ END;
 
 
 
-value matches ?{exact=True} ~{pattern} text =
-  let pattern = if exact then Str.quote pattern else pattern in
+value matches ?{quote=True} ~{pattern} text =
+  let pattern = if quote then Str.quote pattern else pattern in
   match Str.search_forward (Str.regexp pattern) text 0 with [
     _ -> True
   | exception Not_found -> False
 ]
 ;
 
-value assert_raises_exn_pattern ?{exact=True} pattern f =
+value assert_raises_exn_pattern ?{quote=True} pattern f =
   Testutil.assert_raises_exn_pred
     (fun e ->
       let s = Printexc.to_string e in
-      matches ~{exact=exact} ~{pattern=pattern} s)
+      matches ~{quote=quote} ~{pattern=pattern} s)
     f
 ;
 
@@ -86,7 +86,7 @@ value tests = "simple" >::: [
       "Error1" >:: (fun _ -> do {
         assert_raises_exn_pattern "[e] or [e2] or [e3] expected (in [etop1])"
           (fun () -> pa Interp.etop1 {foo|foo a|foo})
-      ; assert_raises_exn_pattern {foo|[x = e] or [x = e2] or [x = e3] expected after [FLAG 'foo'] (in [etop1])|foo}
+      ; assert_raises_exn_pattern {foo|[x = e] or [x = e2] or [x = e3]|foo}
           (fun () -> pa Error1.etop1 {foo|foo a|foo})
 
       ; assert_raises_exn_pattern "[e] or [e2] or [e3] expected after 'foo' (in [etop2])"
@@ -96,7 +96,7 @@ value tests = "simple" >::: [
 
       ; assert_raises_exn_pattern "illegal begin of etop1"
           (fun () -> (pa Interp.etop1 {foo|bar|foo}))
-      ; assert_raises_exn_pattern ~{exact=True} ""
+      ; assert_raises_exn_pattern ~{quote=True} ""
           (fun () -> (pa Error1.etop1 {foo|bar|foo}))
 
       ; assert_raises_exn_pattern "illegal begin of etop2"
