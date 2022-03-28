@@ -21,9 +21,9 @@ REGEXPS:
   check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
 END;
 
-external expr : PREDICTION LIDENT ;
-external expr_LEVEL_simple : PREDICTION LIDENT ;
-external patt : PREDICTION LIDENT ;
+external expr : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
+external expr_LEVEL_simple : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
+external patt : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
 external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $_lid ;
 
   bootstrapped_top:
@@ -125,20 +125,20 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   ;
   symbol:
     [ "top" NONA
-      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = SELF; sep = GREEDY OPT sep_opt_sep ->
+      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_0, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = SELF; sep = GREEDY OPT sep_opt_sep ->
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_1, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"OPT"; s = SELF ->
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"OPT"; s = NEXT ->
          ASopt (loc, g, s)
-      | UIDENT/"LEFT_ASSOC"; s1 = SELF ; UIDENT/"ACCUMULATE" ; s2 = SELF ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
+      | UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc (loc, s1, s2, e)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"FLAG"; s = SELF ->
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"FLAG"; s = NEXT ->
           ASflag (loc, g, s)
       | s = NEXT -> s
       ]
     | "vala"
-      [ UIDENT/"V"; s = NEXT; al = GREEDY LIST0 STRING ->
+      [ UIDENT/"V"; s = SELF; al = GREEDY LIST0 STRING ->
           ASvala (loc, s, al)
       | s = NEXT -> s
       ]
@@ -158,6 +158,8 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | e = STRING ->
           ASkeyw (loc, e)
 
+      | UIDENT/"ANTI" ; l = GREEDY LIST1 STRING -> ASanti(loc, l)
+
       | id = LIDENT ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT/"LEVEL"; s = STRING -> s ] ->
@@ -166,7 +168,12 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | UIDENT/"PREDICT" ; id = LIDENT ->
         ASregexp (loc, Name.mk id)
 
-      | "("; s_t = SELF; ")" -> s_t ] ]
+      | UIDENT/"INFER" ; n = INT ->
+        ASinfer (loc, int_of_string n)
+
+      | "("; s_t = NEXT; ")" -> s_t
+      | "("; s_t = NEXT; ")" ; "?" -> ASsyntactic (loc, s_t)
+      ] ]
   ;
   pattern:
     [ [ i = LIDENT -> <:patt< $lid:i$ >>
@@ -197,7 +204,9 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
  
   e2': [ [ x = e1 ; "?" -> OPT (loc, x) | x = e1 -> x ] ] ;
 
-  e1: [ [ x = e0; "*" -> STAR (loc, x) | x = e0 -> x ] ] ;
+  e1: [ [ x = e0; "*" -> STAR (loc, x)
+        | x = e0; "+" -> CONC(loc, [x; STAR (loc, x)])
+        | x = e0 -> x ] ] ;
 
   e0:
     [ [ t = token -> TOKEN (loc, t)
@@ -205,6 +214,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | "eps" -> EPS loc
       | "empty" -> DISJ(loc, [])
       | "_" -> ANY loc
+      | "[" ; "^"; l = LIST1 token ; "]" -> EXCEPT (loc, l)
       | x = LIDENT -> ID(loc, Name.mk x)
       ]
     ]

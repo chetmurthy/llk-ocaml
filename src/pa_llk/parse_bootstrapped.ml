@@ -120,14 +120,14 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           {ap_loc = loc; ap_patt = None; ap_symb = s} ] ]
   ;
   sep_opt_sep:
-    [ [ sep = UIDENT/"SEP"; t = symbol; b = FLAG [ UIDENT/"OPT_SEP" ] ->
+    [ [ sep = UIDENT/"SEP"; t = symbol; b = GREEDY FLAG [ UIDENT/"OPT_SEP" ] ->
           (t, b) ] ]
   ;
   symbol:
     [ "top" NONA
-      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = NEXT; sep = OPT sep_opt_sep ->
+      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_0, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = NEXT; sep = OPT sep_opt_sep ->
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_1, s, sep)
       | g = FLAG UIDENT/"GREEDY" ; UIDENT/"OPT"; s = NEXT ->
          ASopt (loc, g, s)

@@ -175,7 +175,9 @@ and symbol~{pctxt} pc =
          (simple_symbol ~{pctxt=pctxt}) sep
          (if b then " OPT_SEP" else "")
 
-    | ASopt _ sym -> pprintf pc "OPT@;%p" (simple_symbol ~{pctxt=pctxt}) sym
+    | ASopt _ g sym -> pprintf pc "%sOPT@;%p" 
+         (if g then "GREEDY " else "")
+         (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASleft_assoc _ sym1 sym2 e ->
        pprintf pc "LEFT_ASSOC@;%p@;%p WITH %p"
@@ -183,11 +185,14 @@ and symbol~{pctxt} pc =
          (simple_symbol ~{pctxt=pctxt}) sym2
          expr e
 
-    | ASflag _ sym ->
-       pprintf pc "FLAG@;%p" (simple_symbol ~{pctxt=pctxt}) sym
+    | ASflag _ g sym ->
+       pprintf pc "%sFLAG@;%p"
+         (if g then "GREEDY " else "")
+         (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASvala _ sy sl ->
-       pprintf pc "V @[<2>%p%p@]" (simple_symbol ~{pctxt=pctxt}) sy (string_list pctxt) sl
+       pprintf pc "V @[<2>%p%p@]"
+         (simple_symbol ~{pctxt=pctxt}) sy (string_list pctxt) sl
     | sy -> (simple_symbol ~{pctxt=pctxt}) pc sy
     ]
 
@@ -229,7 +234,10 @@ and simple_symbol~{pctxt} pc sy =
   | ASsyntactic _ sym ->
        pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
 
-  | ASlist _ _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
+  | ASanti _ sl ->
+     pprintf pc "ANTI @[<2>%p@]" (string_list pctxt) sl
+
+  | ASlist _ _ _ _ _ | ASopt _ _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 

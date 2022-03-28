@@ -69,7 +69,7 @@ and a_psymbol =
     ap_patt : option patt;
     ap_symb : a_symbol }
 and a_symbol =
-  [ ASflag of loc and a_symbol
+  [ ASflag of loc and bool and a_symbol
   | ASkeyw of loc and string
   | ASlist of loc and bool and lmin_len and a_symbol and
       option (a_symbol * bool)
@@ -77,13 +77,14 @@ and a_symbol =
   | ASnterm of loc and Name.t and list expr and option string
   | ASregexp of loc and Name.t
   | ASinfer of loc and int
-  | ASopt of loc and a_symbol
+  | ASopt of loc and bool and a_symbol
   | ASleft_assoc of loc and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
   | ASself of loc and list expr
   | AStok of loc and string and option string
   | ASvala of loc and a_symbol and list string
   | ASsyntactic of loc and a_symbol
+  | ASanti of loc and list string
   ]
 and lmin_len =
   [ LML_0 | LML_1 ]
@@ -107,19 +108,20 @@ value eq_top x y = equal__top (x |> norm_top) (y |> norm_top) ;
 value compare_top x y = compare__top (x |> norm_top) (y |> norm_top) ;
 
 value loc_of_a_symbol = fun [
-    ASflag loc _ -> loc
+    ASflag loc _ _ -> loc
   | ASkeyw loc _ -> loc
   | ASlist loc _ _ _ _ -> loc
   | ASnext loc _ -> loc
   | ASnterm loc _ _ _ -> loc
   | ASregexp loc _ -> loc
   | ASinfer loc _ -> loc
-  | ASopt loc _ -> loc
+  | ASopt loc _ _ -> loc
   | ASleft_assoc loc _ _ _ -> loc
   | ASrules loc _ -> loc
   | ASself loc _ -> loc
   | AStok loc _ _ -> loc
   | ASvala loc _ _ -> loc
+  | ASanti loc _ -> loc
   | ASsyntactic loc _ -> loc
   ]
 ;

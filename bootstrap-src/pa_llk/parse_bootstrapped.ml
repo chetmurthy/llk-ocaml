@@ -639,11 +639,11 @@ module LLKGram =
                     '"", ":";
                     pos =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[pos = OPT position] expected after [n = LIDENT; formals = entry__0001; ':'] (in [entry])"
-                        (parse_opt position);
+                        ~msg:"[pos = entry__0004] expected after [n = LIDENT; formals = entry__0001; ':'] (in [entry])"
+                        entry__0004;
                     ll =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[ll = level_list] expected after [n = LIDENT; formals = entry__0001; ':'; pos = OPT position] (in [entry])"
+                        ~msg:"[ll = level_list] expected after [n = LIDENT; formals = entry__0001; ':'; pos = entry__0004] (in [entry])"
                         level_list >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {ae_loc = loc; ae_formals = formals; ae_name = Name.mk n;
@@ -707,10 +707,10 @@ module LLKGram =
           with
             0 ->
               (parser
-                 [< x__0019 = entry__0004;
+                 [< x__0019 = entry__0005;
                     y__0010 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0010 = entry__0003] expected after [x__0019 = entry__0004] (in [entry])"
+                        ~msg:"[y__0010 = entry__0003] expected after [x__0019 = entry__0005] (in [entry])"
                         entry__0003 >] ->
                    x__0019 :: y__0010)
                 __strm__
@@ -722,7 +722,27 @@ module LLKGram =
           | Some ("", "]") -> 1
           | _ -> raise Stream.Failure
         and entry__0004 __strm__ =
-          match entry__0004_matcher __strm__[@llk.first_follow "\",\""] with
+          match
+            entry__0004_matcher __strm__[@llk.first_follow "\"[\" | UIDENT \"AFTER\" | UIDENT \"BEFORE\" | UIDENT \"FIRST\" | UIDENT \"LAST\" | UIDENT \"LEVEL\" | UIDENT \"LIKE\""]
+          with
+            0 -> (parser [< x__0051 = position >] -> Some x__0051) __strm__
+          | 1 -> (parser [< >] -> None) __strm__
+          | _ -> raise Stream.Failure
+        and entry__0004_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("UIDENT", "AFTER") -> 0
+          | Some ("UIDENT", "BEFORE") -> 0
+          | Some ("UIDENT", "FIRST") -> 0
+          | Some ("UIDENT", "LAST") -> 0
+          | Some ("UIDENT", "LEVEL") -> 0
+          | Some ("UIDENT", "LIKE") -> 0
+          | Some ("", "[") -> 1
+          | _ ->
+              raise
+                (Stream.Error
+                   "[x__0051 = position] or [<empty>] expected after [n = LIDENT; formals = entry__0001; ':'] (in [entry])")
+        and entry__0005 __strm__ =
+          match entry__0005_matcher __strm__[@llk.first_follow "\",\""] with
             0 ->
               (parser
                  [< '"", ",";
@@ -733,7 +753,7 @@ module LLKGram =
                    a)
                 __strm__
           | _ -> raise Stream.Failure
-        and entry__0004_matcher __strm__ =
+        and entry__0005_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", ",") -> 0
           | _ -> raise Stream.Failure
@@ -869,23 +889,23 @@ module LLKGram =
                  [< '"UIDENT", gid; '"", ":";
                     extend_opt =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[extend_opt = OPT grammar_body__0001] expected after [gid = UIDENT; ':'] (in [grammar_body])"
-                        (parse_opt grammar_body__0001);
+                        ~msg:"[extend_opt = grammar_body__0008] expected after [gid = UIDENT; ':'] (in [grammar_body])"
+                        grammar_body__0008;
                     expl =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[expl = grammar_body__0002] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001] (in [grammar_body])"
+                        ~msg:"[expl = grammar_body__0002] expected after [gid = UIDENT; ':'; extend_opt = grammar_body__0008] (in [grammar_body])"
                         grammar_body__0002;
                     rl =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[rl = grammar_body__0003] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001; expl = grammar_body__0002] (in [grammar_body])"
+                        ~msg:"[rl = grammar_body__0003] expected after [gid = UIDENT; ':'; extend_opt = grammar_body__0008; expl = grammar_body__0002] (in [grammar_body])"
                         grammar_body__0003;
                     extl =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[extl = grammar_body__0004] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001; expl = grammar_body__0002; rl = grammar_body__0003] (in [grammar_body])"
+                        ~msg:"[extl = grammar_body__0004] expected after [gid = UIDENT; ':'; extend_opt = grammar_body__0008; expl = grammar_body__0002; rl = grammar_body__0003] (in [grammar_body])"
                         grammar_body__0004;
                     el =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[el = grammar_body__0006] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001; expl = grammar_body__0002; rl = grammar_body__0003; extl = grammar_body__0004] (in [grammar_body])"
+                        ~msg:"[el = grammar_body__0006] expected after [gid = UIDENT; ':'; extend_opt = grammar_body__0008; expl = grammar_body__0002; rl = grammar_body__0003; extl = grammar_body__0004] (in [grammar_body])"
                         grammar_body__0006 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {gram_loc = loc; gram_extend = extend_opt; gram_id = gid;
@@ -933,7 +953,7 @@ module LLKGram =
           | _ ->
               raise
                 (Stream.Error
-                   "[l = exports] or [<empty>] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001] (in [grammar_body])")
+                   "[l = exports] or [<empty>] expected after [gid = UIDENT; ':'; extend_opt = [ x__0053 = grammar_body__0001 \226\134\146 <expr> | \226\134\146 <expr> ]] (in [grammar_body])")
         and grammar_body__0003 __strm__ =
           match
             grammar_body__0003_matcher __strm__[@llk.first_follow "LIDENT | \"external\" | UIDENT \"REGEXPS\""]
@@ -949,7 +969,7 @@ module LLKGram =
           | _ ->
               raise
                 (Stream.Error
-                   "[l = regexps] or [<empty>] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001; expl = grammar_body__0002] (in [grammar_body])")
+                   "[l = regexps] or [<empty>] expected after [gid = UIDENT; ':'; extend_opt = [ x__0054 = grammar_body__0001 \226\134\146 <expr> | \226\134\146 <expr> ]; expl = grammar_body__0002] (in [grammar_body])")
         and grammar_body__0004 __strm__ =
           match
             grammar_body__0004_matcher __strm__[@llk.first_follow "LIDENT | \"external\""]
@@ -964,7 +984,7 @@ module LLKGram =
           | _ ->
               raise
                 (Stream.Error
-                   "[l = externals] or [<empty>] expected after [gid = UIDENT; ':'; extend_opt = OPT grammar_body__0001; expl = grammar_body__0002; rl = grammar_body__0003] (in [grammar_body])")
+                   "[l = externals] or [<empty>] expected after [gid = UIDENT; ':'; extend_opt = [ x__0055 = grammar_body__0001 \226\134\146 <expr> | \226\134\146 <expr> ]; expl = grammar_body__0002; rl = grammar_body__0003] (in [grammar_body])")
         and grammar_body__0005 __strm__ =
           match
             grammar_body__0005_matcher __strm__[@llk.first_follow "LIDENT"]
@@ -1013,20 +1033,40 @@ module LLKGram =
             Some ("LIDENT", _) -> 0
           | Some ("", "END") -> 1
           | _ -> raise Stream.Failure
+        and grammar_body__0008 __strm__ =
+          match
+            grammar_body__0008_matcher __strm__[@llk.first_follow "LIDENT | UIDENT \"EXPORT\" | \"external\" | \"EXTEND\" | UIDENT \"REGEXPS\""]
+          with
+            0 ->
+              (parser [< x__0052 = grammar_body__0001 >] -> Some x__0052)
+                __strm__
+          | 1 -> (parser [< >] -> None) __strm__
+          | _ -> raise Stream.Failure
+        and grammar_body__0008_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", "EXTEND") -> 0
+          | Some ("UIDENT", "EXPORT") -> 1
+          | Some ("UIDENT", "REGEXPS") -> 1
+          | Some ("LIDENT", _) -> 1
+          | Some ("", "external") -> 1
+          | _ ->
+              raise
+                (Stream.Error
+                   "[x__0052 = grammar_body__0001] or [<empty>] expected after [gid = UIDENT; ':'] (in [grammar_body])")
         and level __strm__ =
           match
             level_matcher __strm__[@llk.first_follow "\"[\" | UIDENT \"LEFTA\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\" | STRING"]
           with
             0 ->
               (parser bp
-                 [< lab = parse_opt (parser [< '"STRING", __x__ >] -> __x__);
+                 [< lab = level__0001;
                     ass =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[ass = OPT assoc] expected after [lab = OPT STRING] (in [level])"
-                        (parse_opt assoc);
+                        ~msg:"[ass = level__0002] expected after [lab = level__0001] (in [level])"
+                        level__0002;
                     rules =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[rules = rule_list] expected after [lab = OPT STRING; ass = OPT assoc] (in [level])"
+                        ~msg:"[rules = rule_list] expected after [lab = level__0001; ass = level__0002] (in [level])"
                         rule_list >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {al_loc = loc; al_label = lab; al_assoc = ass;
@@ -1041,6 +1081,38 @@ module LLKGram =
           | Some ("STRING", _) -> 0
           | Some ("", "[") -> 0
           | _ -> raise Stream.Failure
+        and level__0001 __strm__ =
+          match
+            level__0001_matcher __strm__[@llk.first_follow "\"[\" | UIDENT \"LEFTA\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\" | STRING"]
+          with
+            0 -> (parser [< '"STRING", x__0056 >] -> Some x__0056) __strm__
+          | 1 -> (parser [< >] -> None) __strm__
+          | _ -> raise Stream.Failure
+        and level__0001_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("STRING", _) -> 0
+          | Some ("UIDENT", "LEFTA") -> 1
+          | Some ("UIDENT", "NONA") -> 1
+          | Some ("UIDENT", "RIGHTA") -> 1
+          | Some ("", "[") -> 1
+          | _ -> raise Stream.Failure
+        and level__0002 __strm__ =
+          match
+            level__0002_matcher __strm__[@llk.first_follow "\"[\" | UIDENT \"LEFTA\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\""]
+          with
+            0 -> (parser [< x__0057 = assoc >] -> Some x__0057) __strm__
+          | 1 -> (parser [< >] -> None) __strm__
+          | _ -> raise Stream.Failure
+        and level__0002_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("UIDENT", "LEFTA") -> 0
+          | Some ("UIDENT", "NONA") -> 0
+          | Some ("UIDENT", "RIGHTA") -> 0
+          | Some ("", "[") -> 1
+          | _ ->
+              raise
+                (Stream.Error
+                   "[x__0057 = assoc] or [<empty>] expected after [lab = level__0001] (in [level])")
         and level_list __strm__ =
           match level_list_matcher __strm__[@llk.first_follow "\"[\""] with
             0 ->
@@ -1269,7 +1341,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol __strm__ =
           match
-            psymbol_regexp __strm__[@llk.regexp "\"_\" #0 | LIDENT \"=\" #1 | LIDENT \"[\" #2 | \"(\" (LIDENT | \"(\" | \"_\" | \",\" | \")\")* \"=\" #3 | (LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\") #4"]
+            psymbol_regexp __strm__[@llk.regexp "\"_\" #0 | LIDENT \"=\" #1 | LIDENT \"[\" #2 | \"(\" (LIDENT | \"(\" | \"_\" | \",\" | \")\")* \"=\" #3 | (LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\") #4"]
           with
             Some (_, 0) ->
               (parser bp
@@ -1303,8 +1375,8 @@ module LLKGram =
                         psymbol__0001;
                     lev =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[lev = OPT psymbol__0002] expected after [PREDICT check_lident_lbracket; p = LIDENT; args = psymbol__0001] (in [psymbol])"
-                        (parse_opt psymbol__0002) >] ep ->
+                        ~msg:"[lev = psymbol__0005] expected after [PREDICT check_lident_lbracket; p = LIDENT; args = psymbol__0001] (in [psymbol])"
+                        psymbol__0005 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {ap_loc = loc; ap_patt = None;
                     ap_symb = ASnterm (loc, Name.mk p, args, lev)})
@@ -1334,6 +1406,8 @@ module LLKGram =
               Some ("", "(") -> q0003 lastf (ofs + 1)
             | Some ("", "[") -> q0002 lastf (ofs + 1)
             | Some ("", "_") -> q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "ANTI") ->
+                let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "FLAG") ->
                 let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") ->
@@ -1457,10 +1531,10 @@ module LLKGram =
           with
             0 ->
               (parser
-                 [< x__0032 = psymbol__0005;
+                 [< x__0032 = psymbol__0006;
                     y__0023 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0023 = psymbol__0004] expected after [x__0032 = psymbol__0005] (in [psymbol])"
+                        ~msg:"[y__0023 = psymbol__0004] expected after [x__0032 = psymbol__0006] (in [psymbol])"
                         psymbol__0004 >] ->
                    x__0032 :: y__0023)
                 __strm__
@@ -1472,7 +1546,26 @@ module LLKGram =
           | Some ("", "]") -> 1
           | _ -> raise Stream.Failure
         and psymbol__0005 __strm__ =
-          match psymbol__0005_matcher __strm__[@llk.first_follow "\",\""] with
+          match
+            psymbol__0005_matcher __strm__[@llk.first_follow "\"]\" | \";\" | \"|\" | UIDENT \"LEVEL\" | \"->\""]
+          with
+            0 ->
+              (parser [< x__0058 = psymbol__0002 >] -> Some x__0058) __strm__
+          | 1 -> (parser [< >] -> None) __strm__
+          | _ -> raise Stream.Failure
+        and psymbol__0005_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("UIDENT", "LEVEL") -> 0
+          | Some ("", "->") -> 1
+          | Some ("", ";") -> 1
+          | Some ("", "]") -> 1
+          | Some ("", "|") -> 1
+          | _ ->
+              raise
+                (Stream.Error
+                   "[x__0058 = psymbol__0002] or [<empty>] expected after [PREDICT check_lident_lbracket; p = LIDENT; args = psymbol__0001] (in [psymbol])")
+        and psymbol__0006 __strm__ =
+          match psymbol__0006_matcher __strm__[@llk.first_follow "\",\""] with
             0 ->
               (parser
                  [< '"", ",";
@@ -1483,7 +1576,7 @@ module LLKGram =
                    a)
                 __strm__
           | _ -> raise Stream.Failure
-        and psymbol__0005_matcher __strm__ =
+        and psymbol__0006_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", ",") -> 0
           | _ -> raise Stream.Failure
@@ -1584,7 +1677,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule __strm__ =
           match
-            rule_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
+            rule_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
           with
             0 ->
               (parser bp
@@ -1609,6 +1702,7 @@ module LLKGram =
         and rule_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "->") -> 0
+          | Some ("UIDENT", "ANTI") -> 1
           | Some ("UIDENT", "FLAG") -> 1
           | Some ("UIDENT", "GREEDY") -> 1
           | Some ("UIDENT", "INFER") -> 1
@@ -1659,7 +1753,7 @@ module LLKGram =
                    "['->'] or [<empty>] expected after [psl = LIST1 psymbol SEP ';'] (in [rule])")
         and rule__0002 __strm__ =
           match
-            rule__0002_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
+            rule__0002_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
           with
             0 ->
               (parser
@@ -1673,7 +1767,8 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule__0002_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "FLAG") -> 0
+            Some ("UIDENT", "ANTI") -> 0
+          | Some ("UIDENT", "FLAG") -> 0
           | Some ("UIDENT", "GREEDY") -> 0
           | Some ("UIDENT", "INFER") -> 0
           | Some ("UIDENT", "LEFT_ASSOC") -> 0
@@ -1747,7 +1842,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_list__0001 __strm__ =
           match
-            rule_list__0001_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | \"]\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
+            rule_list__0001_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | \"]\" | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
           with
             0 ->
               (parser bp
@@ -1765,6 +1860,7 @@ module LLKGram =
         and rule_list__0001_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "]") -> 0
+          | Some ("UIDENT", "ANTI") -> 1
           | Some ("UIDENT", "FLAG") -> 1
           | Some ("UIDENT", "GREEDY") -> 1
           | Some ("UIDENT", "INFER") -> 1
@@ -1789,7 +1885,7 @@ module LLKGram =
                    "[']'] or [rules = rule_list__0002] expected after ['['] (in [rule_list])")
         and rule_list__0002 __strm__ =
           match
-            rule_list__0002_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
+            rule_list__0002_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
           with
             0 ->
               (parser
@@ -1803,7 +1899,8 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_list__0002_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "FLAG") -> 0
+            Some ("UIDENT", "ANTI") -> 0
+          | Some ("UIDENT", "FLAG") -> 0
           | Some ("UIDENT", "GREEDY") -> 0
           | Some ("UIDENT", "INFER") -> 0
           | Some ("UIDENT", "LEFT_ASSOC") -> 0
@@ -1873,8 +1970,8 @@ module LLKGram =
                         symbol;
                     b =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[b = FLAG sep_opt_sep__0001] expected after [sep = UIDENT 'SEP'; t = symbol] (in [sep_opt_sep])"
-                        (parse_flag sep_opt_sep__0001) >] ->
+                        ~msg:"[b = sep_opt_sep__0002] expected after [sep = UIDENT 'SEP'; t = symbol] (in [sep_opt_sep])"
+                        sep_opt_sep__0002 >] ->
                    t, b)
                 __strm__
           | _ -> raise Stream.Failure
@@ -1892,15 +1989,34 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("UIDENT", "OPT_SEP") -> 0
           | _ -> raise Stream.Failure
+        and sep_opt_sep__0002 __strm__ =
+          match
+            sep_opt_sep__0002_regexp __strm__[@llk.regexp "#1 | UIDENT \"OPT_SEP\" #0"]
+          with
+            Some (_, 0) ->
+              (parser [< _ = sep_opt_sep__0001 >] -> true) __strm__
+          | Some (_, 1) -> (parser [< >] -> false) __strm__
+          | _ -> raise Stream.Failure
+        and sep_opt_sep__0002_regexp strm =
+          let open Llk_regexps in
+          let open PatternBaseToken in
+          let rec q0000 lastf ofs =
+            let lastf = Some (ofs, 1) in
+            match must_peek_nth (ofs + 1) strm with
+              Some ("UIDENT", "OPT_SEP") -> q0001 lastf (ofs + 1)
+            | _ -> lastf
+          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          q0000 None 0
         and symbol __strm__ =
           match
-            symbol_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
+            symbol_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
           with
             0 -> (parser [< a = symbol__0002 >] -> a) __strm__
           | _ -> raise Stream.Failure
         and symbol_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "FLAG") -> 0
+            Some ("UIDENT", "ANTI") -> 0
+          | Some ("UIDENT", "FLAG") -> 0
           | Some ("UIDENT", "GREEDY") -> 0
           | Some ("UIDENT", "INFER") -> 0
           | Some ("UIDENT", "LEFT_ASSOC") -> 0
@@ -1919,19 +2035,9 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0002 __strm__ =
           match
-            symbol__0002_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
+            symbol__0002_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
           with
             0 ->
-              (parser bp
-                 [< '"UIDENT", "FLAG";
-                    s =
-                      Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[s = symbol__0003] expected after [UIDENT 'FLAG'] (in [symbol])"
-                        symbol__0003 >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   ASflag (loc, s))
-                __strm__
-          | 1 ->
               (parser bp
                  [< '"UIDENT", "LEFT_ASSOC";
                     s1 =
@@ -1952,52 +2058,40 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASleft_assoc (loc, s1, s2, e))
                 __strm__
-          | 2 ->
-              (parser bp
-                 [< '"UIDENT", "OPT";
-                    s =
-                      Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[s = symbol__0003] expected after [UIDENT 'OPT'] (in [symbol])"
-                        symbol__0003 >] ep ->
-                   let loc = Grammar.loc_of_token_interval bp ep in
-                   ASopt (loc, s))
-                __strm__
-          | 3 ->
+          | 1 ->
               (parser
-                 [< g =
-                      parse_flag
-                        (parser
-                           [< '"UIDENT", ("GREEDY" as __x__) >] -> __x__);
+                 [< g = symbol__0025;
                     a =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[x__0005 = symbol__0006[<expr>]] expected after [g = FLAG UIDENT 'GREEDY'] (in [symbol])"
+                        ~msg:"[x__0005 = symbol__0006[<expr>]] expected after [g = symbol__0025] (in [symbol])"
                         (symbol__0006 g) >] ->
                    a)
                 __strm__
-          | 4 -> (parser [< a = symbol__0003 >] -> a) __strm__
+          | 2 -> (parser [< a = symbol__0003 >] -> a) __strm__
           | _ -> raise Stream.Failure
         and symbol__0002_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "FLAG") -> 0
-          | Some ("UIDENT", "LEFT_ASSOC") -> 1
-          | Some ("UIDENT", "OPT") -> 2
-          | Some ("UIDENT", "GREEDY") -> 3
-          | Some ("UIDENT", "LIST0") -> 3
-          | Some ("UIDENT", "LIST1") -> 3
-          | Some ("UIDENT", "INFER") -> 4
-          | Some ("UIDENT", "NEXT") -> 4
-          | Some ("UIDENT", "PREDICT") -> 4
-          | Some ("UIDENT", "SELF") -> 4
-          | Some ("UIDENT", "V") -> 4
-          | Some ("LIDENT", _) -> 4
-          | Some ("STRING", _) -> 4
-          | Some ("UIDENT", _) -> 4
-          | Some ("", "(") -> 4
-          | Some ("", "[") -> 4
+            Some ("UIDENT", "LEFT_ASSOC") -> 0
+          | Some ("UIDENT", "FLAG") -> 1
+          | Some ("UIDENT", "GREEDY") -> 1
+          | Some ("UIDENT", "LIST0") -> 1
+          | Some ("UIDENT", "LIST1") -> 1
+          | Some ("UIDENT", "OPT") -> 1
+          | Some ("UIDENT", "ANTI") -> 2
+          | Some ("UIDENT", "INFER") -> 2
+          | Some ("UIDENT", "NEXT") -> 2
+          | Some ("UIDENT", "PREDICT") -> 2
+          | Some ("UIDENT", "SELF") -> 2
+          | Some ("UIDENT", "V") -> 2
+          | Some ("LIDENT", _) -> 2
+          | Some ("STRING", _) -> 2
+          | Some ("UIDENT", _) -> 2
+          | Some ("", "(") -> 2
+          | Some ("", "[") -> 2
           | _ -> raise Stream.Failure
         and symbol__0003 __strm__ =
           match
-            symbol__0003_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"INFER\" | UIDENT \"NEXT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
+            symbol__0003_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"INFER\" | UIDENT \"NEXT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\""]
           with
             0 ->
               (parser bp
@@ -2018,6 +2112,7 @@ module LLKGram =
         and symbol__0003_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("UIDENT", "V") -> 0
+          | Some ("UIDENT", "ANTI") -> 1
           | Some ("UIDENT", "INFER") -> 1
           | Some ("UIDENT", "NEXT") -> 1
           | Some ("UIDENT", "PREDICT") -> 1
@@ -2030,7 +2125,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0004 __strm__ =
           match
-            symbol__0004_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"INFER\" | UIDENT \"NEXT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\""]
+            symbol__0004_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"INFER\" | UIDENT \"NEXT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\""]
           with
             0 ->
               (parser
@@ -2059,11 +2154,21 @@ module LLKGram =
                 __strm__
           | 2 ->
               (parser bp
+                 [< '"UIDENT", "ANTI";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = symbol__0015] expected after [UIDENT 'ANTI'] (in [symbol])"
+                        symbol__0015 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASanti (loc, l))
+                __strm__
+          | 3 ->
+              (parser bp
                  [< '"UIDENT", "INFER"; '"INT", n >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASinfer (loc, int_of_string n))
                 __strm__
-          | 3 ->
+          | 4 ->
               (parser bp
                  [< '"UIDENT", "NEXT";
                     args =
@@ -2073,13 +2178,13 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASnext (loc, args))
                 __strm__
-          | 4 ->
+          | 5 ->
               (parser bp
                  [< '"UIDENT", "PREDICT"; '"LIDENT", id >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASregexp (loc, Name.mk id))
                 __strm__
-          | 5 ->
+          | 6 ->
               (parser bp
                  [< '"UIDENT", "SELF";
                     args =
@@ -2089,13 +2194,13 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASself (loc, args))
                 __strm__
-          | 6 ->
+          | 7 ->
               (parser bp
                  [< '"STRING", e >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASkeyw (loc, e))
                 __strm__
-          | 7 ->
+          | 8 ->
               (parser bp
                  [< '"LIDENT", id;
                     args =
@@ -2104,12 +2209,12 @@ module LLKGram =
                         symbol__0010;
                     lev =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[lev = OPT symbol__0011] expected after [id = LIDENT; args = symbol__0010] (in [symbol])"
-                        (parse_opt symbol__0011) >] ep ->
+                        ~msg:"[lev = symbol__0026] expected after [id = LIDENT; args = symbol__0010] (in [symbol])"
+                        symbol__0026 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASnterm (loc, Name.mk id, args, lev))
                 __strm__
-          | 8 ->
+          | 9 ->
               (parser
                  [< '"UIDENT", x;
                     a =
@@ -2123,55 +2228,78 @@ module LLKGram =
           match Stream.peek __strm__ with
             Some ("", "(") -> 0
           | Some ("", "[") -> 1
-          | Some ("UIDENT", "INFER") -> 2
-          | Some ("UIDENT", "NEXT") -> 3
-          | Some ("UIDENT", "PREDICT") -> 4
-          | Some ("UIDENT", "SELF") -> 5
-          | Some ("STRING", _) -> 6
-          | Some ("LIDENT", _) -> 7
-          | Some ("UIDENT", _) -> 8
+          | Some ("UIDENT", "ANTI") -> 2
+          | Some ("UIDENT", "INFER") -> 3
+          | Some ("UIDENT", "NEXT") -> 4
+          | Some ("UIDENT", "PREDICT") -> 5
+          | Some ("UIDENT", "SELF") -> 6
+          | Some ("STRING", _) -> 7
+          | Some ("LIDENT", _) -> 8
+          | Some ("UIDENT", _) -> 9
           | _ -> raise Stream.Failure
         and symbol__0006 g __strm__ =
           match
-            symbol__0006_matcher __strm__[@llk.first_follow "UIDENT \"LIST0\" | UIDENT \"LIST1\""]
+            symbol__0006_matcher __strm__[@llk.first_follow "UIDENT \"FLAG\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"OPT\""]
           with
             0 ->
+              (parser bp
+                 [< '"UIDENT", "FLAG";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = [ UIDENT 'GREEDY' \\226\\134\\146 <expr> | \\226\\134\\146 <expr> ]; UIDENT 'FLAG'] (in [symbol])"
+                        symbol__0003 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASflag (loc, g, s))
+                __strm__
+          | 1 ->
               (parser bp
                  [< '"UIDENT", "LIST0";
                     s =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[s = symbol__0003] expected after [g = FLAG UIDENT 'GREEDY'; UIDENT 'LIST0'] (in [symbol])"
+                        ~msg:"[s = symbol__0003] expected after [g = [ UIDENT 'GREEDY' \\226\\134\\146 <expr> | \\226\\134\\146 <expr> ]; UIDENT 'LIST0'] (in [symbol])"
                         symbol__0003;
                     sep =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[sep = OPT sep_opt_sep] expected after [g = FLAG UIDENT 'GREEDY'; UIDENT 'LIST0'; s = symbol__0003] (in [symbol])"
-                        (parse_opt sep_opt_sep) >] ep ->
+                        ~msg:"[sep = symbol__0028] expected after [g = [ UIDENT 'GREEDY' \\226\\134\\146 <expr> | \\226\\134\\146 <expr> ]; UIDENT 'LIST0'; s = symbol__0003] (in [symbol])"
+                        symbol__0028 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASlist (loc, g, LML_0, s, sep))
                 __strm__
-          | 1 ->
+          | 2 ->
               (parser bp
                  [< '"UIDENT", "LIST1";
                     s =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[s = symbol__0003] expected after [g = FLAG UIDENT 'GREEDY'; UIDENT 'LIST1'] (in [symbol])"
+                        ~msg:"[s = symbol__0003] expected after [g = [ UIDENT 'GREEDY' \\226\\134\\146 <expr> | \\226\\134\\146 <expr> ]; UIDENT 'LIST1'] (in [symbol])"
                         symbol__0003;
                     sep =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[sep = OPT sep_opt_sep] expected after [g = FLAG UIDENT 'GREEDY'; UIDENT 'LIST1'; s = symbol__0003] (in [symbol])"
-                        (parse_opt sep_opt_sep) >] ep ->
+                        ~msg:"[sep = symbol__0029] expected after [g = [ UIDENT 'GREEDY' \\226\\134\\146 <expr> | \\226\\134\\146 <expr> ]; UIDENT 'LIST1'; s = symbol__0003] (in [symbol])"
+                        symbol__0029 >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASlist (loc, g, LML_1, s, sep))
+                __strm__
+          | 3 ->
+              (parser bp
+                 [< '"UIDENT", "OPT";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = [ UIDENT 'GREEDY' \\226\\134\\146 <expr> | \\226\\134\\146 <expr> ]; UIDENT 'OPT'] (in [symbol])"
+                        symbol__0003 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASopt (loc, g, s))
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0006_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "LIST0") -> 0
-          | Some ("UIDENT", "LIST1") -> 1
+            Some ("UIDENT", "FLAG") -> 0
+          | Some ("UIDENT", "LIST0") -> 1
+          | Some ("UIDENT", "LIST1") -> 2
+          | Some ("UIDENT", "OPT") -> 3
           | _ ->
               raise
                 (Stream.Error
-                   "[UIDENT 'LIST0'] or [UIDENT 'LIST1'] expected after [g = FLAG UIDENT 'GREEDY'] (in [symbol])")
+                   "[UIDENT 'FLAG'] or [UIDENT 'LIST0'] or [UIDENT 'LIST1'] or [UIDENT 'OPT'] expected after [g = [ UIDENT 'GREEDY' \226\134\146 <expr> | \226\134\146 <expr> ]] (in [symbol])")
         and symbol__0007 s_t __strm__ =
           match
             symbol__0007_matcher __strm__[@llk.first_follow "\")\" | STRING | \"]\" | \";\" | \"?\" | \"|\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\""]
@@ -2210,8 +2338,8 @@ module LLKGram =
                  [< '"", "[";
                     l =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[l = symbol__0017] expected after [UIDENT 'NEXT'; '['] (in [symbol])"
-                        symbol__0017;
+                        ~msg:"[l = symbol__0019] expected after [UIDENT 'NEXT'; '['] (in [symbol])"
+                        symbol__0019;
                     '"", "]" >] ->
                    l)
                 __strm__
@@ -2243,8 +2371,8 @@ module LLKGram =
                  [< '"", "[";
                     l =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[l = symbol__0019] expected after [UIDENT 'SELF'; '['] (in [symbol])"
-                        symbol__0019;
+                        ~msg:"[l = symbol__0021] expected after [UIDENT 'SELF'; '['] (in [symbol])"
+                        symbol__0021;
                     '"", "]" >] ->
                    l)
                 __strm__
@@ -2276,8 +2404,8 @@ module LLKGram =
                  [< '"", "[";
                     l =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[l = symbol__0021] expected after [id = LIDENT; '['] (in [symbol])"
-                        symbol__0021;
+                        ~msg:"[l = symbol__0023] expected after [id = LIDENT; '['] (in [symbol])"
+                        symbol__0023;
                     '"", "]" >] ->
                    l)
                 __strm__
@@ -2372,10 +2500,10 @@ module LLKGram =
           q0000 None 0
         and symbol__0014 __strm__ =
           match
-            symbol__0014_regexp __strm__[@llk.regexp "#0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #1"]
+            symbol__0014_regexp __strm__[@llk.regexp "#0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #1"]
           with
             Some (_, 0) -> (parser [< >] -> []) __strm__
-          | Some (_, 1) -> (parser [< a = symbol__0015 >] -> a) __strm__
+          | Some (_, 1) -> (parser [< a = symbol__0017 >] -> a) __strm__
           | _ -> raise Stream.Failure
         and symbol__0014_regexp strm =
           let open Llk_regexps in
@@ -2387,6 +2515,8 @@ module LLKGram =
             | Some ("", "->") -> q0001 lastf (ofs + 1)
             | Some ("", "[") -> q0001 lastf (ofs + 1)
             | Some ("", "_") -> q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "ANTI") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "FLAG") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") ->
@@ -2416,22 +2546,64 @@ module LLKGram =
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0015 __strm__ =
-          match
-            symbol__0015_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
-          with
+          match symbol__0015_matcher __strm__[@llk.first_follow "STRING"] with
             0 ->
               (parser
-                 [< x__0041 = rule;
+                 [< '"STRING", x__0041;
                     y__0032 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0032 = symbol__0016] expected after [x__0041 = rule] (in [symbol])"
+                        ~msg:"[y__0032 = symbol__0016] expected after [x__0041 = STRING] (in [symbol])"
                         symbol__0016 >] ->
                    x__0041 :: y__0032)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0015_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("UIDENT", "FLAG") -> 0
+            Some ("STRING", _) -> 0
+          | _ -> raise Stream.Failure
+        and symbol__0016 __strm__ =
+          match
+            symbol__0016_regexp __strm__[@llk.regexp "#0 | STRING #1"]
+          with
+            Some (_, 0) -> (parser [< >] -> []) __strm__
+          | Some (_, 1) ->
+              (parser
+                 [< '"STRING", x__0042;
+                    y__0033 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0033 = symbol__0016] expected after [x__0042 = STRING] (in [symbol])"
+                        symbol__0016 >] ->
+                   x__0042 :: y__0033)
+                __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0016_regexp strm =
+          let open Llk_regexps in
+          let open PatternBaseToken in
+          let rec q0000 lastf ofs =
+            let lastf = Some (ofs, 0) in
+            match must_peek_nth (ofs + 1) strm with
+              Some ("STRING", _) -> q0001 lastf (ofs + 1)
+            | _ -> lastf
+          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          q0000 None 0
+        and symbol__0017 __strm__ =
+          match
+            symbol__0017_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"INFER\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\""]
+          with
+            0 ->
+              (parser
+                 [< x__0043 = rule;
+                    y__0034 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0034 = symbol__0018] expected after [x__0043 = rule] (in [symbol])"
+                        symbol__0018 >] ->
+                   x__0043 :: y__0034)
+                __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0017_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("UIDENT", "ANTI") -> 0
+          | Some ("UIDENT", "FLAG") -> 0
           | Some ("UIDENT", "GREEDY") -> 0
           | Some ("UIDENT", "INFER") -> 0
           | Some ("UIDENT", "LEFT_ASSOC") -> 0
@@ -2450,58 +2622,16 @@ module LLKGram =
           | Some ("", "[") -> 0
           | Some ("", "_") -> 0
           | _ -> raise Stream.Failure
-        and symbol__0016 __strm__ =
-          match
-            symbol__0016_matcher __strm__[@llk.first_follow "\"]\" | \"|\""]
-          with
-            0 ->
-              (parser
-                 [< x__0042 = symbol__0023;
-                    y__0033 =
-                      Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0033 = symbol__0016] expected after [x__0042 = symbol__0023] (in [symbol])"
-                        symbol__0016 >] ->
-                   x__0042 :: y__0033)
-                __strm__
-          | 1 -> (parser [< >] -> []) __strm__
-          | _ -> raise Stream.Failure
-        and symbol__0016_matcher __strm__ =
-          match Stream.peek __strm__ with
-            Some ("", "|") -> 0
-          | Some ("", "]") -> 1
-          | _ -> raise Stream.Failure
-        and symbol__0017 __strm__ =
-          match
-            symbol__0017_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | INT | \"{\""]
-          with
-            0 ->
-              (parser
-                 [< x__0043 = Grammar.Entry.parse_token_stream expr;
-                    y__0034 =
-                      Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0034 = symbol__0018] expected after [x__0043 = expr] (in [symbol])"
-                        symbol__0018 >] ->
-                   x__0043 :: y__0034)
-                __strm__
-          | _ -> raise Stream.Failure
-        and symbol__0017_matcher __strm__ =
-          match Stream.peek __strm__ with
-            Some ("INT", _) -> 0
-          | Some ("LIDENT", _) -> 0
-          | Some ("", "(") -> 0
-          | Some ("", "[") -> 0
-          | Some ("", "{") -> 0
-          | _ -> raise Stream.Failure
         and symbol__0018 __strm__ =
           match
-            symbol__0018_matcher __strm__[@llk.first_follow "\",\" | \"]\""]
+            symbol__0018_matcher __strm__[@llk.first_follow "\"]\" | \"|\""]
           with
             0 ->
               (parser
-                 [< x__0044 = symbol__0024;
+                 [< x__0044 = symbol__0027;
                     y__0035 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0035 = symbol__0018] expected after [x__0044 = symbol__0024] (in [symbol])"
+                        ~msg:"[y__0035 = symbol__0018] expected after [x__0044 = symbol__0027] (in [symbol])"
                         symbol__0018 >] ->
                    x__0044 :: y__0035)
                 __strm__
@@ -2509,7 +2639,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0018_matcher __strm__ =
           match Stream.peek __strm__ with
-            Some ("", ",") -> 0
+            Some ("", "|") -> 0
           | Some ("", "]") -> 1
           | _ -> raise Stream.Failure
         and symbol__0019 __strm__ =
@@ -2540,10 +2670,10 @@ module LLKGram =
           with
             0 ->
               (parser
-                 [< x__0046 = symbol__0025;
+                 [< x__0046 = symbol__0030;
                     y__0037 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0037 = symbol__0020] expected after [x__0046 = symbol__0025] (in [symbol])"
+                        ~msg:"[y__0037 = symbol__0020] expected after [x__0046 = symbol__0030] (in [symbol])"
                         symbol__0020 >] ->
                    x__0046 :: y__0037)
                 __strm__
@@ -2582,10 +2712,10 @@ module LLKGram =
           with
             0 ->
               (parser
-                 [< x__0048 = symbol__0026;
+                 [< x__0048 = symbol__0031;
                     y__0039 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0039 = symbol__0022] expected after [x__0048 = symbol__0026] (in [symbol])"
+                        ~msg:"[y__0039 = symbol__0022] expected after [x__0048 = symbol__0031] (in [symbol])"
                         symbol__0022 >] ->
                    x__0048 :: y__0039)
                 __strm__
@@ -2597,39 +2727,141 @@ module LLKGram =
           | Some ("", "]") -> 1
           | _ -> raise Stream.Failure
         and symbol__0023 __strm__ =
-          match symbol__0023_matcher __strm__[@llk.first_follow "\"|\""] with
+          match
+            symbol__0023_matcher __strm__[@llk.first_follow "LIDENT | \"[\" | \"(\" | INT | \"{\""]
+          with
+            0 ->
+              (parser
+                 [< x__0049 = Grammar.Entry.parse_token_stream expr;
+                    y__0040 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0040 = symbol__0024] expected after [x__0049 = expr] (in [symbol])"
+                        symbol__0024 >] ->
+                   x__0049 :: y__0040)
+                __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0023_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("INT", _) -> 0
+          | Some ("LIDENT", _) -> 0
+          | Some ("", "(") -> 0
+          | Some ("", "[") -> 0
+          | Some ("", "{") -> 0
+          | _ -> raise Stream.Failure
+        and symbol__0024 __strm__ =
+          match
+            symbol__0024_matcher __strm__[@llk.first_follow "\",\" | \"]\""]
+          with
+            0 ->
+              (parser
+                 [< x__0050 = symbol__0032;
+                    y__0041 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0041 = symbol__0024] expected after [x__0050 = symbol__0032] (in [symbol])"
+                        symbol__0024 >] ->
+                   x__0050 :: y__0041)
+                __strm__
+          | 1 -> (parser [< >] -> []) __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0024_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", ",") -> 0
+          | Some ("", "]") -> 1
+          | _ -> raise Stream.Failure
+        and symbol__0025 __strm__ =
+          match
+            symbol__0025_matcher __strm__[@llk.first_follow "UIDENT \"FLAG\" | UIDENT \"GREEDY\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"OPT\""]
+          with
+            0 -> (parser [< '"UIDENT", "GREEDY" >] -> true) __strm__
+          | 1 -> (parser [< >] -> false) __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0025_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("UIDENT", "GREEDY") -> 0
+          | Some ("UIDENT", "FLAG") -> 1
+          | Some ("UIDENT", "LIST0") -> 1
+          | Some ("UIDENT", "LIST1") -> 1
+          | Some ("UIDENT", "OPT") -> 1
+          | _ -> raise Stream.Failure
+        and symbol__0026 __strm__ =
+          match
+            symbol__0026_matcher __strm__[@llk.first_follow "\")\" | STRING | \"]\" | \";\" | \"|\" | UIDENT \"LEVEL\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\""]
+          with
+            0 ->
+              (parser [< x__0059 = symbol__0011 >] -> Some x__0059) __strm__
+          | 1 -> (parser [< >] -> None) __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0026_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("UIDENT", "LEVEL") -> 0
+          | Some ("UIDENT", "ACCUMULATE") -> 1
+          | Some ("UIDENT", "OPT_SEP") -> 1
+          | Some ("UIDENT", "SEP") -> 1
+          | Some ("UIDENT", "WITH") -> 1
+          | Some ("STRING", _) -> 1
+          | Some ("", ")") -> 1
+          | Some ("", "->") -> 1
+          | Some ("", ";") -> 1
+          | Some ("", "]") -> 1
+          | Some ("", "|") -> 1
+          | _ ->
+              raise
+                (Stream.Error
+                   "[x__0059 = symbol__0011] or [<empty>] expected after [id = LIDENT; args = symbol__0010] (in [symbol])")
+        and symbol__0027 __strm__ =
+          match symbol__0027_matcher __strm__[@llk.first_follow "\"|\""] with
             0 ->
               (parser
                  [< '"", "|";
                     a =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0032 = rule] expected after ['|'] (in [symbol])"
+                        ~msg:"[y__0034 = rule] expected after ['|'] (in [symbol])"
                         rule >] ->
                    a)
                 __strm__
           | _ -> raise Stream.Failure
-        and symbol__0023_matcher __strm__ =
+        and symbol__0027_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", "|") -> 0
           | _ -> raise Stream.Failure
-        and symbol__0024 __strm__ =
-          match symbol__0024_matcher __strm__[@llk.first_follow "\",\""] with
-            0 ->
-              (parser
-                 [< '"", ",";
-                    a =
-                      Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0034 = expr] expected after [','] (in [symbol])"
-                        (Grammar.Entry.parse_token_stream expr) >] ->
-                   a)
-                __strm__
+        and symbol__0028 __strm__ =
+          match
+            symbol__0028_regexp __strm__[@llk.regexp "#0 | UIDENT \"SEP\" #1"]
+          with
+            Some (_, 0) -> (parser [< >] -> None) __strm__
+          | Some (_, 1) ->
+              (parser [< x__0062 = sep_opt_sep >] -> Some x__0062) __strm__
           | _ -> raise Stream.Failure
-        and symbol__0024_matcher __strm__ =
-          match Stream.peek __strm__ with
-            Some ("", ",") -> 0
+        and symbol__0028_regexp strm =
+          let open Llk_regexps in
+          let open PatternBaseToken in
+          let rec q0000 lastf ofs =
+            let lastf = Some (ofs, 0) in
+            match must_peek_nth (ofs + 1) strm with
+              Some ("UIDENT", "SEP") -> q0001 lastf (ofs + 1)
+            | _ -> lastf
+          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          q0000 None 0
+        and symbol__0029 __strm__ =
+          match
+            symbol__0029_regexp __strm__[@llk.regexp "#0 | UIDENT \"SEP\" #1"]
+          with
+            Some (_, 0) -> (parser [< >] -> None) __strm__
+          | Some (_, 1) ->
+              (parser [< x__0063 = sep_opt_sep >] -> Some x__0063) __strm__
           | _ -> raise Stream.Failure
-        and symbol__0025 __strm__ =
-          match symbol__0025_matcher __strm__[@llk.first_follow "\",\""] with
+        and symbol__0029_regexp strm =
+          let open Llk_regexps in
+          let open PatternBaseToken in
+          let rec q0000 lastf ofs =
+            let lastf = Some (ofs, 0) in
+            match must_peek_nth (ofs + 1) strm with
+              Some ("UIDENT", "SEP") -> q0001 lastf (ofs + 1)
+            | _ -> lastf
+          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          q0000 None 0
+        and symbol__0030 __strm__ =
+          match symbol__0030_matcher __strm__[@llk.first_follow "\",\""] with
             0 ->
               (parser
                  [< '"", ",";
@@ -2640,12 +2872,12 @@ module LLKGram =
                    a)
                 __strm__
           | _ -> raise Stream.Failure
-        and symbol__0025_matcher __strm__ =
+        and symbol__0030_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", ",") -> 0
           | _ -> raise Stream.Failure
-        and symbol__0026 __strm__ =
-          match symbol__0026_matcher __strm__[@llk.first_follow "\",\""] with
+        and symbol__0031 __strm__ =
+          match symbol__0031_matcher __strm__[@llk.first_follow "\",\""] with
             0 ->
               (parser
                  [< '"", ",";
@@ -2656,7 +2888,23 @@ module LLKGram =
                    a)
                 __strm__
           | _ -> raise Stream.Failure
-        and symbol__0026_matcher __strm__ =
+        and symbol__0031_matcher __strm__ =
+          match Stream.peek __strm__ with
+            Some ("", ",") -> 0
+          | _ -> raise Stream.Failure
+        and symbol__0032 __strm__ =
+          match symbol__0032_matcher __strm__[@llk.first_follow "\",\""] with
+            0 ->
+              (parser
+                 [< '"", ",";
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0040 = expr] expected after [','] (in [symbol])"
+                        (Grammar.Entry.parse_token_stream expr) >] ->
+                   a)
+                __strm__
+          | _ -> raise Stream.Failure
+        and symbol__0032_matcher __strm__ =
           match Stream.peek __strm__ with
             Some ("", ",") -> 0
           | _ -> raise Stream.Failure
@@ -2760,6 +3008,7 @@ module LLKGram =
       lexer.tok_using ("INT", "");
       lexer.tok_using ("LIDENT", "");
       lexer.tok_using ("STRING", "");
+      lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");

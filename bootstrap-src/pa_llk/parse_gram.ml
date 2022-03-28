@@ -143,13 +143,14 @@ EXTEND
          ASlist loc g LML_0 s sep
       | g = FLAG (UIDENT "GREEDY") ; UIDENT "LIST1"; s = SELF; sep = OPT sep_opt_sep ->
          ASlist loc g LML_1 s sep
-      | UIDENT "OPT"; s = SELF ->
-         ASopt loc s
+      | g = FLAG (UIDENT "GREEDY") ; UIDENT "OPT"; s = SELF ->
+         ASopt loc g s
+      | g = FLAG (UIDENT "GREEDY") ; UIDENT "FLAG"; s = SELF ->
+          ASflag loc g s
       | UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
          ASleft_assoc loc s1 s2 e
-      | UIDENT "FLAG"; s = SELF ->
-          ASflag loc s ]
-    | "vala"
+      ]
+  | "vala"
       [ UIDENT "V"; s = NEXT; al = LIST0 STRING ->
           ASvala loc s al
       | s = NEXT -> s
@@ -169,6 +170,8 @@ EXTEND
           AStok loc x (Some (Scanf.unescaped e))
       | e = STRING ->
           ASkeyw loc e
+
+      | UIDENT "ANTI" ; l = LIST1 STRING -> ASanti loc l
 
       | id = LIDENT ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
