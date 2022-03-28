@@ -372,6 +372,20 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR VFLAGS:
+EXPORT: e;
+
+e: [ [ "value"; mf = V (GREEDY FLAG "mutable") "mflag"; vf = V (GREEDY FLAG "virtual") "vflag"; l = V LIDENT "lid" ""; ":";
+        t = ctyp → 1
+     ] ];
+ctyp: [ [ "int" -> "int" ] ] ;
+END;
+
+|foo}
+] ;;
+
 let matches ~pattern text =
   match Str.search_forward (Str.regexp pattern) text 0 with
     _ -> true

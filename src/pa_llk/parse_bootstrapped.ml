@@ -129,12 +129,12 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
          ASlist (loc, g, LML_0, s, sep)
       | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = NEXT; sep = OPT sep_opt_sep ->
          ASlist (loc, g, LML_1, s, sep)
-      | UIDENT/"OPT"; s = NEXT ->
-         ASopt (loc, s)
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"OPT"; s = NEXT ->
+         ASopt (loc, g, s)
       | UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc (loc, s1, s2, e)
-      | UIDENT/"FLAG"; s = NEXT ->
-          ASflag (loc, s)
+      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"FLAG"; s = NEXT ->
+          ASflag (loc, g, s)
       | s = NEXT -> s
       ]
     | "vala"

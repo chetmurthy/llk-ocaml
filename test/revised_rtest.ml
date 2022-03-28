@@ -729,7 +729,7 @@ END;
       | e = NEXT -> e
       ]
     | "where" LEFTA
-      [ e = SELF; "where"; (ext,attrs) = ext_attributes; rf = V (FLAG "rec"); lb = let_binding →
+      [ e = SELF; "where"; (ext,attrs) = ext_attributes; rf = V (FLAG "rec"); lb = where_binding →
           expr_to_inline <:expr< let $_flag:rf$ $list:[lb]$ in $e$ >> ext attrs
       ]
     | ":=" RIGHTA
@@ -919,6 +919,17 @@ END;
       | check_eps ; e = expr → [e]
       ]
     ]
+  ;
+  where_binding:
+    [ [ p = ipatt; check_colon ; e = fun_binding →
+          let (p,e) = match e with [
+            <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
+          | _ -> (p,e)
+          ] in
+          (p, e, <:vala< [] >>)
+      | p = ipatt ; check_eps ; e = fun_binding →
+          (p, e, <:vala< [] >>)
+      ] ]
   ;
   let_binding:
     [ [ p = ipatt; check_colon ; e = fun_binding ; attrs = item_attributes →
@@ -1346,7 +1357,7 @@ END;
         ":"; t = ctyp ; attrs = item_attributes →
           <:class_str_item< method virtual $_flag:pf$ $_lid:l$ : $t$ $_itemattrs:attrs$ >>
       | "method"; ovf = V (FLAG "!") "!"; pf = V (FLAG "private") "priv";
-        l = V lident "lid" ""; topt = V (OPT polyt); e = fun_binding ; attrs = item_attributes →
+        l = V lident "lid" ""; topt = V (GREEDY OPT polyt); e = fun_binding ; attrs = item_attributes →
           <:class_str_item<
             method $_!:ovf$ $_priv:pf$ $_lid:l$ $_opt:topt$ = $e$ $_itemattrs:attrs$ >>
       | "type"; t1 = ctyp; "="; t2 = ctyp ; attrs = item_attributes →
@@ -1406,7 +1417,7 @@ END;
           <:class_sig_item< declare $_list:st$ end >>
       | "inherit"; cs = class_type ; attrs = item_attributes →
           <:class_sig_item< inherit $cs$ $_itemattrs:attrs$ >>
-      | "value"; mf = V (FLAG "mutable"); vf = V (FLAG "virtual"); l = V lident "lid" ""; ":";
+      | "value"; mf = V (GREEDY FLAG "mutable") "mflag"; vf = V (GREEDY FLAG "virtual") "vflag"; l = V lident "lid" ""; ":";
         t = ctyp ; attrs = item_attributes →
           <:class_sig_item< value $_flag:mf$ $_flag:vf$  $_lid:l$ : $t$ $_itemattrs:attrs$ >>
       | "method"; "virtual"; pf = V (FLAG "private"); l = V lident "lid" "";

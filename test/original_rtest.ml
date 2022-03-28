@@ -457,7 +457,7 @@ external p_phony : PREDICTION empty ;
     ]
     ;
   structure:
-    [ [ st = V (LIST0 [ s = str_item; OPT ";;" -> s ]) -> st ] ]
+    [ [ st = V (LIST0 [ s = str_item; OPT ";;" -> s ]) "structure" -> st ] ]
   ;
   mod_expr_ident:
     [ LEFTA
@@ -789,7 +789,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
             expr_to_inline e ext attrs
 
       | "fun"; (ext,attrs) = ext_attributes; p = patt LEVEL "simple";
-        tyopt = OPT [ ":"; t = ctyp LEVEL "apply" -> t ] ;
+        tyopt = GREEDY OPT [ ":"; t = ctyp LEVEL "apply" -> t ] ;
         (eo, e) = fun_def ->
           let e = match tyopt with [
             None -> e
@@ -1375,31 +1375,31 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   ;
   first_type_decl:
     [ [ tpl = type_parameters; n = V type_patt "tp"; "="; pf = V (FLAG "private");
-        tk = type_kind; cl = V (LIST0 constrain) ; attrs = item_attributes ->
-          <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
+        tk = type_kind; cl = LIST0 constrain ; attrs = item_attributes ->
+          <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $list:cl$ $_itemattrs:attrs$ >>
       | tpl = type_parameters; n = V type_patt "tp"; ":="; pf = V (FLAG "private");
-        tk = type_kind; cl = V (LIST0 constrain) ; attrs = item_attributes ->
-          <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
-      | tpl = type_parameters; n = V type_patt "tp"; cl = V (LIST0 constrain) ; attrs = item_attributes ->
+        tk = type_kind; cl = LIST0 constrain ; attrs = item_attributes ->
+          <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $list:cl$ $_itemattrs:attrs$ >>
+      | tpl = type_parameters; n = V type_patt "tp"; cl = LIST0 constrain ; attrs = item_attributes ->
           let tk = <:ctyp< '$choose_tvar tpl$ >> in
-          <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $_list:cl$ $_itemattrs:attrs$ >> ] ]
+          <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $list:cl$ $_itemattrs:attrs$ >> ] ]
   ;
   (* Type declaration *)
   rest_type_decl:
     [ [ "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; "="; pf = V (FLAG "private");
-        tk = type_kind; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
+        tk = type_kind; cl = LIST0 constrain ; item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
-          <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
+          <:type_decl< $_tp:n$ $list:tpl$ = $_priv:pf$ $tk$ $list:cl$ $_itemattrs:attrs$ >>
 
       | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; ":="; pf = V (FLAG "private");
-        tk = type_kind; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
+        tk = type_kind; cl = LIST0 constrain ; item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
-          <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $_list:cl$ $_itemattrs:attrs$ >>
+          <:type_decl< $_tp:n$ $list:tpl$ := $_priv:pf$ $tk$ $list:cl$ $_itemattrs:attrs$ >>
 
-      | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; cl = V (LIST0 constrain) ; item_attrs = item_attributes ->
+      | "and"; alg_attrs = alg_attributes_no_anti; tpl = type_parameters; n = V type_patt "tp"; cl = LIST0 constrain ; item_attrs = item_attributes ->
           let tk = <:ctyp< '$choose_tvar tpl$ >> in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
-          <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $_list:cl$ $_itemattrs:attrs$ >> ] ]
+          <:type_decl< $_tp:n$ $list:tpl$ = $tk$ $list:cl$ $_itemattrs:attrs$ >> ] ]
   ;
   (* TODO FIX: this should be a longident+lid, to match ocaml's grammar *)
   type_extension:

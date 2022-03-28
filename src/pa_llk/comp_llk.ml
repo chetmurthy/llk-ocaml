@@ -305,9 +305,9 @@ module Anti = struct
 value infer_kinds cg loc s kinds =
   if kinds <> [] then kinds else
     match s with [
-        ASflag _ _ -> ["flag"]
+        ASflag _ _ _ -> ["flag"]
       | ASlist _ _ _ _ _ -> ["list"]
-      | ASopt _ _ -> ["opt"]
+      | ASopt _ _ _ -> ["opt"]
       | AStok loc "CHAR" _ -> ["chr"]
       | AStok loc "FLOAT" _ -> ["flo"]
       | AStok loc "INT" _ -> ["int"]
@@ -534,7 +534,7 @@ module Env = struct
 end ;
 
 value rec check_symbol cg env = fun [
-    ASflag _ s -> check_symbol cg env s
+    ASflag _ _ s -> check_symbol cg env s
   | ASkeyw _ _ -> ()
   | ASlist _ _ _ s None -> check_symbol cg env s
   | ASlist _ _ _ s (Some (s2, _)) -> do { check_symbol cg env s ; check_symbol cg env s2 }
@@ -543,7 +543,7 @@ value rec check_symbol cg env = fun [
   | ASnterm _ _ _ _ -> ()
   | ASregexp _ _ -> ()
   | ASinfer _ _ -> ()
-  | ASopt _ s -> check_symbol cg env s
+  | ASopt _ _ s -> check_symbol cg env s
   | ASleft_assoc _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
   | ASrules _ rs -> check_rules cg env rs
   | ASself _ _ -> ()
@@ -1313,7 +1313,7 @@ value rec psymbols cg = fun [
 and psymbol cg ps = symbol cg ps.ap_symb
 
 and symbol cg = fun [
-      ASflag _ s -> TS.(union (symbol cg s) (mk[None]))
+      ASflag _ _ s -> TS.(union (symbol cg s) (mk[None]))
     | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
     | (ASlist loc _ lml elem_s sepb_opt) as s ->
        let felem = symbol cg elem_s in
@@ -1337,7 +1337,7 @@ and symbol cg = fun [
      let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
      TS.mk (toks@nulls)
 
-    | ASopt _ s -> TS.(union (mk [None]) (symbol cg s))
+    | ASopt _ _ s -> TS.(union (mk [None]) (symbol cg s))
 
   | ASleft_assoc _ s1 s2 _ ->
      let fs1 = symbol cg s1 in
@@ -1471,7 +1471,7 @@ and fifo_psymbol cg e ff ps =
  *)
 
 and fifo_symbol cg e ff = fun [
-      ASflag loc s | ASopt loc s ->
+      ASflag loc _ s | ASopt loc _ s ->
       (* the fifo of [FLAG s] is always the concat of the FIRST of s
          (minus eps) and the full-follow of [FLAG s], since [FLAG s]
          is nullable.
@@ -1839,7 +1839,7 @@ and lift_psymbol cg acc e0 left_psyms stkpat ps =
   { (ps) with ap_symb = lift_symbol cg acc e0 left_psyms stkpat ps.ap_symb }
 
 and lift_symbol cg acc e0 left_psyms revpats = fun [
-    ASflag loc s -> ASflag loc (lift_symbol cg acc e0 [] revpats s)
+    ASflag loc g s -> ASflag loc g (lift_symbol cg acc e0 [] revpats s)
   | ASkeyw _ _ as s -> s
   | ASanti _ _ as s -> s
 
@@ -1852,7 +1852,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
-  | ASopt loc s -> ASopt loc (lift_symbol cg acc e0 [] revpats s)
+  | ASopt loc g s -> ASopt loc g (lift_symbol cg acc e0 [] revpats s)
 
   | ASleft_assoc loc s1 s2 e ->
      ASleft_assoc loc (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
@@ -2324,7 +2324,88 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 
 end ;
 
-module S8SeparateSyntactic = struct
+module S8ExpandMacros = struct
+
+open FreeLids ;
+
+(** expand_macros
+
+    expand macros
+ *)
+
+value expand_macros (cg : CG.t) e =
+  let open Llk_migrate in
+  let dt = make_dt [] in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASvala loc sym anti_kinds ->
+        let sym = dt.migrate_a_symbol dt sym in
+        let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+        ASrules loc
+          {au_loc = loc;
+           au_rules =
+             [{ar_loc = loc;
+               ar_psymbols =
+                 [{ ap_loc = loc
+                  ; ap_patt = Some <:patt< $lid:x$ >>
+                  ; ap_symb = sym}];
+               ar_action = Some <:expr< Ploc.VaVal $lid:x$ >>};
+               {ar_loc = loc;
+                ar_psymbols =
+                  [{ ap_loc = loc
+                   ; ap_patt = Some <:patt< $lid:x$ >>
+                   ; ap_symb = ASanti loc anti_kinds}];
+                ar_action = Some <:expr< $lid:x$ >>}]}
+
+      | ASflag loc g sym ->
+         let sym = dt.migrate_a_symbol dt sym in
+         let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
+         let rule1_psl = if g then [ps_eps] else [] in
+         ASrules loc
+           {au_loc = loc;
+            au_rules =
+              [{ ar_loc = loc
+               ; ar_psymbols =
+                   [{ ap_loc = loc; ap_patt = None
+                      ; ap_symb = sym
+                   }]
+               ; ar_action = Some <:expr< True >>}
+               ;{ ar_loc = loc
+                ; ar_psymbols = rule1_psl
+                ; ar_action = Some <:expr< False >>}]}
+
+      | ASopt loc g sym ->
+         let sym = dt.migrate_a_symbol dt sym in
+         let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
+         let rule1_psl = if g then [ps_eps] else [] in
+         let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+
+         ASrules loc
+                 {au_loc = loc;
+                  au_rules =
+                   [{ar_loc = loc;
+                     ar_psymbols =
+                      [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                        ap_symb = sym}];
+                     ar_action = Some <:expr< Some $lid:x$ >>};
+                    {ar_loc = loc; ar_psymbols = rule1_psl;
+                     ar_action = Some <:expr< None >>}]}
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = {(dt) with
+             migrate_a_symbol = migrate_a_symbol
+           } in
+  dt.migrate_a_entry dt e
+;
+
+value exec0 cg el = List.map (expand_macros cg) el ;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S9SeparateSyntactic = struct
   (** in each entry, separate entries with some rules that start
       with syntactic predicates and some that do not, into two entries,
       one with syntactic predicates, and the other without.
@@ -2469,7 +2550,7 @@ module Infer = struct
 open PatternBaseToken ;
 
 value rec infer_symbol cg stk ename = fun [
-   ASflag _ s | ASopt _ s ->
+   ASflag _ _ s | ASopt _ _ s ->
    (match infer_symbol cg stk ename s with [
         (re, False) ->
             if PSyn.empty re then (PSyn.epsilon, False)
@@ -2521,6 +2602,13 @@ value rec infer_symbol cg stk ename = fun [
           else (PSyn.(disjunction [re; anti_re]), False)
         | (re, True) -> (PSyn.(disjunction [re; anti_re]), True)
      ])
+
+  | ASanti _ sl ->
+     let anti_re =
+       sl
+       |> List.concat_map (fun s -> PSyn.[token (ANTI s); token (ANTI ("_"^s))])
+       |> PSyn.disjunction in
+     (anti_re, True)
 ]
 
 and infer_entry cg stk e =
@@ -2710,13 +2798,13 @@ value illegal_begin_msg e fifotxt =
 
 value rec compile1_symbol cg loc e s =
   match s with [
-      ASflag loc s -> do {
+      ASflag loc g s -> do {
         let s_body = compile1_symbol cg loc e s in
         (* <:expr< parser [ [: _ = $s_body$ :] -> True | [: :] -> False ] >> *)
         <:expr< parse_flag $s_body$ >>
       }
 
-    | ASopt loc s -> do {
+    | ASopt loc g s -> do {
         let s_body = compile1_symbol cg loc e s in
         <:expr< parse_opt $s_body$ >>
        }
@@ -2793,11 +2881,11 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
   in
   let patt = match ps.ap_patt with [ None -> <:patt< _ >> | Some p -> p ] in
   match ps.ap_symb with [
-      ASflag loc s -> do {
+      ASflag loc _ s -> do {
         let s_body = compile1_symbol cg loc e s in
         (SpNtr loc patt (must <:expr< parse_flag $s_body$ >>), SpoNoth)
        }
-    | ASopt loc s -> do {
+    | ASopt loc _ s -> do {
         let s_body = compile1_symbol cg loc e s in
         (SpNtr loc patt (must <:expr< parse_opt $s_body$ >>), SpoNoth)
        }
@@ -3315,7 +3403,7 @@ value compile_sp_entry cg e = do {
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S8SeparateSyntactic.is_syntactic_predicate_rule rl in
+  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S9SeparateSyntactic.is_syntactic_predicate_rule rl in
   assert (List.length nonsp_rl = 1) ;
   assert (sp_rl <> []) ;
   let fallback = match List.hd nonsp_rl with [
@@ -3347,7 +3435,7 @@ value compile_sp_entry cg e = do {
 ;
 
 value compile_entry cg e =
-  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S8SeparateSyntactic.is_syntactic_predicate_rule then
+  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S9SeparateSyntactic.is_syntactic_predicate_rule then
     compile_sp_entry cg e
   else
     compile1_entry cg e
@@ -3570,9 +3658,16 @@ value lift_lists loc ?{bootstrap=False} s =
   |> Dump.exec "After S7LiftLists"
 ;
 
-value left_factorize2 loc ?{bootstrap=False} s =
+value expand_macros loc ?{bootstrap=False} s =
   s
   |> lift_lists loc ~{bootstrap=bootstrap}
+  |> S8ExpandMacros.exec
+  |> Dump.exec "After S8ExpandMacros"
+;
+
+value left_factorize2 loc ?{bootstrap=False} s =
+  s
+  |> expand_macros loc ~{bootstrap=bootstrap}
   |> S5LeftFactorize.exec
 ;
 
@@ -3588,7 +3683,7 @@ value lambda_lift2 loc ?{bootstrap=False} s =
 value separate_syntactic loc ?{bootstrap=False} s =
   s
   |> lambda_lift2 loc ~{bootstrap=bootstrap}
-  |> S8SeparateSyntactic.exec
+  |> S9SeparateSyntactic.exec
 ;
 
 value first loc ?{bootstrap=False} s =
