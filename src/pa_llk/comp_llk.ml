@@ -219,8 +219,13 @@ module CompilingGrammar = struct
     SM.lookup nt (snd cg).follows
   };
 
-  value add_follow (cg : t) nt fi =
-    (snd cg).follows := SM.addset (snd cg).follows (nt, fi) ;
+  value trace_follow = ref False ;
+  value watch_follow ((nt : Name.t), (from:string), (ti : TS.t token)) = () ;
+  value add_follow (cg : t) ~{from:string} nt fi = do {
+    watch_follow (nt, from, fi) ;
+    (snd cg).follows := SM.addset (snd cg).follows (nt, fi)
+  }
+  ;
 
 
   value adjust0_loc loc loc' =
@@ -1420,21 +1425,21 @@ value fi2fo cg loc fi = fifo_concat cg loc ~{must=True} fi TS.mt ;
 value watch_follow (nt : Name.t) (ff : TS.t token) = () ;
 
 
-value rec fifo_psymbols cg ff = fun [
+value rec fifo_psymbols cg e ff = fun [
       [] -> ff
-    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg ff t
-    | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg ff t
-    | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg ff t
+    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg e ff t
+    | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg e ff t
+    | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg e ff t
     | [h::t] ->
-       let ft = fifo_psymbols cg ff t in
-       fifo_psymbol cg ft h
+       let ft = fifo_psymbols cg e ff t in
+       fifo_psymbol cg e ft h
        
 ]
 
-and fifo_psymbol cg ff ps =
-  fifo_symbol cg ff ps.ap_symb
+and fifo_psymbol cg e ff ps =
+  fifo_symbol cg e ff ps.ap_symb
 
-(** [fifo_symbol cg ff]
+(** [fifo_symbol cg e ff]
 
     fimap: the result of First.exec, the map from nonterminal to
    FIRST-set mm: mutable map of FOLLOW sets ff: full-follow for the
@@ -1450,13 +1455,13 @@ and fifo_psymbol cg ff ps =
 
  *)
 
-and fifo_symbol cg ff = fun [
+and fifo_symbol cg e ff = fun [
       ASflag loc s | ASopt loc s ->
       (* the fifo of [FLAG s] is always the concat of the FIRST of s
          (minus eps) and the full-follow of [FLAG s], since [FLAG s]
          is nullable.
        *)
-      let _ = fifo_symbol cg ff s in
+      let _ = fifo_symbol cg e ff s in
       let fi_s = First.symbol cg s in do {
         if nullable fi_s then
           raise_failwith (CG.adjust_loc cg loc) "FLAG/OPT must not be nullable"
@@ -1494,7 +1499,7 @@ and fifo_symbol cg ff = fun [
 
            let _ = 
              let ff = fifo_concat cg loc ~{must=True} fi_s ff in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            fifo_concat cg loc ~{if_nullable=True} fi_s ff
 
@@ -1514,11 +1519,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = (fifo_concat cg loc ~{if_nullable=True} fi_s (fifo_concat cg loc fi_s2 ff)) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            fifo_concat cg loc ~{if_nullable=True} fi_s (TS.union (fi2fo cg loc fi_s2) ff)
 
@@ -1539,11 +1544,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            fifo_concat cg loc ~{if_nullable=True} fi_s (TS.union (fi2fo cg loc fi_s2) ff)
 
@@ -1557,7 +1562,7 @@ and fifo_symbol cg ff = fun [
          | (LML_0, None) ->
            let _ = 
              let ff = fifo_concat cg loc ~{must=True} fi_s ff in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            fifo_concat cg loc ~{must=True} fi_s ff
 
@@ -1577,11 +1582,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = (fifo_concat cg loc ~{if_nullable=True} fi_s (fifo_concat cg loc fi_s2 ff)) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff)
 
@@ -1601,11 +1606,11 @@ and fifo_symbol cg ff = fun [
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg ff s in
+             fifo_symbol cg e ff s in
 
            let _ =
              let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff) in
-             fifo_symbol cg ff s2 in
+             fifo_symbol cg e ff s2 in
 
            TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff)
 
@@ -1614,7 +1619,7 @@ and fifo_symbol cg ff = fun [
   | ASnext loc _ | ASself loc _ -> raise_failwithf (CG.adjust_loc cg loc) "fifo_symbol: internal error: NEXT should not occur here"
   | ASnterm loc nt _ _ as s when CG.exists_entry cg nt -> do {
         watch_follow nt ff ;
-        CG.add_follow cg nt ff ;
+        CG.add_follow cg ~{from=Name.print e.ae_name} nt ff ;
         let fi_s = First.symbol cg s in
         fifo_concat cg loc ~{if_nullable=True} fi_s ff
       }
@@ -1634,22 +1639,22 @@ and fifo_symbol cg ff = fun [
 
      let _ =
        let ff = TS.(union (fi2fo cg loc fi_s2) ff) in
-       fifo_symbol cg ff s1 in
+       fifo_symbol cg e ff s1 in
 
      let _ =
        let ff = TS.(union (fi2fo cg loc fi_s2) ff) in
-       fifo_symbol cg ff s2 in
+       fifo_symbol cg e ff s2 in
 
      fifo_concat cg loc ~{if_nullable=True} fi_s1
        (fifo_concat cg loc ~{if_nullable=True} fi_s2 ff)
 
   | ASrules loc rs ->
-     fifo_rules cg ff rs
+     fifo_rules cg e ff rs
 
   | AStok loc cls tokopt -> TS.mk [CLS cls tokopt]
 
   | ASvala loc s sl as s0 ->
-     let _ = fifo_symbol cg ff s in
+     let _ = fifo_symbol cg e ff s in
 
      let fi_vala = First.symbol cg s0 in
      fifo_concat cg loc ~{if_nullable=True} fi_vala ff
@@ -1657,20 +1662,20 @@ and fifo_symbol cg ff = fun [
   | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
 ]
 
-and fifo_rule cg ff r =
-  fifo_psymbols cg ff r.ar_psymbols
+and fifo_rule cg e ff r =
+  fifo_psymbols cg e ff r.ar_psymbols
 
-and fifo_rules cg ff rs =
+and fifo_rules cg e ff rs =
   let loc = rs.au_loc in
   let rl = rs.au_rules in
   let fi_rs = rl |> List.map (First.rule cg) |> TS.unionl in do {
     rl |> List.iter (fun r ->
-              ignore (fifo_rule cg ff r)) ;
+              ignore (fifo_rule cg e ff r)) ;
     fifo_concat cg loc ~{if_nullable=True} fi_rs ff
   }
 
-and fifo_level cg ff lev =
-  fifo_rules  cg ff lev.al_rules
+and fifo_level cg e ff lev =
+  fifo_rules  cg e ff lev.al_rules
 ;
 
 value comp1_entry cg e =
@@ -1678,7 +1683,7 @@ try
   let ll = e.ae_levels in do {
   assert (1 = List.length ll) ;
   let e_ff = CG.follow cg e.ae_name in
-  ignore (fifo_level cg e_ff (List.hd ll))
+  ignore (fifo_level cg e e_ff (List.hd ll))
 }
 with First.ExternalEntry _ -> ()
 ;
@@ -1698,7 +1703,7 @@ value rec comprec el cg = do {
 value exec0 cg ~{tops} el = do {
   ignore (First.exec0 cg el) ;
   tops |> List.iter (fun t ->
-              CG.add_follow cg t [CLS "EOI" None]) ;
+              CG.add_follow cg ~{from="entrypoint"} t [CLS "EOI" None]) ;
   comprec el cg
 }
 ;
@@ -1919,14 +1924,9 @@ module S7LiftLists = struct
    LIST0 sym SEP sym2 OPT_SEP ->
 
    entry: [ [ x = sym -> [x]
-            | x = sym ; sym2 -> [x]
             | x = sym ; sym2 ; y = entry -> [x :: y]
             | -> []
             ] ] ;
-
-  e1[x]: [ [ y = entry -> [x :: y] | -> [x] ] ] ;
-  e2[x]: [ [ sym2 ; z = e1[x] -> z ] ] ;
-  entry: [ [ x = sym ; z = e2[x] -> z ] ] ;
 
 ================================================================
 
@@ -1935,10 +1935,6 @@ module S7LiftLists = struct
    entry: [ [ x = sym -> [x]
             | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
             ] ] ;
-
-   e1[x]: [ [ sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
-            | -> [x] ] ] ;
-   entry: [ [ x = sym ; y = e1[x] -> y ] ] ;
 
 ================================================================
 
@@ -2112,62 +2108,78 @@ value list0sep_e2 cg (formals, actuals) ~{new_e1} e = fun [
 ]
 ;
 
-(* e1[x]: [ [ sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
-            | -> [x] ] ] ; ; *)
-value list1sep_opt_e1 cg (formals, actuals) e = fun [
-  ASlist loc LML_1 s0 (Some (s1, True)) as s ->
-  let new_ename1 = CG.fresh_name cg e.ae_name in
-  let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
-  let formal_x = <:patt< $lid:new_x$ >> in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let formal_y = <:patt< $lid:new_y$ >> in
-  let s' = ASlist loc LML_0 s0 (Some (s1, True)) in
-  let rule0 = {ar_loc=loc
-              ;ar_action= Some <:expr< [ $lid:new_x$ :: $lid:new_y$ ] >>
-              ;ar_psymbols=[{ap_loc=loc; ap_patt=None; ap_symb=s1}
-                           ;{ap_loc=loc; ap_patt=Some formal_y; ap_symb=s'}]} in
-  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$] >> ; ar_psymbols = []} in
-  let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename1
-  ; ae_loc = loc
-  ; ae_pos = None
-  ; ae_formals = formals@[formal_x]
-  ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
-  }
+
+(*
+   entry: [ [ x = sym -> [x]
+            | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
+            ] ] ;
+ *)
+value list1sep_opt_e cg (formals, actuals) e = fun [
+  ASlist loc LML_1 sym (Some (sep, True)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+
+{ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
+    ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+        {au_loc = loc;
+         au_rules =
+          [{ar_loc = loc;
+            ar_psymbols =
+             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+               ap_symb = sym}];
+            ar_action = Some <:expr< [$lid:x$] >>};
+           {ar_loc = loc;
+            ar_psymbols =
+             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+               ap_symb = sym};
+              {ap_loc = loc; ap_patt = None;
+               ap_symb = sep};
+              {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
+               ap_symb = ASlist loc LML_0 sym (Some (sep, True))}];
+            ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>}]}}];
+    ae_preceding_psymbols = []}
 ]
 ;
 
-(* entry: [ [ x = sym ; y = e1[x] -> y ] ] ; *)
-value list1sep_opt_e2 cg (formals, actuals) ~{new_e1} e = fun [
-  ASlist loc LML_1 s0 (Some (s1, True)) as s ->
-  let new_ename1 = CG.fresh_name cg e.ae_name in
-  let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
-  let formal_x = <:patt< $lid:new_x$ >> in
-  let actual_x = <:expr< $lid:new_x$ >> in
-  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
-  let formal_y = <:patt< $lid:new_y$ >> in
-  let actual_y = <:expr< $lid:new_y$ >> in
-  let s' = ASnterm loc new_e1.ae_name (actuals@[actual_x]) None in
-  let rule0 = {ar_loc=loc
-              ;ar_action= Some actual_y
-              ;ar_psymbols=[{ap_loc=loc; ap_patt= Some formal_x; ap_symb=s0}
-                           ;{ap_loc=loc; ap_patt= Some formal_y; ap_symb=s'}]} in
-  let rules = {au_loc=loc; au_rules=[rule0]} in
-  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
-  {
-    ae_name = new_ename1
-  ; ae_loc = loc
-  ; ae_pos = None
-  ; ae_formals = formals
-  ; ae_preceding_psymbols = []
-  ; ae_levels = [level]
-  }
+(*
+   entry: [ [ x = sym -> [x]
+            | x = sym ; sym2 ; y = entry -> [x :: y]
+            | -> []
+            ] ] ;
+ *)
+value list0sep_opt_e cg (formals, actuals) e = fun [
+  ASlist loc LML_0 sym (Some (sep, True)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  
+{ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
+    ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+        {au_loc = loc;
+         au_rules =
+          [{ar_loc = loc;
+            ar_psymbols =
+             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+               ap_symb = sym}];
+            ar_action = Some <:expr< [$lid:x$] >>};
+           {ar_loc = loc;
+            ar_psymbols =
+             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+               ap_symb = sym};
+              {ap_loc = loc; ap_patt = None;
+               ap_symb = sep};
+              {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
+               ap_symb = ASnterm loc ename [] None}];
+            ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>};
+           {ar_loc = loc; ar_psymbols = []; ar_action = Some <:expr< [] >>}]}}];
+    ae_preceding_psymbols = []}
 ]
 ;
-
 
 value lift_lists cg acc e =
   let open Llk_migrate in
@@ -2256,15 +2268,26 @@ value lift_lists cg acc e =
           |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
         let actuals = formals2actuals cg formals in
 
-        (* e1[x]: [ [ sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y] ] ] ; *)
-        let new_e1 = list1sep_opt_e1 cg (formals, actuals) e s in
-
-        (* entry: [ [ x = sym ; y = e1[x] -> y ] ] ; *)
-        let new_e2 = list1sep_opt_e2 cg (formals, actuals) ~{new_e1=new_e1} e s in
+        let new_e = list1sep_opt_e cg (formals, actuals) e s in
 
         do {
-          acc.val := [new_e1 ; new_e2 :: acc.val] ;
-          ASnterm loc new_e2.ae_name actuals None
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc LML_0 s0 (Some (s1, True)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = list0sep_opt_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
         }
 
       | s -> fallback_migrate_a_symbol dt s
@@ -3441,6 +3464,7 @@ end ;
 module Dump = struct
 
 value exec msg cg = do {
+  let pctxt = if Codegen.report_verbose.val then Pr.normal else Pr.errmsg in
   Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
   Fmt.(pf stderr "================================================================\n") ;
   (CG.gram_entries cg)
@@ -3448,12 +3472,12 @@ value exec msg cg = do {
          let fi = CG.first cg e.ae_name in
          let fo = CG.follow cg e.ae_name in
          Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-                Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
+                Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
                 (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
          )
        ) ;
   Fmt.(pf stderr "================================================================\n") ;
-  prerr_string Pr.(top ~{pctxt=errmsg} Pprintf.empty_pc (CG.g cg)) ;
+  prerr_string Pr.(top ~{pctxt=pctxt} Pprintf.empty_pc (CG.g cg)) ;
   Fmt.(pf stderr "\n================================================================\n%!") ;
   cg
 }
@@ -3534,11 +3558,27 @@ value lift_lists loc ?{bootstrap=False} s =
   s
   |> lambda_lift loc ~{bootstrap=bootstrap}
   |> S7LiftLists.exec
+  |> Dump.exec "After S7LiftLists"
+;
+
+value left_factorize2 loc ?{bootstrap=False} s =
+  s
+  |> lift_lists loc ~{bootstrap=bootstrap}
+  |> S5LeftFactorize.exec
+;
+
+value lambda_lift2 loc ?{bootstrap=False} s =
+  s
+  |> left_factorize2 loc ~{bootstrap=bootstrap}
+  |> CheckLexical.exec
+  |> S6LambdaLift.exec
+  |> CheckLexical.exec
+  |> SortEntries.exec
 ;
 
 value separate_syntactic loc ?{bootstrap=False} s =
   s
-  |> lift_lists loc ~{bootstrap=bootstrap}
+  |> lambda_lift2 loc ~{bootstrap=bootstrap}
   |> S8SeparateSyntactic.exec
 ;
 

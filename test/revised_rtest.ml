@@ -534,8 +534,6 @@ END;
       | "value"; ext = ext_opt; r = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and") ->
           str_item_to_inline loc <:str_item< value $_flag:r$ $_list:l$ >> ext
 
-      | "#"; s = V STRING; sil = V (LIST0 [ si = str_item → (si, loc) ]) →
-          <:str_item< # $_str:s$ $_list:sil$ >>
       | e = expr ; attrs = item_attributes → <:str_item< $exp:e$ $_itemattrs:attrs$ >>
       | attr = floating_attribute -> <:str_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
