@@ -120,6 +120,18 @@ END;
 |foo}
 ] ;;
 
+[@@@llk
+{foo|
+GRAMMAR VALA2:
+EXPORT: vala1 vala2;
+vala1: [ [ x = LIDENT -> <:vala< x >>
+         | x = ANTI "lid" "_lid" -> x
+         ] ] ;
+vala2: [ [ x = V LIDENT "a" "b" -> x ] ] ;
+END;
+|foo}
+] ;;
+
 
 [@@@llk
 {foo|

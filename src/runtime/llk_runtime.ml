@@ -82,6 +82,15 @@ value parse_antiquot elem kinds = parser [
 ]
 ;
 
+value parse_antiquot_token kinds = parser [
+  [: `("ANTIQUOT", x) when
+      match Plexer.parse_antiquot x with [
+          Some (k, _) -> List.mem k kinds
+        | _ -> False
+        ] :] -> Ploc.VaAnt x
+]
+;
+
 value must_peek_nth n strm : option (string * string) =
   let l = Stream.npeek n strm in
   if List.length l = n then Some (fst (Asttools.sep_last l))

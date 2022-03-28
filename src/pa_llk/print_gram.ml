@@ -229,6 +229,9 @@ and simple_symbol~{pctxt} pc sy =
   | ASsyntactic _ sym ->
        pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
 
+  | ASanti _ sl ->
+     pprintf pc "ANTI @[<2>%p@]" (string_list pctxt) sl
+
   | ASlist _ _ _ _ _ | ASopt _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]

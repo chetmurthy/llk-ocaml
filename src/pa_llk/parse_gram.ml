@@ -170,6 +170,8 @@ EXTEND
       | e = STRING ->
           ASkeyw loc e
 
+      | UIDENT "ANTI" ; l = LIST1 STRING -> ASanti loc l
+
       | id = LIDENT ;
         args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
         lev = OPT [ UIDENT "LEVEL"; s = STRING -> s ] ->

@@ -550,6 +550,7 @@ value rec check_symbol cg env = fun [
   | AStok _ _ _ -> ()
   | ASsyntactic _ s -> check_symbol cg env s
   | ASvala _ s _ -> check_symbol cg env s
+  | ASanti _ _ -> ()
 ]
 
 and check_rule cg env r =
@@ -1348,6 +1349,8 @@ and symbol cg = fun [
   | AStok _ cls tokopt -> TS.mk[Some (CLS cls tokopt)]
   | ASvala loc s anti_kinds ->
      TS.(union (symbol cg s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
+  | ASanti loc anti_kinds ->
+     TS.(anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk)
   | ASregexp loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
   | ASinfer loc _ as s ->
@@ -1671,6 +1674,10 @@ and fifo_symbol cg e ff = fun [
      let fi_vala = First.symbol cg s0 in
      fifo_concat cg loc ~{if_nullable=True} fi_vala ff
 
+  | ASanti loc sl as s0 ->
+     let fi_vala = First.symbol cg s0 in
+     fifo_concat cg loc ~{if_nullable=True} fi_vala ff
+
   | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
 ]
 
@@ -1834,6 +1841,7 @@ and lift_psymbol cg acc e0 left_psyms stkpat ps =
 and lift_symbol cg acc e0 left_psyms revpats = fun [
     ASflag loc s -> ASflag loc (lift_symbol cg acc e0 [] revpats s)
   | ASkeyw _ _ as s -> s
+  | ASanti _ _ as s -> s
 
   | ASlist loc g lml s None ->
      ASlist loc g lml (lift_symbol cg acc e0 [] revpats s) None
@@ -2837,6 +2845,15 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
          |> Ppxutil.convert_up_list_expr loc in
        let elem = compile1_symbol cg loc e elem in
        let exp = <:expr< parse_antiquot $elem$ $kinds_list_expr$ >> in
+       (SpNtr loc patt (must exp), SpoNoth)
+
+    | ASanti loc anti_kinds ->
+       let kinds_list_expr =
+         anti_kinds
+         |> List.concat_map (fun k -> [k; "_"^k])
+         |> List.map (fun k -> <:expr< $str:k$ >>)
+         |> Ppxutil.convert_up_list_expr loc in
+       let exp = <:expr< parse_antiquot_token $kinds_list_expr$ >> in
        (SpNtr loc patt (must exp), SpoNoth)
 
     | s -> do {
