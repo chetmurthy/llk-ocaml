@@ -85,6 +85,8 @@ open Print_gram ;;
 open Comp_llk ;;
 open Llk_regexps ;;
 
+let pctxt = Pr.normal ;;
+
 let pp_name n = Fmt.(pf stdout "%s" (Primtypes.Name.print n)) ;;
 #install_printer pp_name ;;
 
@@ -94,25 +96,24 @@ let pp_regexp_ast e = Fmt.(pf stdout "<:regexp_ast< %s >>" (Pr.pr_regexp_ast Ppr
 let pp_regexp e = Fmt.(pf stdout "<:regexp< %s >>" (PSyn.print e)) ;;
 #install_printer pp_regexp ;;
 
-let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" Pr.(entry ~pctxt:errmsg Pprintf.empty_pc e)) ;;
+let pp_a_entry e = Fmt.(pf stdout "<:entry<%s>>" Pr.(entry ~pctxt Pprintf.empty_pc e)) ;;
 #install_printer pp_a_entry ;;
 
-let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" Pr.(level ~pctxt:errmsg false Pprintf.empty_pc e)) ;;
+let pp_a_level e = Fmt.(pf stdout "<:level<%s>>" Pr.(level ~pctxt false Pprintf.empty_pc e)) ;;
 #install_printer pp_a_level ;;
 
-let pp_a_symbol e = Fmt.(pf stdout "<:symbol<%s>>" Pr.(symbol ~pctxt:errmsg Pprintf.empty_pc e)) ;;
+let pp_a_symbol e = Fmt.(pf stdout "<:symbol<%s>>" Pr.(symbol ~pctxt Pprintf.empty_pc e)) ;;
 #install_printer pp_a_symbol ;;
 
-let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" Pr.(psymbol ~pctxt:errmsg Pprintf.empty_pc e)) ;;
+let pp_a_psymbol e = Fmt.(pf stdout "<:psymbol<%s>>" Pr.(psymbol ~pctxt Pprintf.empty_pc e)) ;;
 #install_printer pp_a_psymbol ;;
 
-let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" Pr.(rule ~pctxt:errmsg true Pprintf.empty_pc e)) ;;
+let pp_a_rule e = Fmt.(pf stdout "<:rule<%s>>" Pr.(rule ~pctxt true Pprintf.empty_pc e)) ;;
 #install_printer pp_a_rule ;;
 
 let pp_cg (cg : CG.t) = Fmt.(pf stdout "<cg>") ;;
-(*
 #install_printer pp_cg ;;
- *)
+
 (* ================================================================ *)
 
 (*
@@ -165,10 +166,10 @@ open Regexp_test ;;
 
 #load "error_rtest.cmo";;
 open Error_rtest ;;
-
+ *)
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-
+(*
 #load "external_test.cmo";;
 open External_test ;;
 
