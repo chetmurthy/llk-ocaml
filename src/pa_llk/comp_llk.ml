@@ -1897,8 +1897,7 @@ module S7LiftLists = struct
 
    LIST0 sym SEP sym2 ->
 
-   entry: [ [ x = sym ; y = LIST1 sym SEP sym2 -> [x :: y]
-            | x = sym -> [x]
+   entry: [ [ y = LIST1 sym SEP sym2 -> y
             | -> [] ] ] ;
 
    LIST1 sym ->
@@ -2033,6 +2032,52 @@ value list1sep_e3 cg (formals, actuals) ~{new_e2} e = fun [
 ;
 
 
+(* [ y = LIST1 sym SEP sym2 -> y ] *)
+value list0sep_e1 cg (formals, actuals) e = fun [
+  ASlist loc LML_0 s0 (Some (s1, False)) as s ->
+  let new_ename1 = CG.fresh_name cg e.ae_name in
+  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let s' = ASlist loc LML_1 s0 (Some (s1, False)) in
+  let rule0 = {ar_loc=loc
+              ;ar_action= Some <:expr< $lid:new_y$ >>
+              ;ar_psymbols=[{ap_loc=loc; ap_patt= Some <:patt< $lid:new_y$ >>; ap_symb=s'}]} in
+  let rules = {au_loc=loc; au_rules=[rule0]} in
+  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
+  {
+    ae_name = new_ename1
+  ; ae_loc = loc
+  ; ae_pos = None
+  ; ae_formals = formals
+  ; ae_preceding_psymbols = []
+  ; ae_levels = [level]
+  }
+]
+;
+
+
+(*    [ [ y = e1 -> y | -> [] ] ] ; *)
+value list0sep_e2 cg (formals, actuals) ~{new_e1} e = fun [
+  ASlist loc LML_0 s0 (Some (s1, False)) as s ->
+  let new_ename1 = CG.fresh_name cg e.ae_name in
+  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let s' = ASnterm loc new_e1.ae_name actuals None in
+  let rule0 = {ar_loc=loc
+              ;ar_action= Some <:expr< $lid:new_y$ >>
+              ;ar_psymbols=[{ap_loc=loc; ap_patt= Some <:patt< $lid:new_y$ >>; ap_symb=s'}]} in
+  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = []} in
+  let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
+  let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
+  {
+    ae_name = new_ename1
+  ; ae_loc = loc
+  ; ae_pos = None
+  ; ae_formals = formals
+  ; ae_preceding_psymbols = []
+  ; ae_levels = [level]
+  }
+]
+;
+
 value lift_lists cg acc e =
   let open Llk_migrate in
   let dt = make_dt [] in
@@ -2091,6 +2136,25 @@ value lift_lists cg acc e =
         do {
           acc.val := [new_e1 ; new_e2 ; new_e3 :: acc.val] ;
           ASnterm loc new_e3.ae_name actuals None
+        }
+
+      | ASlist loc LML_0 s0 (Some (s1, False)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        (* [ y = LIST1 sym SEP sym2 -> y ] *)
+        let new_e1 = list0sep_e1 cg (formals, actuals) e s in
+
+        (*    [ [ y = e1 -> y | -> [] ] ] ; *)
+        let new_e2 = list0sep_e2 cg (formals, actuals) ~{new_e1=new_e1} e s in
+
+        do {
+          acc.val := [new_e1 ; new_e2 :: acc.val] ;
+          ASnterm loc new_e2.ae_name actuals None
         }
 
       | s -> fallback_migrate_a_symbol dt s
