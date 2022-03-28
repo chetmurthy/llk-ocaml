@@ -35,13 +35,24 @@ value print_token_option = fun [
 ;
 
 module Ctr = struct
-  type t = ref int ;
-  value mk () = ref 0 ;
+  type t = { it : Hashtbl.t string (ref int) } ;
+  value mk () = { it = Hashtbl.create 23 } ;
+  value find {it=it} s =
+    match Hashtbl.find it s with [
+        x -> x
+      | exception Not_found -> do {
+          let v = ref 1 in
+          Hashtbl.add it s v ;
+          v
+        }
+      ]
+  ;
   value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
-
-  value fresh_name root ctr =
-    let n = next ctr in
-    Name.fresh root n ;
+  value fresh_name root it =
+    let r = find it (fst root) in
+    let n = next r in
+    Name.fresh root n
+  ;
 end ;
 
 module type TOKENSET = sig
@@ -1044,6 +1055,7 @@ value passthru_entry cg e from_name to_name =
   let actuals = formals2actuals cg e.ae_formals in
   {ae_loc = loc; ae_name = from_name; ae_formals = formals ; ae_pos = None;
    ae_preceding_psymbols = [];
+   ae_source_symbol = None;
    ae_levels =
      [{al_loc = loc; al_label = None; al_assoc = None;
        al_rules =
@@ -1837,7 +1849,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASleft_assoc loc s1 s2 e ->
      ASleft_assoc loc (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
 
-  | ASrules loc rl ->
+  | ASrules loc rl as s ->
      let formals = e0.ae_formals @ (List.rev revpats) in
      let ids_of_rl = free_lids_of_a_rules rl in
      let formals =
@@ -1852,6 +1864,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
        ; ae_formals = formals
        ; ae_levels = [{al_loc = rl.au_loc; al_label = None ; al_assoc = None ; al_rules = rl}]
        ; ae_preceding_psymbols = left_psyms
+       ; ae_source_symbol = Some s
        } in do {
          Std.push acc new_e ;
          ASnterm rl.au_loc new_ename actuals None
@@ -1973,6 +1986,7 @@ value list0_e (cg : CG.t) (formals, actuals) e = fun [
   ; ae_formals = formals
   ; ae_preceding_psymbols = []
   ; ae_levels = [level]
+  ; ae_source_symbol = Some s
   }
 ]
 ;
@@ -1996,6 +2010,7 @@ value list1_e (cg : CG.t) (formals, actuals) e = fun [
   ; ae_formals = formals
   ; ae_preceding_psymbols = []
   ; ae_levels = [level]
+  ; ae_source_symbol = Some s
   }
 ]
 ;
@@ -2041,6 +2056,7 @@ value list1sep_e (cg : CG.t) (formals, actuals) e = fun [
              }
      ]}}]
   ; ae_preceding_psymbols = []
+  ; ae_source_symbol = Some s
   }
 ]
 ;
@@ -2082,6 +2098,7 @@ value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
        }
       ]
   ; ae_preceding_psymbols = []
+  ; ae_source_symbol = Some s
   }
 ]
 ;
@@ -2097,27 +2114,29 @@ value list1sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
   let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
 
-{ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
-    ae_levels =
+  {ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
+   ae_levels =
      [{al_loc = loc; al_label = None; al_assoc = None;
        al_rules =
-        {au_loc = loc;
-         au_rules =
-          [{ar_loc = loc;
-            ar_psymbols =
-             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
-               ap_symb = sym}];
-            ar_action = Some <:expr< [$lid:x$] >>};
-           {ar_loc = loc;
-            ar_psymbols =
-             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
-               ap_symb = sym};
-              {ap_loc = loc; ap_patt = None;
-               ap_symb = sep};
-              {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
-               ap_symb = ASlist loc g LML_0 sym (Some (sep, True))}];
-            ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>}]}}];
-    ae_preceding_psymbols = []}
+         {au_loc = loc;
+          au_rules =
+            [{ar_loc = loc;
+              ar_psymbols =
+                [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                              ap_symb = sym}];
+              ar_action = Some <:expr< [$lid:x$] >>};
+              {ar_loc = loc;
+               ar_psymbols =
+                 [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                               ap_symb = sym};
+                  {ap_loc = loc; ap_patt = None;
+                   ap_symb = sep};
+                  {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
+                                                               ap_symb = ASlist loc g LML_0 sym (Some (sep, True))}];
+               ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>}]}}]
+   ; ae_preceding_psymbols = []
+   ; ae_source_symbol = Some s
+  }
 ]
 ;
 
@@ -2133,38 +2152,40 @@ value list0sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
   let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
   
-{ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
-    ae_levels =
+  {ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
+   ae_levels =
      [{al_loc = loc; al_label = None; al_assoc = None;
        al_rules =
-        {au_loc = loc;
-         au_rules =
-          [{ar_loc = loc;
-            ar_psymbols =
-             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
-               ap_symb = sym}];
-            ar_action = Some <:expr< [$lid:x$] >>};
-           {ar_loc = loc;
-            ar_psymbols =
-             [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
-               ap_symb = sym};
-              {ap_loc = loc; ap_patt = None;
-               ap_symb = sep};
-              {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
-               ap_symb = ASnterm loc ename [] None}];
-            ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>};
-           {ar_loc = loc; ar_psymbols = []; ar_action = Some <:expr< [] >>}]}}];
-    ae_preceding_psymbols = []}
+         {au_loc = loc;
+          au_rules =
+            [{ar_loc = loc;
+              ar_psymbols =
+                [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                              ap_symb = sym}];
+              ar_action = Some <:expr< [$lid:x$] >>};
+              {ar_loc = loc;
+               ar_psymbols =
+                 [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                                                               ap_symb = sym};
+                  {ap_loc = loc; ap_patt = None;
+                   ap_symb = sep};
+                  {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
+                                                               ap_symb = ASnterm loc ename [] None}];
+               ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>};
+               {ar_loc = loc; ar_psymbols = []; ar_action = Some <:expr< [] >>}]}}]
+   ; ae_preceding_psymbols = []
+   ; ae_source_symbol = Some s
+  }
 ]
 ;
 
-value lift_lists (cg : CG.t) acc e =
+value lift_lists1 (cg : CG.t) acc e =
   let open Llk_migrate in
   let dt = make_dt [] in
   let fallback_migrate_a_entry = dt.migrate_a_entry in
   let migrate_a_entry dt e =
     let dt = {(dt) with aux = e.ae_formals} in
-    fallback_migrate_a_entry dt e in
+    {(e) with ae_levels = List.map (dt.migrate_a_level dt) e.ae_levels} in
 
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
@@ -2276,10 +2297,15 @@ value lift_lists (cg : CG.t) acc e =
   dt.migrate_a_entry dt e
 ;
 
-value rec exec1_entry (cg : CG.t) e =
+value lift_lists cg e =
   let acc = ref [] in
-  let e = lift_lists cg acc e in
-  [e :: List.concat_map (exec1_entry cg) acc.val]
+  let e = lift_lists1 cg acc e in
+  (e, acc.val)
+;
+
+value rec exec1_entry (cg : CG.t) e =
+  let (e, newel) = lift_lists cg e in
+  [e :: List.concat_map (exec1_entry cg) newel]
 ;
 
 value exec0 cg el =

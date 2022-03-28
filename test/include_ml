@@ -172,10 +172,10 @@ open Regexp_test ;;
 
 #load "error_rtest.cmo";;
 open Error_rtest ;;
- *)
+
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
 
@@ -224,5 +224,10 @@ END;
 |} |> Top.normre ~bootstrap:true Ploc.dummy ;;
 module DC = DebugCompile(struct let rexs = {|  "let" #0 | (~"let" & _* ) #1 |} let cg = cg end) ;;
  *)
-Codegen.report_verbose := true ;;
-#trace S7LiftLists.list1sep_e;;
+(*
+open S7LiftLists ;;
+#trace list1sep_e;;
+#trace list0_e ;;
+#trace lift_lists;;
+#trace exec1_entry ;;
+ *)

@@ -48,7 +48,8 @@ and a_entry =
     ae_pos : option a_position;
     ae_formals : list patt ;
     ae_levels : list a_level ;
-    ae_preceding_psymbols : list a_psymbol
+    ae_preceding_psymbols : list a_psymbol ;
+    ae_source_symbol : option a_symbol
   }
 and a_level =
   { al_loc : loc;

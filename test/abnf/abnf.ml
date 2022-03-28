@@ -67,7 +67,15 @@ GRAMMAR Abnf:
   rule_: [ [ id = ID ; "=" ; f = FLAG "/" ; l = elements -> (id, f, l) ] ] ;
   elements: [ [ a = alternation -> a ] ] ;
   alternation: [ [ l = LIST1 concatenation SEP "/" -> ALT l ] ] ;
-  concatenation: [ [ l = LIST1 repetition -> CONC l ] ] ;
+
+concatenation:
+  [ [ x = repetition; y = concatenation2 → CONC [x :: y] ] ]
+;
+concatenation2:
+  [ [ INFER 2 ; x__0004 = repetition; y__0004 = concatenation2 → [x__0004 :: y__0004]
+    | → [] ] ]
+;
+
   repetition: [ [ r = OPT repeat_ ; e = element -> (r,e) ] ] ;
   repeat_: [ [ n = INT -> (Some n, Some n) | ([ OPT INT ; "*" ])? ; n = OPT INT ; "*" ; m = OPT INT -> (n,m) ] ] ;
   element: [ [

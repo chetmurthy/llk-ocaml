@@ -67,6 +67,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           ; ae_pos = pos
           ; ae_levels = ll
           ; ae_preceding_psymbols = []
+          ; ae_source_symbol = None
           }
       ] ]
   ;

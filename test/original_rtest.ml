@@ -776,7 +776,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         x = expr LEVEL "top" ->
           build_letop_binder loc letop b l x
 
-      | "function"; (ext,attrs) = ext_attributes; OPT "|"; l = V (LIST1 match_case SEP "|") ->
+      | "function"; (ext,attrs) = ext_attributes; OPT "|"; l = V (GREEDY LIST1 match_case SEP "|") ->
           expr_to_inline <:expr< fun [ $_list:l$ ] >> ext attrs
 
       | "fun"; (ext,attrs) = ext_attributes;
@@ -797,9 +797,9 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           ] in
           expr_to_inline <:expr< fun [$p$ $opt:eo$ -> $e$] >> ext attrs
       | "match"; (ext,attrs) = ext_attributes; e = SELF; "with"; OPT "|";
-        l = V (LIST1 match_case SEP "|") ->
+        l = V (GREEDY LIST1 match_case SEP "|") ->
           expr_to_inline <:expr< match $e$ with [ $_list:l$ ] >> ext attrs
-      | "try"; (ext,attrs) = ext_attributes; e = SELF; "with"; OPT "|"; l = V (LIST1 match_case SEP "|") ->
+      | "try"; (ext,attrs) = ext_attributes; e = SELF; "with"; OPT "|"; l = V (GREEDY LIST1 match_case SEP "|") ->
           expr_to_inline <:expr< try $e$ with [ $_list:l$ ] >> ext attrs
       | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1"; "else";
         e3 = expr LEVEL "expr1" ->
@@ -820,7 +820,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
           expr_to_inline <:expr< while $e1$ do { $_list:el$ } >> ext attrs
       | e = NEXT -> e
       ]
-    | "," [ e = NEXT; ","; el = LIST1 NEXT SEP "," ->
+    | "," [ e = NEXT; ","; el = GREEDY LIST1 NEXT SEP "," ->
           <:expr< ( $list:[e :: el]$ ) >>
           | e = NEXT ; check_eps -> e
           ]
