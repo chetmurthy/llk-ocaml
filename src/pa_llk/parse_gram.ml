@@ -106,7 +106,7 @@ EXTEND
           {al_loc = loc; al_label = lab; al_assoc = ass; al_rules = rules} ] ]
   ;
   assoc:
-    [ [ UIDENT "LEFTA" -> LEFTA
+    [ [ g = FLAG (UIDENT "GREEDY") ; UIDENT "LEFTA" -> LEFTA g
       | UIDENT "RIGHTA" -> RIGHTA
       | UIDENT "NONA" -> NONA ] ]
   ;
@@ -147,8 +147,8 @@ EXTEND
          ASopt loc g s
       | g = FLAG (UIDENT "GREEDY") ; UIDENT "FLAG"; s = SELF ->
           ASflag loc g s
-      | UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
-         ASleft_assoc loc s1 s2 e
+      | g = FLAG (UIDENT "GREEDY") ; UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
+         ASleft_assoc loc g s1 s2 e
       ]
   | "vala"
       [ UIDENT "V"; s = NEXT; al = LIST0 STRING ->

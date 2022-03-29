@@ -10,6 +10,7 @@ open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
 open Pa_ppx_utils ;
+open Coll ;
 open Ppxutil ;
 
 open Primtypes ;
@@ -163,6 +164,196 @@ module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
 end ;
 module MSM = MutSetMap ;
 
+module ATN0 = struct
+
+module Node = struct
+  type t = [ NODE of int ] ;
+  value mk n = NODE n ;
+  value print = fun [ NODE n -> Fmt.(str "%d" n) ] ;
+end ;
+
+module Raw = struct
+type edge_t = (Node.t * option token * Node.t) ;
+
+type t = {
+  next_node : ref int
+; nodes : ref (list Node.t)
+; node_labels : MHM.t Node.t string
+; entry_map : MHM.t Name.t (Node.t * Node.t)
+; entry_branch_map : MHM.t (Name.t * int) Node.t
+; final_nodes : mutable list Node.t
+; initial_nodes : mutable list Node.t
+; edges: mutable list edge_t
+; edges_ht: MHM.t Node.t (MHM.t (option token) (ref (list Node.t)))
+; tokens : MHS.t (option token)
+} ;
+
+value mk () =
+  { next_node = ref 0
+  ; nodes = ref []
+  ; node_labels = MHM.mk 23
+  ; tokens = MHS.mk 23
+  ; entry_map = MHM.mk 23
+  ; entry_branch_map = MHM.mk 23
+  ; final_nodes = []
+  ; initial_nodes = []
+  ; edges = []
+  ; edges_ht = MHM.mk 23
+  }
+;
+
+value nodes it = it.nodes.val ;
+value tokens it = MHS.toList it.tokens ;
+
+value new_node it = do {
+  let n = it.next_node.val in 
+  incr it.next_node ;
+  let node = Node.mk n in
+  Std.push it.nodes node ;
+  node
+}
+;
+
+value add_node_label it n s = MHM.add it.node_labels (n, s) ;
+value node_label it n =
+  match MHM.map it.node_labels n with [
+      x -> Some x
+    | exception Not_found -> None
+]
+;
+
+value new_entry it ename = do {
+  assert (not (MHM.in_dom it.entry_map ename)) ;
+  let snode = new_node it in
+  let enode = new_node it in
+  MHM.add it.entry_map (ename, (snode, enode)) ;
+  add_node_label it snode Fmt.(str "ENTER %s" (Name.print ename)) ;
+  add_node_label it enode Fmt.(str "EXIT %s" (Name.print ename)) ;
+  (snode, enode)
+}
+;
+
+value entry_nodes it ename =
+ match MHM.map it.entry_map ename with [
+   x -> x
+ | exception Not_found -> new_entry it ename
+ ]
+;
+
+value mark_final it n =
+  it.final_nodes := [n :: it.final_nodes]
+;
+
+value mark_initial it n =
+  it.initial_nodes := [n :: it.initial_nodes]
+;
+
+value add_edge it ((src, lab, dst) as e) = do {
+    MHS.add lab it.tokens ;
+    it.edges := [e :: it.edges] ;
+    let src_ht = match MHM.map it.edges_ht src with [
+          x -> x
+        | exception Not_found -> do {
+            let x = MHM.mk 23 in
+            MHM.add it.edges_ht (src, x) ;
+            x
+          }
+    ] in
+    let lab_ref = match MHM.map src_ht lab with [
+          x -> x
+        | exception Not_found -> do {
+            let x = ref [] in
+            MHM.add src_ht (lab, x) ;
+            x
+          }
+        ] in
+    Std.push lab_ref dst
+}
+;
+
+value edge_labels it src =
+  match MHM.map it.edges_ht src with [
+      src_ht -> MHM.dom src_ht
+    | exception Not_found -> []
+    ]
+;
+
+value traverse it src lab =
+  match MHM.map it.edges_ht src with [
+      src_ht ->
+      (match MHM.map src_ht lab with [
+           x -> x.val
+         | exception Not_found -> []
+      ])
+    | exception Not_found -> []
+    ]
+;
+
+value entry_branch it ename i =
+  MHM.map it.entry_branch_map (ename, i)
+;
+
+value add_entry_branch it ename i n = do {
+  assert (not (MHM.in_dom it.entry_branch_map (ename, i))) ;
+  MHM.add it.entry_branch_map ((ename, i), n)
+}
+;
+
+value start_entry_branch it ename i = do {
+  let (snode, _) = entry_nodes it ename in
+  let n' = new_node it in
+  let edge = (snode, None, n') in
+  add_edge it edge ;
+  add_entry_branch it ename i n' ;
+  add_node_label it n' Fmt.(str "%s:%d" (Name.print ename) i) ;
+  n'
+}
+;
+
+value dump f it = do {
+  let open Printf in
+  let node2string n = Node.print n in
+  let node2label n =
+    let s = Node.print n in
+    match node_label it n with [
+        None -> s
+      | Some l -> Fmt.(str "%s/%s" s l)
+      ] in
+  let final q = List.mem q it.final_nodes in
+  let initial q = List.mem q it.initial_nodes in
+  let state_label q =
+    let s = node2label q in
+    if initial q then 
+      Fmt.(str "INIT %s" s)
+    else
+      s
+  in
+  (* Header. *)
+  fprintf f "digraph G {\n";
+  fprintf f "rankdir = LR;\n";
+  fprintf f "ratio = auto;\n";
+  (* Vertices. *)
+  (nodes it)
+  |> List.iter (fun q ->
+         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
+           (node2string q)
+           (state_label q)
+           (if final q then "doublecircle" else "circle")
+       );
+  (* Edges. *)
+    it.edges
+    |> List.iter (fun (src,lab,dst) ->
+           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
+             (node2string src)
+             (node2string dst)
+             (String.escaped (match lab with [ None -> "eps" | Some t -> PatternBaseToken.print t ]))
+         ) ;
+    fprintf f "}\n%!"
+}
+;
+end ;
+end ;
+
 module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
@@ -173,6 +364,8 @@ module CompilingGrammar = struct
     ; firsts : mutable SM.t (option token)
     ; follows : mutable SM.t token
     ; errors : mutable list error_t
+    ; atn : mutable ATN0.Raw.t
+    ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -186,6 +379,8 @@ module CompilingGrammar = struct
                 ; firsts = SM.mt
                 ; follows = SM.mt
                 ; errors = []
+                ; atn = ATN0.Raw.mk ()
+                ; eclosure = MHM.mk 23
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -212,6 +407,9 @@ module CompilingGrammar = struct
       | Some e -> e
       ]
   ;
+
+  value gram_atn cg = (snd cg).atn ;
+  value gram_eclosure cg = (snd cg).eclosure ;
 
   value firstmap cg = (snd cg).firsts ;
 
@@ -544,7 +742,7 @@ value rec check_symbol cg env = fun [
   | ASregexp _ _ -> ()
   | ASinfer _ _ -> ()
   | ASopt _ _ s -> check_symbol cg env s
-  | ASleft_assoc _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
+  | ASleft_assoc _ _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
   | ASrules _ rs -> check_rules cg env rs
   | ASself _ _ -> ()
   | AStok _ _ _ -> ()
@@ -906,7 +1104,7 @@ value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
   rl @ [last_rule]
 ;
 
-value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
+value rewrite_lefta loc ename ~{cur} ~{next} ~{greedy} rho rl =
   let left_rho = Subst.[
       (SELF, next)
      ;(NT ename None, next)
@@ -923,7 +1121,7 @@ value rewrite_lefta loc ename ~{cur} ~{next} rho rl =
   let right_rl = Subst.rules rho right_rl in
   let left_symbol = Subst.symbol left_rho left_symbol in
   let left_assoc_symbol =
-    ASleft_assoc loc left_symbol
+    ASleft_assoc loc greedy left_symbol
       (ASrules loc {au_loc=loc; au_rules = right_rl})
       <:expr< fun x f -> f x >> in
   [{ ar_loc=loc
@@ -1011,7 +1209,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
              }
           }
 
-          | Some LEFTA ->
+          | Some (LEFTA greedy) ->
              let rl = l.al_rules.au_rules in do {
              if rl |> List.exists (fun r -> List.length r.ar_psymbols < 2) then
                raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s LEFTA level rules must all have at least 2 psymbols"
@@ -1032,7 +1230,7 @@ value rewrite1 cg e (ename, eargs) ~{cur} ~{next} dict l = do {
                | _ -> raise_failwithf (CG.adjust_loc cg l.al_rules.au_loc) "rewrite1: entry %s LEFTA level has first psymbol non-recursive"
                         (Name.print ename)
                ] ;
-             let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} Subst.[
+             let rl = rewrite_lefta loc ename ~{cur=cur} ~{next=next} ~{greedy=greedy} Subst.[
                           (NEXT, next)
                          ;(SELF, next)
                          ;(NT ename None, next)
@@ -1339,7 +1537,7 @@ and symbol cg = fun [
 
     | ASopt _ _ s -> TS.(union (mk [None]) (symbol cg s))
 
-  | ASleft_assoc _ s1 s2 _ ->
+  | ASleft_assoc _ _ s1 s2 _ ->
      let fs1 = symbol cg s1 in
      if not (TS.mem None fs1) then fs1
      else TS.(union (except None fs1) (symbol cg s2))
@@ -1644,7 +1842,7 @@ and fifo_symbol cg e ff = fun [
      let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
      C.BEval.OutputDfa.first_tokens rex
 
-  | ASleft_assoc loc s1 s2 _ ->
+  | ASleft_assoc loc _ s1 s2 _ ->
   (* 1. fifo is [FIRST s1].{is_nullable}.[FIRST s2].{is_nullable}.full-follow
      2. compute [FIFO s1] with ff=[FIRST s2] union full-follow
      3. compute [FIFO s2] with ff=[FIRST s2].{is_nullable}.full-follow
@@ -1784,7 +1982,7 @@ value free_lids_of =
   let fallback_migrate_a_rule = dt.migrate_a_rule in
   let migrate_a_symbol dt s = 
     do { match s with [
-             ASleft_assoc _ _ _ e -> pushe e
+             ASleft_assoc _ _ _ _ e -> pushe e
            | ASself _ el -> List.iter pushe el
            | ASnext _ el -> List.iter pushe el
            | ASnterm _ _ el _ -> List.iter pushe el
@@ -1854,8 +2052,8 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASinfer _ _ as s -> s
   | ASopt loc g s -> ASopt loc g (lift_symbol cg acc e0 [] revpats s)
 
-  | ASleft_assoc loc s1 s2 e ->
-     ASleft_assoc loc (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
+  | ASleft_assoc loc g s1 s2 e ->
+     ASleft_assoc loc g (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
 
   | ASrules loc rl as s ->
      let formals = e0.ae_formals @ (List.rev revpats) in
@@ -2324,7 +2522,151 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 
 end ;
 
-module S8ExpandMacros = struct
+module S8LiftLeftAssoc = struct
+  (** in each entry, replace all LEFT_ASSOC symbols with a new entry;
+
+e2:
+  [ [ x = LEFT_ASSOC e3 e7 WITH f → x ] ]
+;
+
+-->
+
+e2: [ [ x = e4 -> x ] ] ;
+
+e4: [ [ x = e3 ; y = e5[x] -> y ] ]
+
+e5[x]: [ [ y = e7 ; z = e5[f x y] -> z
+         | -> x ] ] ;
+
+   *)
+
+open FreeLids ;
+
+(** generate entry e5 above *)
+value left_assoc_e1 cg (formals, actuals) e = fun [
+  ASleft_assoc loc g s1 s2 combiner ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let z = Name.print (CG.fresh_name cg (Name.mk "z")) in
+  let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
+  let rule1_psl = if g then [ps_eps] else [] in
+  
+  {ae_loc = loc; ae_name = ename; ae_pos = None;
+   ae_formals = formals@[<:patt< $lid:x$ >>];
+   ae_levels =
+     [{al_loc = loc; al_label = None; al_assoc = None;
+       al_rules =
+         {au_loc = loc;
+          au_rules =
+            [{ar_loc = loc;
+              ar_psymbols =
+                [{ ap_loc = loc
+                 ; ap_patt = Some <:patt< $lid:y$ >>
+                 ; ap_symb = s2};
+                 { ap_loc = loc
+                 ; ap_patt = Some <:patt< $lid:z$ >>
+                 ; ap_symb = ASnterm loc ename (actuals@[<:expr< $combiner$ $lid:x$ $lid:y$ >>]) None}];
+              ar_action = Some <:expr< $lid:z$ >>};
+              { ar_loc = loc
+              ; ar_psymbols = rule1_psl
+              ; ar_action = Some <:expr< $lid:x$ >>}]}}]
+   ; ae_preceding_psymbols = []
+   ; ae_source_symbol = None}
+]
+;
+
+value left_assoc_e2 cg (formals, actuals) ~{new_e1} e = fun [
+  ASleft_assoc loc _ s1 s2 combiner ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  {ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = formals;
+      ae_levels =
+       [{al_loc = loc; al_label = None; al_assoc = None;
+         al_rules =
+          {au_loc = loc;
+           au_rules =
+            [{ar_loc = loc;
+              ar_psymbols =
+               [{ap_loc = loc
+                ; ap_patt = Some <:patt< $lid:x$ >>
+                ; ap_symb = s1};
+                {ap_loc = loc
+                ; ap_patt = Some <:patt< $lid:y$ >>
+                ; ap_symb = ASnterm loc new_e1.ae_name (actuals@[<:expr< $lid:x$ >>]) None}];
+              ar_action = Some <:expr< $lid:y$ >>}]}}]
+      ; ae_preceding_psymbols = []
+      ; ae_source_symbol = None}
+]
+;
+
+
+value lift_left_assoc1 (cg : CG.t) acc e =
+  let open Llk_migrate in
+  let dt = make_dt [] in
+  let fallback_migrate_a_entry = dt.migrate_a_entry in
+  let migrate_a_entry dt e =
+    let dt = {(dt) with aux = e.ae_formals} in
+    {(e) with ae_levels = List.map (dt.migrate_a_level dt) e.ae_levels} in
+
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASleft_assoc loc _ s1 s2 combiner as s ->
+        let formals = dt.aux in
+        let freevars = free_lids_of_a_symbol s in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e1 = left_assoc_e1 cg (formals, actuals) e s in
+        let new_e2 = left_assoc_e2 cg (formals, actuals) ~{new_e1=new_e1} e s in
+        do {
+          acc.val := [new_e1 ; new_e2 :: acc.val] ;
+          ASnterm loc new_e2.ae_name actuals None
+        }
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+
+  let fallback_migrate_a_psymbols = dt.migrate_a_psymbols in
+  let migrate_a_psymbols dt psl = match psl with [
+        [] -> []
+      | [h :: t] ->
+         let dt' = match h.ap_patt with [
+               None -> dt
+             | Some p -> {(dt) with aux = dt.aux@[p]}
+             ] in
+         [ dt.migrate_a_psymbol dt h :: dt'.migrate_a_psymbols dt' t]
+      ] in
+  let dt = {(dt) with
+             migrate_a_entry = migrate_a_entry
+           ; migrate_a_psymbols = migrate_a_psymbols
+           ; migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value lift_left_assoc cg e =
+  let acc = ref [] in
+  let e = lift_left_assoc1 cg acc e in
+  (e, acc.val)
+;
+
+value rec exec1_entry (cg : CG.t) e =
+  let (e, newel) = lift_left_assoc cg e in
+  [e :: List.concat_map (exec1_entry cg) newel]
+;
+
+value exec0 cg el =
+  List.concat_map (exec1_entry cg) el
+;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S9ExpandMacros = struct
 
 open FreeLids ;
 
@@ -2582,7 +2924,7 @@ value rec infer_symbol cg stk ename = fun [
 
   | ASsyntactic _ _ -> (PSyn.epsilon, False)
 
-  | ASleft_assoc _ s _ _ ->
+  | ASleft_assoc _ _ s _ _ ->
      let (re, _) = infer_symbol cg stk ename s in
      (re, False)
 
@@ -2691,193 +3033,7 @@ end ;
 *)
 module ATN = struct
 
-open Coll;
-
-module Raw = struct
-module Node = struct
-  type t = [ NODE of int ] ;
-  value mk n = NODE n ;
-  value print = fun [ NODE n -> Fmt.(str "%d" n) ] ;
-end ;
-type edge_t = (Node.t * option token * Node.t) ;
-
-type t = {
-  next_node : ref int
-; nodes : ref (list Node.t)
-; node_labels : MHM.t Node.t string
-; entry_map : MHM.t Name.t (Node.t * Node.t)
-; entry_branch_map : MHM.t (Name.t * int) Node.t
-; final_nodes : mutable list Node.t
-; initial_nodes : mutable list Node.t
-; edges: mutable list edge_t
-; edges_ht: MHM.t Node.t (MHM.t (option token) (ref (list Node.t)))
-; tokens : MHS.t (option token)
-} ;
-
-value mk () =
-  { next_node = ref 0
-  ; nodes = ref []
-  ; node_labels = MHM.mk 23
-  ; tokens = MHS.mk 23
-  ; entry_map = MHM.mk 23
-  ; entry_branch_map = MHM.mk 23
-  ; final_nodes = []
-  ; initial_nodes = []
-  ; edges = []
-  ; edges_ht = MHM.mk 23
-  }
-;
-
-value nodes it = it.nodes.val ;
-value tokens it = MHS.toList it.tokens ;
-
-value new_node it = do {
-  let n = it.next_node.val in 
-  incr it.next_node ;
-  let node = Node.mk n in
-  Std.push it.nodes node ;
-  node
-}
-;
-
-value add_node_label it n s = MHM.add it.node_labels (n, s) ;
-value node_label it n =
-  match MHM.map it.node_labels n with [
-      x -> Some x
-    | exception Not_found -> None
-]
-;
-
-value new_entry it ename = do {
-  assert (not (MHM.in_dom it.entry_map ename)) ;
-  let snode = new_node it in
-  let enode = new_node it in
-  MHM.add it.entry_map (ename, (snode, enode)) ;
-  add_node_label it snode Fmt.(str "ENTER %s" (Name.print ename)) ;
-  add_node_label it enode Fmt.(str "EXIT %s" (Name.print ename)) ;
-  (snode, enode)
-}
-;
-
-value entry_nodes it ename =
- match MHM.map it.entry_map ename with [
-   x -> x
- | exception Not_found -> new_entry it ename
- ]
-;
-
-value mark_final it n =
-  it.final_nodes := [n :: it.final_nodes]
-;
-
-value mark_initial it n =
-  it.initial_nodes := [n :: it.initial_nodes]
-;
-
-value add_edge it ((src, lab, dst) as e) = do {
-    MHS.add lab it.tokens ;
-    it.edges := [e :: it.edges] ;
-    let src_ht = match MHM.map it.edges_ht src with [
-          x -> x
-        | exception Not_found -> do {
-            let x = MHM.mk 23 in
-            MHM.add it.edges_ht (src, x) ;
-            x
-          }
-    ] in
-    let lab_ref = match MHM.map src_ht lab with [
-          x -> x
-        | exception Not_found -> do {
-            let x = ref [] in
-            MHM.add src_ht (lab, x) ;
-            x
-          }
-        ] in
-    Std.push lab_ref dst
-}
-;
-
-value edge_labels it src =
-  match MHM.map it.edges_ht src with [
-      src_ht -> MHM.dom src_ht
-    | exception Not_found -> []
-    ]
-;
-
-value traverse it src lab =
-  match MHM.map it.edges_ht src with [
-      src_ht ->
-      (match MHM.map src_ht lab with [
-           x -> x.val
-         | exception Not_found -> []
-      ])
-    | exception Not_found -> []
-    ]
-;
-
-value entry_branch it ename i =
-  MHM.map it.entry_branch_map (ename, i)
-;
-
-value add_entry_branch it ename i n = do {
-  assert (not (MHM.in_dom it.entry_branch_map (ename, i))) ;
-  MHM.add it.entry_branch_map ((ename, i), n)
-}
-;
-
-value start_entry_branch it ename i = do {
-  let (snode, _) = entry_nodes it ename in
-  let n' = new_node it in
-  let edge = (snode, None, n') in
-  add_edge it edge ;
-  add_entry_branch it ename i n' ;
-  add_node_label it n' Fmt.(str "%s:%d" (Name.print ename) i) ;
-  n'
-}
-;
-
-value dump f it = do {
-  let open Printf in
-  let node2string n = Node.print n in
-  let node2label n =
-    let s = Node.print n in
-    match node_label it n with [
-        None -> s
-      | Some l -> Fmt.(str "%s/%s" s l)
-      ] in
-  let final q = List.mem q it.final_nodes in
-  let initial q = List.mem q it.initial_nodes in
-  let state_label q =
-    let s = node2label q in
-    if initial q then 
-      Fmt.(str "INIT %s" s)
-    else
-      s
-  in
-  (* Header. *)
-  fprintf f "digraph G {\n";
-  fprintf f "rankdir = LR;\n";
-  fprintf f "ratio = auto;\n";
-  (* Vertices. *)
-  (nodes it)
-  |> List.iter (fun q ->
-         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
-           (node2string q)
-           (state_label q)
-           (if final q then "doublecircle" else "circle")
-       );
-  (* Edges. *)
-    it.edges
-    |> List.iter (fun (src,lab,dst) ->
-           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
-             (node2string src)
-             (node2string dst)
-             (String.escaped (match lab with [ None -> "eps" | Some t -> PatternBaseToken.print t ]))
-         ) ;
-    fprintf f "}\n%!"
-}
-;
-end ;
+include ATN0 ;
 
 module Build = struct
 value symbol it (snode, enode) = fun [
@@ -2888,6 +3044,7 @@ value symbol it (snode, enode) = fun [
   | ASrules _ _
   | ASself _ _
   | ASvala _ _ _
+  | ASleft_assoc _ _ _ _ _
 
   -> assert False
 
@@ -2903,8 +3060,6 @@ value symbol it (snode, enode) = fun [
   | ASsyntactic _ _
 
     -> Raw.add_edge it (snode, None, enode)
-
-  | ASleft_assoc _ s1 s2 _ -> failwith "symbol: unimplemented"
 
   | AStok _ cls tokopt ->
     Raw.add_edge it (snode, Some (CLS cls tokopt), enode)
@@ -2971,7 +3126,7 @@ value eclosure it n =
   }
 ;
 
-value epsilon_closure it : MHM.t Raw.Node.t (list Raw.Node.t) = do {
+value epsilon_closure it : MHM.t Node.t (list Node.t) = do {
   let ht = MHM.mk 23 in
   (Raw.nodes it)
   |> List.iter (fun n ->
@@ -2988,7 +3143,7 @@ value epsilon_closure it : MHM.t Raw.Node.t (list Raw.Node.t) = do {
     returning the list of (tok * st) that are reached.
  *)
 
-value step1 (it, ec) (st : Raw.Node.t) = do {
+value step1 (it, ec) (st : Node.t) = do {
   let acc = ref [] in
   MHM.map ec st
   |> List.iter (fun st ->
@@ -3021,6 +3176,17 @@ value branch_first cg ((atn : Raw.t), ec) e =
   |> List.mapi (fun i _ ->
          let node = Raw.entry_branch atn e.ae_name i in
          (i, node_first (atn, ec) node))
+;
+end ;
+
+module ATNFirst = struct
+
+value exec cg = do {
+  ATN.Build.grammar (CG.gram_atn cg) cg ;
+  let eclosure = ATN.epsilon_closure(CG.gram_atn cg) in
+  (snd cg).eclosure := eclosure ;
+  cg
+}
 ;
 end ;
 
@@ -3252,7 +3418,7 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
            | _ -> <:patt< ($str:String.escaped tok$ as $patt$) >> ] in
        ((SpTrm loc <:patt< ($str:cls$, $patt$) >> <:vala<  None >>), SpoNoth)
 
-    | ASleft_assoc loc lhs restrhs exp ->
+    | ASleft_assoc loc _ lhs restrhs exp ->
        let lhs = compile1_symbol cg loc e lhs in
        let restrhs = compile1_symbol cg loc e restrhs in
        let exp = <:expr< parse_left_assoc $lhs$ $restrhs$ $exp$ >> in
@@ -3995,11 +4161,18 @@ value lift_lists loc ?{bootstrap=False} s =
   |> Dump.exec "After S7LiftLists"
 ;
 
-value expand_macros loc ?{bootstrap=False} s =
+value lift_left_assoc loc ?{bootstrap=False} s =
   s
   |> lift_lists loc ~{bootstrap=bootstrap}
-  |> S8ExpandMacros.exec
-  |> Dump.exec "After S8ExpandMacros"
+  |> S8LiftLeftAssoc.exec
+  |> Dump.exec "After S7LiftLeftAssoc"
+;
+
+value expand_macros loc ?{bootstrap=False} s =
+  s
+  |> lift_left_assoc loc ~{bootstrap=bootstrap}
+  |> S9ExpandMacros.exec
+  |> Dump.exec "After S9ExpandMacros"
 ;
 
 value left_factorize2 loc ?{bootstrap=False} s =
@@ -4041,6 +4214,9 @@ value codegen loc ?{bootstrap=False} s =
   |> SortEntries.exec
   |> Follow.exec
   |> Dump.exec "final grammar before codegen"
+(*
+  |> ATNFirst.exec
+ *)
   |> Codegen.exec
 ;
 

@@ -374,6 +374,38 @@ END;
 
 [@@@llk
 {foo|
+GRAMMAR Greedy_LEFTA:
+EXPORT: e e1 e2;
+
+e: [ [ h = e1 -> h ] ];
+e1: [ LEFTA [ (x,l) = SELF ; "." ; z = INT -> (x, l@[z]) ]
+    | [ x = e2 -> (x, []) ] ] ;
+e2: [ GREEDY LEFTA [ (x,l) = SELF ; "." ; z = INT -> (x, l@[z]) ]
+    | [ x = LIDENT -> (x, []) ] ] ;
+END;
+
+|foo}
+] ;;
+
+[@@@llk
+{foo|
+GRAMMAR Greedy_LEFTA2:
+EXPORT: e e1 e2;
+REGEXPS:
+  check_dot_uid =  "." (UIDENT | $uid | $_uid) ;
+END;
+e: [ [ h = e1 -> h ] ];
+e1: [ LEFTA [ (x,l) = SELF ; "." ; z = LIDENT -> (x, l@[z]) ]
+    | [ x = e2 -> (x, []) ] ] ;
+e2: [ GREEDY LEFTA [ (x,l) = SELF ; check_dot_uid ; "." ; z = UIDENT -> (x, l@[z]) ]
+    | [ x = LIDENT -> (x, []) ] ] ;
+END;
+
+|foo}
+] ;;
+
+[@@@llk
+{foo|
 GRAMMAR VFLAGS:
 EXPORT: e;
 
@@ -500,6 +532,10 @@ let tests = "simple" >::: [
     ; "Syntactic" >:: (fun _ ->
         assert_equal ([], "x") (pa Syntactic.e {|x|})
       ; assert_equal (["x"; "y"], "z") (pa Syntactic.e {|x y.z|})
+    )
+    ; "Greedy_LEFTA2" >:: (fun _ ->
+        assert_equal (("x",[]),[]) (pa Greedy_LEFTA2.e {|x|})
+      ; assert_equal (("x",[]),["y"]) (pa Greedy_LEFTA2.e {|x . y|})
     )
 ]
 

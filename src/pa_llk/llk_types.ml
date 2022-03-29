@@ -38,7 +38,7 @@ type a_position = [
   | POS_FIRST | POS_LAST
 ]
 and a_assoc = [
-    LEFTA
+    LEFTA of bool
   | RIGHTA
   | NONA
 ]
@@ -78,7 +78,7 @@ and a_symbol =
   | ASregexp of loc and Name.t
   | ASinfer of loc and int
   | ASopt of loc and bool and a_symbol
-  | ASleft_assoc of loc and a_symbol and a_symbol and expr
+  | ASleft_assoc of loc and bool and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
   | ASself of loc and list expr
   | AStok of loc and string and option string
@@ -116,7 +116,7 @@ value loc_of_a_symbol = fun [
   | ASregexp loc _ -> loc
   | ASinfer loc _ -> loc
   | ASopt loc _ _ -> loc
-  | ASleft_assoc loc _ _ _ -> loc
+  | ASleft_assoc loc _ _ _ _ -> loc
   | ASrules loc _ -> loc
   | ASself loc _ -> loc
   | AStok loc _ _ -> loc

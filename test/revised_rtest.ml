@@ -467,7 +467,7 @@ END;
            <:module_expr< functor $_fp:arg$ → $me$ >>
       | x = NEXT -> x
       ]
-    | "alg_attribute" LEFTA
+    | "alg_attribute" GREEDY LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_expr< $e1$ [@ $_attribute:attr$ ] >>
       ]
@@ -566,7 +566,7 @@ END;
          <:module_type< $mt1$ → $mt2$ >>
        | mt1=NEXT ; check_eps -> mt1
        ]
-    | "alg_attribute" LEFTA
+    | "alg_attribute" GREEDY LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
         <:module_type< $e1$ [@ $_attribute:attr$ ] >>
       | e1 = SELF; "with"; wcl = V (GREEDY LIST1 with_constr SEP "and") →
@@ -996,7 +996,7 @@ END;
         <:patt< $p$ [@ $_attribute:attr$ ] >>
       ]
     | NONA
-      [ "exception"; (ext,attrs) = ext_attributes; p = patt →
+      [ "exception"; (ext,attrs) = ext_attributes; p = NEXT →
         patt_to_inline loc <:patt< exception $p$ >> ext attrs
       | x = NEXT -> x
       ]
