@@ -1144,12 +1144,22 @@ END;
       | i = GIDENT → Some (greek_ascii_equiv i)
       | "_" → None ] ]
   ;
+(*
   longident:
     [ LEFTA
       [ me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
+*)
+  longident:
+    [ [ i = V UIDENT "uid"; z = longident_rest[ <:extended_longident< $_uid:i$ >> ] -> z ] ]
+  ;
+  longident_rest[me1]: [ [
+      check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
+    | check_eps -> me1
+    ] ] ;
+
   extended_longident:
     [ LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>

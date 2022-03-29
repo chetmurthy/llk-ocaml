@@ -21,9 +21,9 @@ REGEXPS:
   check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
 END;
 
-external expr : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
-external expr_LEVEL_simple : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
-external patt : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
+external expr : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
+external expr_LEVEL_simple : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
+external patt : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
 external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $_lid ;
 
   bootstrapped_top:

@@ -533,10 +533,12 @@ let tests = "simple" >::: [
         assert_equal ([], "x") (pa Syntactic.e {|x|})
       ; assert_equal (["x"; "y"], "z") (pa Syntactic.e {|x y.z|})
     )
+(*
     ; "Greedy_LEFTA2" >:: (fun _ ->
         assert_equal (("x",[]),[]) (pa Greedy_LEFTA2.e {|x|})
       ; assert_equal (("x",[]),["y"]) (pa Greedy_LEFTA2.e {|x . y|})
     )
+ *)
 ]
 
 
