@@ -2691,45 +2691,76 @@ end ;
 *)
 module ATN = struct
 
+open Coll;
+
 module Raw = struct
-type node_t = [ NODE of int ] ;
-type edge_t = (node_t * option token * node_t) ;
+module Node = struct
+  type t = [ NODE of int ] ;
+  value mk n = NODE n ;
+  value print = fun [ NODE n -> Fmt.(str "%d" n) ] ;
+end ;
+type edge_t = (Node.t * option token * Node.t) ;
 
 type t = {
   next_node : ref int
-; entry_map : Hashtbl.t Name.t (node_t * node_t)
-; entry_branch_map : Hashtbl.t (Name.t * int) node_t
-; final_nodes : mutable list node_t
+; nodes : ref (list Node.t)
+; node_labels : MHM.t Node.t string
+; entry_map : MHM.t Name.t (Node.t * Node.t)
+; entry_branch_map : MHM.t (Name.t * int) Node.t
+; final_nodes : mutable list Node.t
+; initial_nodes : mutable list Node.t
 ; edges: mutable list edge_t
+; edges_ht: MHM.t Node.t (MHM.t (option token) (ref (list Node.t)))
+; tokens : MHS.t (option token)
 } ;
 
 value mk () =
   { next_node = ref 0
-  ; entry_map = Hashtbl.create 23
-  ; entry_branch_map = Hashtbl.create 23
+  ; nodes = ref []
+  ; node_labels = MHM.mk 23
+  ; tokens = MHS.mk 23
+  ; entry_map = MHM.mk 23
+  ; entry_branch_map = MHM.mk 23
   ; final_nodes = []
+  ; initial_nodes = []
   ; edges = []
+  ; edges_ht = MHM.mk 23
   }
 ;
+
+value nodes it = it.nodes.val ;
+value tokens it = MHS.toList it.tokens ;
 
 value new_node it = do {
   let n = it.next_node.val in 
   incr it.next_node ;
-  NODE n
+  let node = Node.mk n in
+  Std.push it.nodes node ;
+  node
 }
 ;
 
+value add_node_label it n s = MHM.add it.node_labels (n, s) ;
+value node_label it n =
+  match MHM.map it.node_labels n with [
+      x -> Some x
+    | exception Not_found -> None
+]
+;
+
 value new_entry it ename = do {
-  assert (not (Hashtbl.mem it.entry_map ename)) ;
+  assert (not (MHM.in_dom it.entry_map ename)) ;
   let snode = new_node it in
   let enode = new_node it in
-  Hashtbl.add it.entry_map ename (snode, enode) ;
+  MHM.add it.entry_map (ename, (snode, enode)) ;
+  add_node_label it snode Fmt.(str "ENTER %s" (Name.print ename)) ;
+  add_node_label it enode Fmt.(str "EXIT %s" (Name.print ename)) ;
   (snode, enode)
 }
 ;
 
 value entry_nodes it ename =
- match Hashtbl.find it.entry_map ename with [
+ match MHM.map it.entry_map ename with [
    x -> x
  | exception Not_found -> new_entry it ename
  ]
@@ -2739,21 +2770,106 @@ value mark_final it n =
   it.final_nodes := [n :: it.final_nodes]
 ;
 
-value add_edge it e =
-  it.edges := [e :: it.edges]
+value mark_initial it n =
+  it.initial_nodes := [n :: it.initial_nodes]
 ;
 
-value entry_branch it e i = do {
-  let (snode, _) = entry_nodes it e in
+value add_edge it ((src, lab, dst) as e) = do {
+    MHS.add lab it.tokens ;
+    it.edges := [e :: it.edges] ;
+    let src_ht = match MHM.map it.edges_ht src with [
+          x -> x
+        | exception Not_found -> do {
+            let x = MHM.mk 23 in
+            MHM.add it.edges_ht (src, x) ;
+            x
+          }
+    ] in
+    let lab_ref = match MHM.map src_ht lab with [
+          x -> x
+        | exception Not_found -> do {
+            let x = ref [] in
+            MHM.add src_ht (lab, x) ;
+            x
+          }
+        ] in
+    Std.push lab_ref dst
+}
+;
+
+value traverse it src lab =
+  match MHM.map it.edges_ht src with [
+      src_ht ->
+      (match MHM.map src_ht lab with [
+           x -> x.val
+         | exception Not_found -> []
+      ])
+    | exception Not_found -> []
+    ]
+;
+
+value add_entry_branch it ename i n = do {
+  assert (not (MHM.in_dom it.entry_branch_map (ename, i))) ;
+  MHM.add it.entry_branch_map ((ename, i), n)
+}
+;
+
+value entry_branch it ename i = do {
+  let (snode, _) = entry_nodes it ename in
   let n' = new_node it in
   let edge = (snode, None, n') in
   add_edge it edge ;
+  add_entry_branch it ename i n' ;
+  add_node_label it n' Fmt.(str "%s:%d" (Name.print ename) i) ;
   n'
+}
+;
+
+value dump f it = do {
+  let open Printf in
+  let node2string n = Node.print n in
+  let node2label n =
+    let s = Node.print n in
+    match node_label it n with [
+        None -> s
+      | Some l -> Fmt.(str "%s/%s" s l)
+      ] in
+  let final q = List.mem q it.final_nodes in
+  let initial q = List.mem q it.initial_nodes in
+  let state_label q =
+    let s = node2label q in
+    if initial q then 
+      Fmt.(str "INIT %s" s)
+    else
+      s
+  in
+  (* Header. *)
+  fprintf f "digraph G {\n";
+  fprintf f "rankdir = LR;\n";
+  fprintf f "ratio = auto;\n";
+  (* Vertices. *)
+  (nodes it)
+  |> List.iter (fun q ->
+         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
+           (node2string q)
+           (state_label q)
+           (if final q then "doublecircle" else "circle")
+       );
+  (* Edges. *)
+    it.edges
+    |> List.iter (fun (src,lab,dst) ->
+           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
+             (node2string src)
+             (node2string dst)
+             (String.escaped (match lab with [ None -> "eps" | Some t -> PatternBaseToken.print t ]))
+         ) ;
+    fprintf f "}\n%!"
 }
 ;
 end ;
 
-value build_symbol it (snode, enode) = fun [
+module Build = struct
+value symbol it (snode, enode) = fun [
   ASflag _ _ _ | ASopt _ _ _
   | ASlist _ _ _ _ _
   | ASnext _ _
@@ -2777,7 +2893,7 @@ value build_symbol it (snode, enode) = fun [
 
     -> Raw.add_edge it (snode, None, enode)
 
-  | ASleft_assoc _ s1 s2 _ -> failwith "build_symbol: unimplemented"
+  | ASleft_assoc _ s1 s2 _ -> failwith "symbol: unimplemented"
 
   | AStok _ cls tokopt ->
     Raw.add_edge it (snode, Some (CLS cls tokopt), enode)
@@ -2789,20 +2905,70 @@ value build_symbol it (snode, enode) = fun [
   ]
 ;
 
-value rec build_psymbols it (snode, enode) = fun [
+value rec psymbols it (snode, enode) = fun [
   [] -> Raw.add_edge it (snode, None, enode)
-| [h] -> build_symbol it (snode, enode) h.ap_symb
+| [h] -> symbol it (snode, enode) h.ap_symb
 | [h :: t] -> do {
     let mid = Raw.new_node it in
-    build_symbol it (snode, mid) h.ap_symb ;
-    build_psymbols it (mid, enode) t
+    symbol it (snode, mid) h.ap_symb ;
+    psymbols it (mid, enode) t
   }
 ]
 ;
 
-value build_rule it (snode, enode) r =
-  build_psymbols it (snode, enode) r.ar_psymbols ;
+value rule it (snode, enode) r =
+  psymbols it (snode, enode) r.ar_psymbols ;
 
+value entry it e =
+  let (e_snode, e_enode) = Raw.entry_nodes it e.ae_name in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.iteri (fun i r ->
+         let r_snode = Raw.entry_branch it e.ae_name i in
+         rule it (r_snode, e_enode) r
+       )
+;
+
+value grammar it cg = do {
+  (CG.gram_entries cg) |> List.iter (entry it) ;
+  (CG.g cg).gram_exports
+  |> List.iter (fun ename -> 
+         let (snode, enode) = Raw.entry_nodes it ename in do {
+                  Raw.mark_initial it snode ;
+                  Raw.mark_final it enode ;
+                }
+       )
+}
+;
+end ;
+
+value eclosure it n =
+  let acc = ref [n] in
+  let rec erec n =
+    Raw.traverse it n None
+    |> List.iter (fun n' ->
+           if (not (List.mem n' acc.val)) then do {
+             Std.push acc n' ;
+             erec n
+           }
+           else ()
+         )
+  in do {
+    erec n ;
+    acc.val
+  }
+;
+
+value epsilon_closure it : MHM.t Raw.Node.t (list Raw.Node.t) = do {
+  let ht = MHM.mk 23 in
+  (Raw.nodes it)
+  |> List.iter (fun n ->
+         let l = eclosure it n in
+         MHM.add ht (n, l)
+       ) ;
+  ht
+}
+;
 end ;
 
 (** Codegen:
