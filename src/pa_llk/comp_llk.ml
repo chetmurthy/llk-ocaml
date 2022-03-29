@@ -2797,6 +2797,13 @@ value add_edge it ((src, lab, dst) as e) = do {
 }
 ;
 
+value edge_labels it src =
+  match MHM.map it.edges_ht src with [
+      src_ht -> MHM.dom src_ht
+    | exception Not_found -> []
+    ]
+;
+
 value traverse it src lab =
   match MHM.map it.edges_ht src with [
       src_ht ->
@@ -2936,6 +2943,7 @@ value grammar it cg = do {
          let (snode, enode) = Raw.entry_nodes it ename in do {
                   Raw.mark_initial it snode ;
                   Raw.mark_final it enode ;
+                  Raw.add_edge it (enode, Some (CLS "EOI" None), enode)
                 }
        )
 }
@@ -2949,7 +2957,7 @@ value eclosure it n =
     |> List.iter (fun n' ->
            if (not (List.mem n' acc.val)) then do {
              Std.push acc n' ;
-             erec n
+             erec n'
            }
            else ()
          )
@@ -2967,6 +2975,29 @@ value epsilon_closure it : MHM.t Raw.Node.t (list Raw.Node.t) = do {
          MHM.add ht (n, l)
        ) ;
   ht
+}
+;
+
+(** atn_step1 [it,ec] [st]:
+
+    From state [st], take one non-epsilon step in the ATN
+    returning the list of (tok * st) that are reached.
+ *)
+
+value atn_step1 (it, ec) st = do {
+  let acc = ref [] in
+  MHM.map ec st
+  |> List.iter (fun st ->
+         let labs = Raw.edge_labels it st in
+         labs
+         |> List.iter (fun [
+            None -> ()
+          | (Some tok) as lab ->
+             let dsts = Raw.traverse it st lab in
+             dsts |> List.iter (fun dst -> Std.push acc (tok, dst))
+              ])
+       ) ;
+  List.sort_uniq Stdlib.compare acc.val
 }
 ;
 end ;
