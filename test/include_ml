@@ -80,6 +80,7 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 #require "camlp5.extend" ;;
 #require "pa_llk_compiler" ;;
 #require "pa_llk_runtime" ;;
+open Primtypes ;;
 open Parse_gram ;;
 open Print_gram ;;
 open Comp_llk ;;

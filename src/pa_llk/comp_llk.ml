@@ -2815,13 +2815,17 @@ value traverse it src lab =
     ]
 ;
 
+value entry_branch it ename i =
+  MHM.map it.entry_branch_map (ename, i)
+;
+
 value add_entry_branch it ename i n = do {
   assert (not (MHM.in_dom it.entry_branch_map (ename, i))) ;
   MHM.add it.entry_branch_map ((ename, i), n)
 }
 ;
 
-value entry_branch it ename i = do {
+value start_entry_branch it ename i = do {
   let (snode, _) = entry_nodes it ename in
   let n' = new_node it in
   let edge = (snode, None, n') in
@@ -2931,7 +2935,7 @@ value entry it e =
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   rl
   |> List.iteri (fun i r ->
-         let r_snode = Raw.entry_branch it e.ae_name i in
+         let r_snode = Raw.start_entry_branch it e.ae_name i in
          rule it (r_snode, e_enode) r
        )
 ;
@@ -2978,13 +2982,13 @@ value epsilon_closure it : MHM.t Raw.Node.t (list Raw.Node.t) = do {
 }
 ;
 
-(** atn_step1 [it,ec] [st]:
+(** step1 [it,ec] [st]:
 
     From state [st], take one non-epsilon step in the ATN
     returning the list of (tok * st) that are reached.
  *)
 
-value atn_step1 (it, ec) st = do {
+value step1 (it, ec) (st : Raw.Node.t) = do {
   let acc = ref [] in
   MHM.map ec st
   |> List.iter (fun st ->
@@ -2999,6 +3003,24 @@ value atn_step1 (it, ec) st = do {
        ) ;
   List.sort_uniq Stdlib.compare acc.val
 }
+;
+
+value node_first ((atn : Raw.t),ec) node =
+  let l = step1 (atn, ec) node in
+  List.map fst l |> List.sort_uniq PatternBaseToken.compare
+;
+
+value entry_first cg ((atn : Raw.t),ec) e =
+  let (snode, _) = Raw.entry_nodes atn e.ae_name in
+  node_first (atn, ec) snode
+;
+
+value branch_first cg ((atn : Raw.t), ec) e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.mapi (fun i _ ->
+         let node = Raw.entry_branch atn e.ae_name i in
+         (i, node_first (atn, ec) node))
 ;
 end ;
 
