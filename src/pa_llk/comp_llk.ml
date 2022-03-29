@@ -2687,6 +2687,124 @@ value length_regexp_of_rule cg ename r length =
 
 end ;
 
+(** Build the ATN NFA for this grammar
+*)
+module ATN = struct
+
+module Raw = struct
+type node_t = [ NODE of int ] ;
+type edge_t = (node_t * option token * node_t) ;
+
+type t = {
+  next_node : ref int
+; entry_map : Hashtbl.t Name.t (node_t * node_t)
+; entry_branch_map : Hashtbl.t (Name.t * int) node_t
+; final_nodes : mutable list node_t
+; edges: mutable list edge_t
+} ;
+
+value mk () =
+  { next_node = ref 0
+  ; entry_map = Hashtbl.create 23
+  ; entry_branch_map = Hashtbl.create 23
+  ; final_nodes = []
+  ; edges = []
+  }
+;
+
+value new_node it = do {
+  let n = it.next_node.val in 
+  incr it.next_node ;
+  NODE n
+}
+;
+
+value new_entry it ename = do {
+  assert (not (Hashtbl.mem it.entry_map ename)) ;
+  let snode = new_node it in
+  let enode = new_node it in
+  Hashtbl.add it.entry_map ename (snode, enode) ;
+  (snode, enode)
+}
+;
+
+value entry_nodes it ename =
+ match Hashtbl.find it.entry_map ename with [
+   x -> x
+ | exception Not_found -> new_entry it ename
+ ]
+;
+
+value mark_final it n =
+  it.final_nodes := [n :: it.final_nodes]
+;
+
+value add_edge it e =
+  it.edges := [e :: it.edges]
+;
+
+value entry_branch it e i = do {
+  let (snode, _) = entry_nodes it e in
+  let n' = new_node it in
+  let edge = (snode, None, n') in
+  add_edge it edge ;
+  n'
+}
+;
+end ;
+
+value build_symbol it (snode, enode) = fun [
+  ASflag _ _ _ | ASopt _ _ _
+  | ASlist _ _ _ _ _
+  | ASnext _ _
+  | ASnterm _ _ _ (Some _)
+  | ASrules _ _
+  | ASself _ _
+  | ASvala _ _ _
+
+  -> assert False
+
+  | ASkeyw _ tok -> Raw.add_edge it (snode, Some (SPCL tok), enode)
+  | ASnterm _ nt _ None -> do {
+    let (snode', enode') = Raw.entry_nodes it nt in
+    Raw.add_edge it (snode, None, snode') ;
+    Raw.add_edge it (enode', None, enode)
+  }
+
+  | ASregexp _ _
+  | ASinfer _ _
+  | ASsyntactic _ _
+
+    -> Raw.add_edge it (snode, None, enode)
+
+  | ASleft_assoc _ s1 s2 _ -> failwith "build_symbol: unimplemented"
+
+  | AStok _ cls tokopt ->
+    Raw.add_edge it (snode, Some (CLS cls tokopt), enode)
+
+  | ASanti _ anti_kinds ->
+    let l = anti_kinds |> List.concat_map (fun s -> [(ANTI s); (ANTI ("_"^s))]) in
+    l |> List.iter (fun tok ->
+        Raw.add_edge it (snode, Some tok, enode))
+  ]
+;
+
+value rec build_psymbols it (snode, enode) = fun [
+  [] -> Raw.add_edge it (snode, None, enode)
+| [h] -> build_symbol it (snode, enode) h.ap_symb
+| [h :: t] -> do {
+    let mid = Raw.new_node it in
+    build_symbol it (snode, mid) h.ap_symb ;
+    build_psymbols it (mid, enode) t
+  }
+]
+;
+
+value build_rule it (snode, enode) r =
+  build_psymbols it (snode, enode) r.ar_psymbols ;
+
+end ;
+
 (** Codegen:
 
   0. compute the set of all tokens/classes.
