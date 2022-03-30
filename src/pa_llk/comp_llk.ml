@@ -3228,6 +3228,8 @@ value branch_first cg e =
          (i, node_first e.ae_loc (atn, ec) node))
 ;
 
+type llk_path_t = { branchnum : int ; tokpath : list token ; states : list Node.t } ;
+
 (** extend1 ([branchnum], [toks], [states])
 
     for each st in states:
@@ -3236,22 +3238,22 @@ value branch_first cg e =
           return (branchnum, toks@[t], stl')
 
  *)
-value extend1 loc cg (bnum, toks, stl) =
-  stl
+value extend1 loc cg t =
+  t.states
 |> List.concat_map (fun st ->
        step1 loc (CG.gram_atn_ec cg) st
-       |> List.map (fun (t, st') -> (bnum, toks@[t], [st']))
+       |> List.map (fun (tok, st') -> {branchnum=t.branchnum; tokpath = t.tokpath@[tok]; states= [st']})
      )
 ;
 
 (** a partition-set is ambiguous if:
 
-    (1) any partition has length>1
+    (1) any partition has length>1 and any two priorities are equal.
     (2) a length=1 partition has empty token-list
  *)
 
-value ambiguous (ll : list (list (int * list token * list Node.t))) =
-  ll |> List.exists (fun [ [_ ; _ :: _] -> True | [(_, [_ :: _], _)] -> False | _ -> True ])
+value ambiguous (ll : list (list llk_path_t)) =
+  ll |> List.exists (fun [ [_ ; _ :: _] -> True | [{tokpath=[_ :: _]}] -> False | _ -> True ])
 ;
 
 (** extend_branches:
@@ -3262,18 +3264,19 @@ value ambiguous (ll : list (list (int * list token * list Node.t))) =
   (4) for each length>1 partition, use [extend1] to extend each element
   (5) partition by (branch-num, token-list) and union the state-sets
  *)
-type branches_toks_list = list (int * list token * list Node.t) ;
+type branches_toks_list = list llk_path_t ;
 value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (bool * branches_toks_list) =
-  let ll = Std.nway_partition (fun (_, toks1, _) (_, toks2, _) -> toks1 = toks2) l in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
   if not (ambiguous ll) then (True, l) else
   let l = ll |> List.concat_map (fun [
-    [(_, [_ :: _], _)] as l -> l
+    [{tokpath=[_ :: _]}] as l -> l
   | l -> l |> List.concat_map (extend1 loc cg)
   ]) in
-  let ll = Std.nway_partition (fun (bn1, toks1, _) (bn2, toks2, _) -> bn1=bn2 && toks1=toks2) l in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum && p1.tokpath=p2.tokpath) l in
+  let states_of p = p.states in
   let l = ll |> List.map (fun l ->
-    let (bn, toks, _) = List.hd l in
-    (bn, toks, List.concat_map Std.third3 l)) in
+    let p0 = List.hd l in
+    {(p0) with states = List.concat_map states_of l}) in
   (False, l)
 ;
 
@@ -3307,18 +3310,20 @@ value rec compute_firstk_depth loc cg ename ~{depth} l =
 ;
 
 value compute_firstk ~{depth} cg e =
+  let open ATN in
   let (atn,ec) = CG.gram_atn_ec cg in
   let l =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.mapi (fun i _ ->
            let node = ATN.Raw.entry_branch atn e.ae_name i in
-           (i, [], [node])) in
+           {branchnum=i; tokpath=[]; states=[node]}) in
   let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} l in
+  let tokpath_of p = p.tokpath in
   l
-  |> Std.nway_partition (fun (n1, _, _) (n2, _, _) -> n1=n2)
-  |> List.map (fun ll ->
-         let (n, _, _) = List.hd ll in
-         (n, List.map Std.snd3 ll))
+  |> Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum)
+  |> List.map (fun l ->
+         let p0 = List.hd l in
+         (p0.branchnum, List.map tokpath_of l))
 ;
 
 value store_firstk cg e =
