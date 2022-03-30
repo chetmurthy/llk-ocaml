@@ -410,6 +410,7 @@ module CompilingGrammar = struct
 
   value gram_atn cg = (snd cg).atn ;
   value gram_eclosure cg = (snd cg).eclosure ;
+  value gram_atn_ec cg = ((snd cg).atn, (snd cg).eclosure) ;
 
   value firstmap cg = (snd cg).firsts ;
 
@@ -3165,12 +3166,14 @@ value node_first ((atn : Raw.t),ec) node =
   List.map fst l |> List.sort_uniq PatternBaseToken.compare
 ;
 
-value entry_first cg ((atn : Raw.t),ec) e =
+value entry_first cg e =
+  let  ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let (snode, _) = Raw.entry_nodes atn e.ae_name in
   node_first (atn, ec) snode
 ;
 
-value branch_first cg ((atn : Raw.t), ec) e =
+value branch_first cg e =
+  let  ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   rl
   |> List.mapi (fun i _ ->
@@ -3188,6 +3191,40 @@ value exec cg = do {
   cg
 }
 ;
+end ;
+
+module CheckATNFirst = struct
+
+value entry_fifo cg e =
+  let loc = e.ae_loc in
+  let ff = CG.follow cg e.ae_name in
+  let fi_fo_rule_list =
+    match (List.hd e.ae_levels).al_rules.au_rules
+          |> List.map (compute_fifo cg loc ff) with [
+      x -> x
+    | exception First.ExternalEntry eename -> do {
+        CG.add_warning cg (CG.adjust_loc cg loc) eename "compile1a_entry: entry is external, FIRST/FOLLOW disallowed" ;
+        failwith "caught"
+      }
+    ] in
+  let (fifo, r) =
+    fi_fo_rule_list
+    |> List.map (fun (fo, fo, r) ->
+        let raw_tokens =
+          TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
+        (raw_tokens, r)
+      ) in
+
+
+value exec cg = do {
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->
+      let atn_fi = TS.mk (ATN.entry_first cg e) in
+
+    ) ;
+}
+; 
+
 end ;
 
 (** Codegen:
@@ -4214,9 +4251,7 @@ value codegen loc ?{bootstrap=False} s =
   |> SortEntries.exec
   |> Follow.exec
   |> Dump.exec "final grammar before codegen"
-(*
   |> ATNFirst.exec
- *)
   |> Codegen.exec
 ;
 
