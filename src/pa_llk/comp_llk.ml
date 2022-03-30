@@ -183,6 +183,7 @@ type t = {
 ; entry_branch_map : MHM.t (Name.t * int) Node.t
 ; final_nodes : mutable list Node.t
 ; initial_nodes : mutable list Node.t
+; bhole_nodes : MHS.t Node.t
 ; edges: mutable list edge_t
 ; edges_ht: MHM.t Node.t (MHM.t (option token) (ref (list Node.t)))
 ; tokens : MHS.t (option token)
@@ -196,6 +197,7 @@ value mk () =
   ; entry_map = MHM.mk 23
   ; entry_branch_map = MHM.mk 23
   ; final_nodes = []
+  ; bhole_nodes = MHS.mk 23
   ; initial_nodes = []
   ; edges = []
   ; edges_ht = MHM.mk 23
@@ -247,6 +249,9 @@ value mark_final it n =
 value mark_initial it n =
   it.initial_nodes := [n :: it.initial_nodes]
 ;
+
+value mark_bhole it n = MHS.add n it.bhole_nodes ;
+value is_bhole it n = MHS.mem n it.bhole_nodes ;
 
 value add_edge it ((src, lab, dst) as e) = do {
     MHS.add lab it.tokens ;
@@ -3096,6 +3101,23 @@ value entry it e =
        )
 ;
 
+value external_entry cg it (ename, rex) =
+  let (snode, enode) = Raw.entry_nodes it ename in
+  let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
+  let is_nullable = C.BEval.nullable rex in
+  let nulls = if is_nullable then [None] else [] in
+  let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
+  (toks@nulls)
+  |> List.iter (fun [
+    Some tok ->
+    let n' = Raw.new_node it in do {
+      Raw.add_edge it (snode, Some tok, n') ;
+      Raw.mark_bhole it n'
+    }
+  | None -> Raw.mark_bhole it snode
+  ])
+;
+
 value grammar it cg = do {
   (CG.gram_entries cg) |> List.iter (entry it) ;
   (CG.g cg).gram_exports
@@ -3105,7 +3127,8 @@ value grammar it cg = do {
                   Raw.mark_final it enode ;
                   Raw.add_edge it (enode, Some (CLS "EOI" None), enode)
                 }
-       )
+       ) ;
+  (CG.gram_externals cg) |> List.iter (external_entry cg it)
 }
 ;
 end ;
@@ -3144,7 +3167,10 @@ value epsilon_closure it : MHM.t Node.t (list Node.t) = do {
     returning the list of (tok * st) that are reached.
  *)
 
-value step1 (it, ec) (st : Node.t) = do {
+value step1 loc (it, ec) (st : Node.t) = do {
+  if Raw.is_bhole it st then
+    raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
+  else () ;
   let acc = ref [] in
   MHM.map ec st
   |> List.iter (fun st ->
@@ -3161,15 +3187,15 @@ value step1 (it, ec) (st : Node.t) = do {
 }
 ;
 
-value node_first ((atn : Raw.t),ec) node =
-  let l = step1 (atn, ec) node in
+value node_first loc ((atn : Raw.t),ec) node =
+  let l = step1 loc (atn, ec) node in
   List.map fst l |> List.sort_uniq PatternBaseToken.compare
 ;
 
 value entry_first cg e =
   let  ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let (snode, _) = Raw.entry_nodes atn e.ae_name in
-  node_first (atn, ec) snode
+  node_first e.ae_loc (atn, ec) snode
 ;
 
 value branch_first cg e =
@@ -3178,7 +3204,7 @@ value branch_first cg e =
   rl
   |> List.mapi (fun i _ ->
          let node = Raw.entry_branch atn e.ae_name i in
-         (i, node_first (atn, ec) node))
+         (i, node_first e.ae_loc (atn, ec) node))
 ;
 end ;
 
@@ -3195,7 +3221,12 @@ end ;
 
 module CheckATNFirst = struct
 
-value entry_fifo cg e =
+value compute_fifo cg loc ff r =
+  let fi = First.rule cg r in
+  (fi, ff, r)
+;
+
+value entry_branches_fifo cg e =
   let loc = e.ae_loc in
   let ff = CG.follow cg e.ae_name in
   let fi_fo_rule_list =
@@ -3207,21 +3238,26 @@ value entry_fifo cg e =
         failwith "caught"
       }
     ] in
-  let (fifo, r) =
-    fi_fo_rule_list
-    |> List.map (fun (fo, fo, r) ->
-        let raw_tokens =
-          TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
-        (raw_tokens, r)
-      ) in
+  fi_fo_rule_list
+  |> List.mapi (fun i (fi, fo, r) ->
+         let raw_tokens =
+           TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
+         (i, raw_tokens)
+       )
+;
 
 
 value exec cg = do {
   (CG.gram_entries cg)
   |> List.iter (fun e ->
-      let atn_fi = TS.mk (ATN.entry_first cg e) in
-
+      let loc = e.ae_loc in
+      let atn_branch_fifo = ATN.branch_first cg e in
+      let fifo_branch_fifo = entry_branches_fifo cg e in
+      if atn_branch_fifo <> fifo_branch_fifo then
+        raise_failwithf  (CG.adjust_loc cg loc) "CheckATNFirst: fifo sets differ"
+      else ()
     ) ;
+  cg
 }
 ; 
 
@@ -4252,6 +4288,7 @@ value codegen loc ?{bootstrap=False} s =
   |> Follow.exec
   |> Dump.exec "final grammar before codegen"
   |> ATNFirst.exec
+  |> CheckATNFirst.exec
   |> Codegen.exec
 ;
 
