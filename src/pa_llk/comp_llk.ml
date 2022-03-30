@@ -3228,7 +3228,14 @@ value branch_first cg e =
          (i, node_first e.ae_loc (atn, ec) node))
 ;
 
-type llk_path_t = { branchnum : int ; tokpath : list token ; states : list Node.t } ;
+module TokPath = struct
+type t = { branchnum : int ; tokpath : list token ; states : list Node.t } ;
+value branchnum p = p.branchnum ;
+value tokpath p = p.tokpath ;
+value states p = p.states ;
+end ;
+module TP = TokPath ;
+
 
 (** extend1 ([branchnum], [toks], [states])
 
@@ -3242,7 +3249,7 @@ value extend1 loc cg t =
   t.states
 |> List.concat_map (fun st ->
        step1 loc (CG.gram_atn_ec cg) st
-       |> List.map (fun (tok, st') -> {branchnum=t.branchnum; tokpath = t.tokpath@[tok]; states= [st']})
+       |> List.map (fun (tok, st') -> {TP.branchnum=t.TP.branchnum; tokpath = t.tokpath@[tok]; states= [st']})
      )
 ;
 
@@ -3252,8 +3259,8 @@ value extend1 loc cg t =
     (2) a length=1 partition has empty token-list
  *)
 
-value ambiguous (ll : list (list llk_path_t)) =
-  ll |> List.exists (fun [ [_ ; _ :: _] -> True | [{tokpath=[_ :: _]}] -> False | _ -> True ])
+value ambiguous (ll : list (list TP.t)) =
+  ll |> List.exists (fun [ [_ ; _ :: _] -> True | [{TP.tokpath=[_ :: _]}] -> False | _ -> True ])
 ;
 
 (** extend_branches:
@@ -3264,8 +3271,9 @@ value ambiguous (ll : list (list llk_path_t)) =
   (4) for each length>1 partition, use [extend1] to extend each element
   (5) partition by (branch-num, token-list) and union the state-sets
  *)
-type branches_toks_list = list llk_path_t ;
+type branches_toks_list = list TP.t ;
 value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (bool * branches_toks_list) =
+  let open TP in
   let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
   if not (ambiguous ll) then (True, l) else
   let l = ll |> List.concat_map (fun [
@@ -3311,6 +3319,7 @@ value rec compute_firstk_depth loc cg ename ~{depth} l =
 
 value compute_firstk ~{depth} cg e =
   let open ATN in
+  let open TP in
   let (atn,ec) = CG.gram_atn_ec cg in
   let l =
     (List.hd e.ae_levels).al_rules.au_rules
