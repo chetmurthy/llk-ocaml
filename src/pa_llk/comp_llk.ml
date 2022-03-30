@@ -372,6 +372,7 @@ module CompilingGrammar = struct
     ; atn : mutable ATN0.Raw.t
     ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
     ; atn_first: MHM.t Name.t (list (int * list token))
+    ; atn_firstk: MHM.t Name.t (list (int * list (list token)))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -388,6 +389,7 @@ module CompilingGrammar = struct
                 ; atn = ATN0.Raw.mk ()
                 ; eclosure = MHM.mk 23
                 ; atn_first = MHM.mk 23
+                ; atn_firstk = MHM.mk 23
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -480,6 +482,9 @@ module CompilingGrammar = struct
 
   value set_atn_first cg ename l = MHM.add (snd cg).atn_first (ename, l) ;
   value atn_first cg ename = MHM.map (snd cg).atn_first ename ;
+
+  value set_atn_firstk cg ename l = MHM.add (snd cg).atn_firstk (ename, l) ;
+  value atn_firstk cg ename = MHM.map (snd cg).atn_firstk ename ;
 
 end ;
 module CG = CompilingGrammar ;
@@ -3199,13 +3204,13 @@ value node_first loc ((atn : Raw.t),ec) node =
 ;
 
 value entry_first cg e =
-  let  ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
+  let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let (snode, _) = Raw.entry_nodes atn e.ae_name in
   node_first e.ae_loc (atn, ec) snode
 ;
 
 value branch_first cg e =
-  let  ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
+  let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   rl
   |> List.mapi (fun i _ ->
@@ -3229,24 +3234,30 @@ value extend1 loc cg (bnum, toks, stl) =
      )
 ;
 
+(** a partition-set is ambiguous if:
+
+    (1) any partition has length>1
+    (2) a length=1 partition has empty token-list
+ *)
+
 value ambiguous (ll : list (list (int * list token * list Node.t))) =
-  ll |> List.for_all (fun [ [_] -> True | _ -> False ])
+  ll |> List.exists (fun [ [_ ; _ :: _] -> True | [(_, [_ :: _], _)] -> False | _ -> True ])
 ;
 
 (** extend_branches:
 
   (1) partition by token-list
-  (2) the current set is ambiguous if any partition has length>1
+  (2) the current set is ambiguous if any partition has length>1 or token-list=[]
   (3) if not ambiguous
   (4) for each length>1 partition, use [extend1] to extend each element
   (5) partition by (branch-num, token-list) and union the state-sets
  *)
 type branches_toks_list = list (int * list token * list Node.t) ;
-value extend_branches loc cg (l : branches_toks_list) : (bool * branches_toks_list) =
+value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (bool * branches_toks_list) =
   let ll = Std.nway_partition (fun (_, toks1, _) (_, toks2, _) -> toks1 = toks2) l in
   if not (ambiguous ll) then (True, l) else
   let l = ll |> List.concat_map (fun [
-    [x] -> [x]
+    [(_, [_ :: _], _)] as l -> l
   | l -> l |> List.concat_map (extend1 loc cg)
   ]) in
   let ll = Std.nway_partition (fun (bn1, toks1, _) (bn2, toks2, _) -> bn1=bn2 && toks1=toks2) l in
@@ -3276,10 +3287,41 @@ value store_entry_branch_first cg e =
   CG.set_atn_first cg e.ae_name l
 ;
 
+value rec compute_firstk_depth loc cg ename ~{depth} l =
+  if depth = 0 then
+    raise_failwithf (CG.adjust_loc cg loc) "compute_firstk_depth(%s): exceeded depth and still ambiguous" (Name.print ename)
+  else
+    let (complete, l') = ATN.extend_branches loc cg l in
+    if complete then l
+    else compute_firstk_depth loc cg ename ~{depth=depth-1} l'
+;
+
+value compute_firstk ~{depth} cg e =
+  let (atn,ec) = CG.gram_atn_ec cg in
+  let l =
+    (List.hd e.ae_levels).al_rules.au_rules
+    |> List.mapi (fun i _ ->
+           let node = ATN.Raw.entry_branch atn e.ae_name i in
+           (i, [], [node])) in
+  let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} l in
+  l
+  |> Std.nway_partition (fun (n1, _, _) (n2, _, _) -> n1=n2)
+  |> List.map (fun ll ->
+         let (n, _, _) = List.hd ll in
+         (n, List.map Std.snd3 ll))
+;
+
+value store_firstk cg e =
+  let l = compute_firstk ~{depth=4} cg e in
+  CG.set_atn_firstk cg e.ae_name l
+;
+
 value exec cg = do {
     (CG.gram_entries cg)
-  |> List.iter (store_entry_branch_first cg) ;
-  cg
+    |> List.iter (store_firstk cg) ;
+    (CG.gram_entries cg)
+    |> List.iter (store_entry_branch_first cg) ;
+    cg
 }
 ;
 

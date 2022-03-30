@@ -285,7 +285,7 @@ END ;
 
   e1:
     [
-      [ "let" ; s = STRING  -> Right s
+      [ "let" ; s = STRING ; s2 = STRING  -> Right (s ^ " " ^ s2)
       | n = INT -> Left n
       ]
     ]

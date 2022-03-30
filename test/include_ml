@@ -8,23 +8,23 @@
 #require "bos";;
 #require "str";;
 
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
-
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
 
 (*
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
  *)
 
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
-
+ *)
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -173,10 +173,10 @@ open Regexp_test ;;
 
 #load "error_rtest.cmo";;
 open Error_rtest ;;
- *)
+
 #load "simple_otest.cmo";;
 open Simple_otest ;;
-(*
+
 #load "external_test.cmo";;
 open External_test ;;
 
@@ -232,14 +232,17 @@ open S7LiftLists ;;
 #trace lift_lists;;
 #trace exec1_entry ;;
  *)
-
+(*
 let cg = "xx.ml" |> RT.read_file |> Top.separate_syntactic Ploc.dummy ~bootstrap:true ;;
 let atn = ATN.Raw.mk() ;;
 ATN.Build.grammar atn cg ;;
 let ec = ATN.epsilon_closure atn ;;
 ATN.Raw.dump stdout atn ;;
-
+ *)
 (*
 #trace CG.watch_follow ;;
 "revised_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
+#trace ATN.extend_branches ;;
+#trace ATNFirst.compute_firstk ;;
+"xx.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
