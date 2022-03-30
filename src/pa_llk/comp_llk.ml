@@ -371,6 +371,7 @@ module CompilingGrammar = struct
     ; errors : mutable list error_t
     ; atn : mutable ATN0.Raw.t
     ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
+    ; atn_first: MHM.t Name.t (list (int * list token))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -386,6 +387,7 @@ module CompilingGrammar = struct
                 ; errors = []
                 ; atn = ATN0.Raw.mk ()
                 ; eclosure = MHM.mk 23
+                ; atn_first = MHM.mk 23
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -475,6 +477,10 @@ module CompilingGrammar = struct
 
   value set_alphabet cg l = (snd cg).gram_alphabet := l ;
   value alphabet cg = (snd cg).gram_alphabet ;
+
+  value set_atn_first cg ename l = MHM.add (snd cg).atn_first (ename, l) ;
+  value atn_first cg ename = MHM.map (snd cg).atn_first ename ;
+
 end ;
 module CG = CompilingGrammar ;
 
@@ -3206,9 +3212,53 @@ value branch_first cg e =
          let node = Raw.entry_branch atn e.ae_name i in
          (i, node_first e.ae_loc (atn, ec) node))
 ;
+
+(** extend1 ([branchnum], [toks], [states])
+
+    for each st in states:
+      for each token t in one step from st
+        let stl' be the states reachable from st by token t:
+          return (branchnum, toks@[t], stl')
+
+ *)
+value extend1 loc cg (bnum, toks, stl) =
+  stl
+|> List.concat_map (fun st ->
+       step1 loc (CG.gram_atn_ec cg) st
+       |> List.map (fun (t, st') -> (bnum, toks@[t], [st']))
+     )
+;
+
+value ambiguous (ll : list (list (int * list token * list Node.t))) =
+  ll |> List.for_all (fun [ [_] -> True | _ -> False ])
+;
+
+(** extend_branches:
+
+  (1) partition by token-list
+  (2) the current set is ambiguous if any partition has length>1
+  (3) if not ambiguous
+  (4) for each length>1 partition, use [extend1] to extend each element
+  (5) partition by (branch-num, token-list) and union the state-sets
+ *)
+type branches_toks_list = list (int * list token * list Node.t) ;
+value extend_branches loc cg (l : branches_toks_list) : (bool * branches_toks_list) =
+  let ll = Std.nway_partition (fun (_, toks1, _) (_, toks2, _) -> toks1 = toks2) l in
+  if not (ambiguous ll) then (True, l) else
+  let l = ll |> List.concat_map (fun [
+    [x] -> [x]
+  | l -> l |> List.concat_map (extend1 loc cg)
+  ]) in
+  let ll = Std.nway_partition (fun (bn1, toks1, _) (bn2, toks2, _) -> bn1=bn2 && toks1=toks2) l in
+  let l = ll |> List.map (fun l ->
+    let (bn, toks, _) = List.hd l in
+    (bn, toks, List.concat_map Std.third3 l)) in
+  (False, l)
+;
+
 end ;
 
-module ATNFirst = struct
+module BuildATN = struct
 
 value exec cg = do {
   ATN.Build.grammar (CG.gram_atn cg) cg ;
@@ -3217,6 +3267,22 @@ value exec cg = do {
   cg
 }
 ;
+end ;
+
+module ATNFirst = struct
+
+value store_entry_branch_first cg e =
+  let l = ATN.branch_first cg e in
+  CG.set_atn_first cg e.ae_name l
+;
+
+value exec cg = do {
+    (CG.gram_entries cg)
+  |> List.iter (store_entry_branch_first cg) ;
+  cg
+}
+;
+
 end ;
 
 module CheckATNFirst = struct
@@ -3251,7 +3317,7 @@ value exec cg = do {
   (CG.gram_entries cg)
   |> List.iter (fun e ->
       let loc = e.ae_loc in
-      let atn_branch_fifo = ATN.branch_first cg e in
+      let atn_branch_fifo = CG.atn_first cg e.ae_name in
       let fifo_branch_fifo = entry_branches_fifo cg e in
       if atn_branch_fifo <> fifo_branch_fifo then
         raise_failwithf  (CG.adjust_loc cg loc) "CheckATNFirst: fifo sets differ"
@@ -4287,6 +4353,7 @@ value codegen loc ?{bootstrap=False} s =
   |> SortEntries.exec
   |> Follow.exec
   |> Dump.exec "final grammar before codegen"
+  |> BuildATN.exec
   |> ATNFirst.exec
   |> CheckATNFirst.exec
   |> Codegen.exec
