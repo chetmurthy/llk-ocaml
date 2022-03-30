@@ -85,6 +85,7 @@ and a_symbol =
   | ASvala of loc and a_symbol and list string
   | ASsyntactic of loc and a_symbol
   | ASanti of loc and list string
+  | ASpriority of loc and int
   ]
 and lmin_len =
   [ LML_0 | LML_1 ]
@@ -123,6 +124,7 @@ value loc_of_a_symbol = fun [
   | ASvala loc _ _ -> loc
   | ASanti loc _ -> loc
   | ASsyntactic loc _ -> loc
+  | ASpriority loc _ -> loc
   ]
 ;
 

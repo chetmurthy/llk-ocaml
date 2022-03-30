@@ -758,6 +758,7 @@ value rec check_symbol cg env = fun [
   | ASnterm _ _ _ _ -> ()
   | ASregexp _ _ -> ()
   | ASinfer _ _ -> ()
+  | ASpriority _ _ -> ()
   | ASopt _ _ s -> check_symbol cg env s
   | ASleft_assoc _ _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
   | ASrules _ rs -> check_rules cg env rs
@@ -1517,6 +1518,7 @@ value rec psymbols cg = fun [
   [] -> TS.mk [None]
 | [{ap_symb=ASregexp _ _} :: t] -> psymbols cg t
 | [{ap_symb=ASinfer _ _} :: t] -> psymbols cg t
+| [{ap_symb=ASpriority _ _} :: t] -> psymbols cg t
 | [{ap_symb=ASsyntactic _ _} :: t] -> psymbols cg t
 | [h::t] ->
    let fh = psymbol cg h in
@@ -1569,6 +1571,8 @@ and symbol cg = fun [
   | ASregexp loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
   | ASinfer loc _ as s ->
+     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
+  | ASpriority loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
   | ASsyntactic loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
@@ -1659,6 +1663,7 @@ value rec fifo_psymbols cg e ff = fun [
       [] -> ff
     | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg e ff t
     | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg e ff t
+    | [{ap_symb=ASpriority _ _} :: t] -> fifo_psymbols cg e ff t
     | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg e ff t
     | [h::t] ->
        let ft = fifo_psymbols cg e ff t in
@@ -2067,6 +2072,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
   | ASinfer _ _ as s -> s
+  | ASpriority _ _ as s -> s
   | ASopt loc g s -> ASopt loc g (lift_symbol cg acc e0 [] revpats s)
 
   | ASleft_assoc loc g s1 s2 e ->
@@ -2133,15 +2139,15 @@ module S7LiftLists = struct
 
    LIST0 sym ->
 
-   entry: [ [ x = sym ; y = entry -> [x :: y]
-            | check_eps ; -> [] ] ] ;
+   entry: [ [ PRIORITY 1; x = sym ; y = entry -> [x :: y]
+            | -> [] ] ] ;
 
 ================================================================
 
    LIST0 sym SEP sym2 ->
 
-   entry: [ [ y = LIST1 sym SEP sym2 -> y
-            | check_eps -> [] ] ] ;
+   entry: [ [ PRIORITY 1; y = LIST1 sym SEP sym2 -> y
+            | -> [] ] ] ;
 
 ================================================================
 
@@ -2159,17 +2165,17 @@ module S7LiftLists = struct
 
    LIST0 sym SEP sym2 OPT_SEP ->
 
-   entry: [ [ x = sym ; check_eps -> [x]
-            | x = sym ; sym2 ; y = entry -> [x :: y]
-            | check_eps -> []
+   entry: [ [ PRIORITY 1 ; x = sym -> [x]
+            | PRIORITY 1 ; x = sym ; PRIORITY 1 ; sym2 ; y = entry -> [x :: y]
+            | -> []
             ] ] ;
 
 ================================================================
 
    LIST1 sym SEP sym2 OPT_SEP ->
 
-   entry: [ [ x = sym ; check_eps -> [x]
-            | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
+   entry: [ [ x = sym -> [x]
+            | x = sym ; PRIORITY 1 ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
             ] ] ;
 
 ================================================================
@@ -2193,13 +2199,12 @@ value list0_e (cg : CG.t) (formals, actuals) e = fun [
   let new_ename = CG.fresh_name cg e.ae_name in
   let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let prio_psl = if g then [{ap_loc=loc; ap_patt=None; ap_symb=ASpriority loc 1}] else [] in
   let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
-               ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
+               ar_psymbols = prio_psl@[{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
                              ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
                                ;ap_symb=ASnterm loc new_ename actuals None}]} in
-  let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
-  let rule1_psl = if g then [ps_eps] else [] in
-  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = rule1_psl} in
+  let rule1 = {ar_loc = loc ; ar_action = Some <:expr< [] >> ; ar_psymbols = []} in
   let rules = {au_loc=loc; au_rules=[rule0; rule1]} in
   let level = {al_loc=loc; al_label=None; al_assoc=None; al_rules=rules} in
   {
@@ -2263,7 +2268,7 @@ value list1sep_e (cg : CG.t) (formals, actuals) e = fun [
                  ; ap_symb = ASlist loc g LML_0
                                (ASrules loc { au_loc = loc
                                             ; au_rules = [{ ar_loc = loc
-                                                          ; ar_psymbols =[
+                                                          ; ar_psymbols = [
                                                               { ap_loc = loc
                                                               ; ap_patt = None
                                                               ; ap_symb = sep
@@ -2290,6 +2295,7 @@ value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
   let ename = CG.fresh_name cg e.ae_name in
   let y = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let prio_psl = if g then [{ap_loc=loc; ap_patt=None; ap_symb=ASpriority loc 1}] else [] in
   { ae_loc = loc
   ; ae_name = ename
   ; ae_pos = None
@@ -2302,7 +2308,7 @@ value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
            { au_loc = loc
            ; au_rules =
                [{ ar_loc = loc
-                ; ar_psymbols = [
+                ; ar_psymbols = prio_psl@[
                     { ap_loc = loc
                     ; ap_patt = Some <:patt< $lid:y$ >>
                     ; ap_symb = ASlist loc g LML_1 sym (Some (sep, False))
@@ -2310,11 +2316,7 @@ value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
                 ; ar_action = Some <:expr< $lid:y$ >>
                 }
                ; { ar_loc = loc
-                 ; ar_psymbols = [
-                     { ap_loc = loc
-                     ; ap_patt = None
-                     ; ap_symb = ASregexp loc check_eps
-                   }]
+                 ; ar_psymbols = []
                  ; ar_action = Some <:expr< [] >>
                }]
            }
@@ -2327,8 +2329,10 @@ value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
 ;
 
 (*
+   LIST1 sym SEP sym2 OPT_SEP ->
+
    entry: [ [ x = sym -> [x]
-            | x = sym ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
+            | x = sym ; PRIORITY 1 ; sym2 ; y = LIST0 sym SEP sym2 OPT_SEP -> [x :: y]
             ] ] ;
  *)
 value list1sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
@@ -2336,6 +2340,7 @@ value list1sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
   let ename = CG.fresh_name cg e.ae_name in
   let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let prio_psl = if g then [{ap_loc=loc; ap_patt=None; ap_symb=ASpriority loc 1}] else [] in
 
   {ae_loc = loc; ae_name = ename; ae_pos = None; ae_formals = [];
    ae_levels =
@@ -2345,17 +2350,18 @@ value list1sep_opt_e (cg : CG.t) (formals, actuals) e = fun [
           au_rules =
             [{ar_loc = loc;
               ar_psymbols =
-                [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
-                                                              ap_symb = sym}];
+                [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>
+                  ; ap_symb = sym}];
               ar_action = Some <:expr< [$lid:x$] >>};
               {ar_loc = loc;
                ar_psymbols =
-                 [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
-                                                               ap_symb = sym};
-                  {ap_loc = loc; ap_patt = None;
+                 [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>
+                   ; ap_symb = sym}]@
+                   prio_psl@
+                 [{ap_loc = loc; ap_patt = None;
                    ap_symb = sep};
-                  {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>;
-                                                               ap_symb = ASlist loc g LML_0 sym (Some (sep, True))}];
+                  {ap_loc = loc; ap_patt = Some <:patt< $lid:y$ >>
+                   ; ap_symb = ASlist loc g LML_0 sym (Some (sep, True))}];
                ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>}]}}]
    ; ae_preceding_psymbols = []
    ; ae_source_symbol = Some s
@@ -2552,7 +2558,7 @@ e2: [ [ x = e4 -> x ] ] ;
 
 e4: [ [ x = e3 ; y = e5[x] -> y ] ]
 
-e5[x]: [ [ y = e7 ; z = e5[f x y] -> z
+e5[x]: [ [ PRIORITY 1 ; y = e7 ; z = e5[f x y] -> z
          | -> x ] ] ;
 
    *)
@@ -2566,8 +2572,8 @@ value left_assoc_e1 cg (formals, actuals) e = fun [
   let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
   let z = Name.print (CG.fresh_name cg (Name.mk "z")) in
-  let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
-  let rule1_psl = if g then [ps_eps] else [] in
+  let prio_ps = {ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1} in
+  let prio_psl = if g then [prio_ps] else [] in
   
   {ae_loc = loc; ae_name = ename; ae_pos = None;
    ae_formals = formals@[<:patt< $lid:x$ >>];
@@ -2578,7 +2584,7 @@ value left_assoc_e1 cg (formals, actuals) e = fun [
           au_rules =
             [{ar_loc = loc;
               ar_psymbols =
-                [{ ap_loc = loc
+                prio_psl@[{ ap_loc = loc
                  ; ap_patt = Some <:patt< $lid:y$ >>
                  ; ap_symb = s2};
                  { ap_loc = loc
@@ -2586,7 +2592,7 @@ value left_assoc_e1 cg (formals, actuals) e = fun [
                  ; ap_symb = ASnterm loc ename (actuals@[<:expr< $combiner$ $lid:x$ $lid:y$ >>]) None}];
               ar_action = Some <:expr< $lid:z$ >>};
               { ar_loc = loc
-              ; ar_psymbols = rule1_psl
+              ; ar_psymbols = []
               ; ar_action = Some <:expr< $lid:x$ >>}]}}]
    ; ae_preceding_psymbols = []
    ; ae_source_symbol = None}
@@ -2968,6 +2974,8 @@ value rec infer_symbol cg stk ename = fun [
        |> List.concat_map (fun s -> PSyn.[token (ANTI s); token (ANTI ("_"^s))])
        |> PSyn.disjunction in
      (anti_re, True)
+
+  | ASpriority _ _ -> assert False
 ]
 
 and infer_entry cg stk e =
@@ -2988,6 +2996,7 @@ and infer_psymbols cg stk ename = fun [
       infer_symbol cg stk ename s
 
     | [ {ap_symb = (ASinfer _ _)} :: t ] -> infer_psymbols cg stk ename t
+    | [ {ap_symb = (ASpriority _ _)} :: t ] -> infer_psymbols cg stk ename t
 
     | [ h :: t ] ->
        (match infer_psymbol cg stk ename h with [
@@ -3074,6 +3083,7 @@ value symbol it (snode, enode) = fun [
 
   | ASregexp _ _
   | ASinfer _ _
+  | ASpriority _ _
   | ASsyntactic _ _
 
     -> Raw.add_edge it (snode, None, enode)

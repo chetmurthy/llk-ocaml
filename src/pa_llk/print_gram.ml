@@ -201,6 +201,8 @@ and simple_symbol~{pctxt} pc sy =
   match sy with
   [ ASregexp _ id ->
     pprintf pc "PREDICT %s" (Name.print id)
+  | ASpriority _ n ->
+    pprintf pc "PRIORITY %d" n
   | ASinfer _ n ->
     pprintf pc "INFER %d" n
   | ASnterm _ id args None ->
