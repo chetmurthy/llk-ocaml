@@ -13,8 +13,8 @@ TESTS = simple_otest regexp_otest external_otest infer_otest self_otest bug_fifo
  r2official_test o2official_test error_rtest longident_rtest \
  revised_rtest \
  llkr2official_test \
-# original_rtest \
-# llko2official_test
+ original_rtest \
+ llko2official_test
 
 ERROR_TESTS = parse_error_test
 

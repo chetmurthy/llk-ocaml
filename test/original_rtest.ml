@@ -435,7 +435,7 @@ external p_phony : PREDICTION empty ;
     | LEFTA [ me1 = SELF; "."; me2 = SELF -> <:module_expr< $me1$ . $me2$ >> ]
     | LEFTA [
         me1 = SELF; me2 = paren_module_expr -> <:module_expr< $me1$ $me2$ >>
-      | me1 = SELF; INFER 2 ; "("; ")" -> <:module_expr< $me1$ (struct end) >>
+      | me1 = SELF ; "("; ")" -> <:module_expr< $me1$ (struct end) >>
       ]
     | [ i = mod_expr_ident -> i
       | me = paren_module_expr -> me
@@ -648,7 +648,7 @@ external p_phony : PREDICTION empty ;
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-include"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< include $mt$ $_itemattrs:attrs$ >> ext
 
-      | "module"; INFER 2 ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
+      | "module" ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
         <:sig_item< module $_uid:i$ := $longid:li$ $_itemattrs:attrs$ >>
 
       | "module"; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
@@ -658,7 +658,7 @@ external p_phony : PREDICTION empty ;
           let h = (i, mt, item_attrs) in
           sig_item_to_inline <:sig_item< module $flag:rf$ $list:[h::t]$ >> ext
 
-      | "module"; (ext,alg_attrs) = ext_attributes; INFER 2 ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
+      | "module"; (ext,alg_attrs) = ext_attributes ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
 (*
 MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
@@ -1222,7 +1222,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         <:patt< $longid:li$ >>
       | _ -> <:patt< $longid:li$ . $p$ >>
       ]
-    | li = longident ; INFER 2 ; "("; "type";
+    | li = longident ; "("; "type";
       loc_ids = V (LIST1 [ s = LIDENT -> (loc,s) ]) ; ")" → 
       <:patt< $longid:li$ (type $_list:loc_ids$ ) >>
     | li = longident → <:patt< $longid:li$ >>
@@ -1783,8 +1783,8 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
     [ "top"
       [ ([ ctyp LEVEL "star"; "->" ])? ; t = ctyp LEVEL "star"; "->"; ct = SELF ->
           <:class_type< [ $t$ ] -> $ct$ >>
-      | INFER 2 ; cs = class_signature -> cs
-      | INFER 2; ct = NEXT -> ct
+      | cs = class_signature -> cs
+      | ct = NEXT -> ct
       ]
     | [ ]
     ]
@@ -1911,7 +1911,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | f = field -> [f] ] ]
   ;
   field:
-    [ [ INFER 2 ; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
+    [ [ lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (Some lab, t, alg_attrs)
       | t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (None, t, alg_attrs)
