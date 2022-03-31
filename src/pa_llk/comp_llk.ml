@@ -4131,10 +4131,14 @@ value compile1b_entry cg e =
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   let fullre = compute_firstk_regexp cg e in
+  let predictor =
+    if PSyn.(equal zero fullre) then
+      <:expr< fun __strm__ -> raise Stream.Failure >>
+    else
+      let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
+      let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
+      letrec_nest exported_dfa in
   let retxt = String.escaped (PSyn.print fullre) in
-  let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
-  let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
-  let predictor = letrec_nest exported_dfa in
   let predictor_name = (Name.print ename)^"_regexp" in
   let branches = 
     rl
@@ -4154,7 +4158,7 @@ value compile1b_entry cg e =
   ;(<:patt< $lid:predictor_name$ >>, predictor, <:vala< [] >>)
   ]
   ;
-
+(*
 value compile1_entry cg e =
   match compile1a_entry cg e with [
       exception Failure "caught" -> do {
@@ -4172,6 +4176,8 @@ value compile1_entry cg e =
     | x -> x
     ]
 ;
+  *)
+value compile1_entry cg e = compile1b_entry cg e ;
 
 value compile_sp_entry cg e = do {
   let loc = e.ae_loc in

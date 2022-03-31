@@ -86,12 +86,20 @@ value tests = "simple" >::: [
       "Error1" >:: (fun _ -> do {
         assert_raises_exn_pattern "[e] or [e2] or [e3] expected (in [etop1])"
           (fun () -> pa Interp.etop1 {foo|foo a|foo})
-      ; assert_raises_exn_pattern {foo|[x = e] or [x = e2] or [x = e3]|foo}
+      ; assert_raises_exn_pattern
+{foo|[x__0001 = etop1__0001] expected after [etop1__0002]|foo}
+(*
+ {foo|[x = e] or [x = e2] or [x = e3]|foo}
+ *)
           (fun () -> pa Error1.etop1 {foo|foo a|foo})
 
       ; assert_raises_exn_pattern "[e] or [e2] or [e3] expected after 'foo' (in [etop2])"
           (fun () -> (pa Interp.etop2 {foo|foo a|foo}))
-      ; assert_raises_exn_pattern {foo|[x = e] or [x = e2] or [x = e3] expected after ['foo'] (in [etop2])|foo}
+      ; assert_raises_exn_pattern
+{foo|[x__0002 = etop2__0001] expected after ['foo']|foo}
+(*
+ {foo|[x = e] or [x = e2] or [x = e3] expected after ['foo'] (in [etop2])|foo}
+ *)
           (fun () -> (pa Error1.etop2 {foo|foo a|foo}))
 
       ; assert_raises_exn_pattern "illegal begin of etop1"

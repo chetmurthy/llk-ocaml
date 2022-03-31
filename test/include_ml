@@ -170,10 +170,10 @@ open Llkr2official_test ;;
 (*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
+ *)
 #load "error_rtest.cmo";;
 open Error_rtest ;;
-
+(*
 #load "simple_otest.cmo";;
 open Simple_otest ;;
 
@@ -244,10 +244,13 @@ ATN.Raw.dump stdout atn ;;
 "revised_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
 Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
+(*
 open ATN ;;
 open TP ;;
 #trace Node ;;
 #trace ATN.extend_branches ;;
 #trace ATNFirst.compute_firstk ;;
 #trace ATN.branch_first ;;
+
 "xx.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
+ *)
