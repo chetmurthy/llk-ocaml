@@ -3229,8 +3229,9 @@ value branch_first cg e =
 ;
 
 module TokPath = struct
-type t = { branchnum : int ; tokpath : list token ; states : list Node.t } ;
+type t = { branchnum : int ; priority : option int ; tokpath : list token ; states : list Node.t } ;
 value branchnum p = p.branchnum ;
+value priority p = p.priority ;
 value tokpath p = p.tokpath ;
 value states p = p.states ;
 end ;
@@ -3249,18 +3250,21 @@ value extend1 loc cg t =
   t.states
 |> List.concat_map (fun st ->
        step1 loc (CG.gram_atn_ec cg) st
-       |> List.map (fun (tok, st') -> {TP.branchnum=t.TP.branchnum; tokpath = t.tokpath@[tok]; states= [st']})
+       |> List.map (fun (tok, st') -> {TP.branchnum=t.TP.branchnum; priority=t.priority; tokpath = t.tokpath@[tok]; states= [st']})
      )
 ;
 
 (** a partition-set is ambiguous if:
 
-    (1) any partition has length>1 and any two priorities are equal.
-    (2) a length=1 partition has empty token-list
+    (1) a partition has empty token-list
+    (2) any partition has length>1 and priorities are not distinct
  *)
 
 value ambiguous (ll : list (list TP.t)) =
-  ll |> List.exists (fun [ [_ ; _ :: _] -> True | [{TP.tokpath=[_ :: _]}] -> False | _ -> True ])
+  ll |> List.exists (fun [
+    [{TP.tokpath=[]} :: _] -> True
+  | l -> not (Std.distinct (List.map TP.priority l))
+  ])
 ;
 
 (** extend_branches:
@@ -3323,9 +3327,13 @@ value compute_firstk ~{depth} cg e =
   let (atn,ec) = CG.gram_atn_ec cg in
   let l =
     (List.hd e.ae_levels).al_rules.au_rules
-    |> List.mapi (fun i _ ->
+    |> List.mapi (fun i r ->
            let node = ATN.Raw.entry_branch atn e.ae_name i in
-           {branchnum=i; tokpath=[]; states=[node]}) in
+           let priority = match r.ar_psymbols with [
+             [{ap_symb=ASpriority _ n} :: _] -> Some n
+           | _ -> None
+           ] in
+           {branchnum=i; priority=priority; tokpath=[]; states=[node]}) in
   let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} l in
   let tokpath_of p = p.tokpath in
   l
@@ -3451,22 +3459,43 @@ value disjoint cg loc ll =
 ;
 
 value report_verbose = ref False ;
+
+value dump_gram oc cg msg = do {
+  Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
+  let pctxt = if report_verbose.val then Pr.normal else Pr.errmsg in
+  Fmt.(pf stderr "================================================================\n") ;
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->  do {
+    let fi = CG.first cg e.ae_name in
+    let fo = CG.follow cg e.ae_name in
+    Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n"
+           Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
+           (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
+        ) ;
+    (match CG.atn_first cg e.ae_name with [
+       atnfi ->
+       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
+       Fmt.(pf stderr "ATN First:\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
+     | exception Not_found -> ()
+     ]) ;
+    (match CG.atn_firstk cg e.ae_name with [
+       atnfi ->
+       let pp_branch pps (n, ll) =
+         let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
+         Fmt.(pf pps "%a" (list ~{sep=const string "\n\t"} pp1) ll) in
+       Fmt.(pf stderr "ATN First(k):\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
+     | exception Not_found -> ()
+     ]) ;
+     Fmt.(pf stderr "\n====\n%!")
+  }) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  prerr_string Pr.(top Pprintf.empty_pc (CG.g cg)) ;
+  Fmt.(pf stderr "\n%!")
+}
+;
+
 value report_compilation_errors cg msg = do {
-  Fmt.(pf stderr "%s\n" msg) ;
-  if report_verbose.val then do {
-    Fmt.(pf stderr "================================================================\n") ;
-    (CG.gram_entries cg)
-    |> List.iter (fun e ->
-           let fi = CG.first cg e.ae_name in
-           let fo = CG.follow cg e.ae_name in
-           Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-                  Pr.(entry ~{pctxt=errmsg} Pprintf.empty_pc e)
-                  (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
-           )
-         ) ;
-    Fmt.(pf stderr "================================================================\n") ;
-    prerr_string Pr.(top Pprintf.empty_pc (CG.g cg)) ;
-  } else () ;
+  dump_gram stderr cg msg ;
   Fmt.(pf stderr "================================================================\n") ;
   (cg |> CG.errors |> List.rev)
   |> List.iter CG.(fun err ->
@@ -4270,20 +4299,7 @@ module Dump = struct
 
 value exec msg cg = do {
   let pctxt = if Codegen.report_verbose.val then Pr.normal else Pr.errmsg in
-  Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  (CG.gram_entries cg)
-  |> List.iter (fun e ->
-         let fi = CG.first cg e.ae_name in
-         let fo = CG.follow cg e.ae_name in
-         Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n\n====\n"
-                Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
-                (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
-         )
-       ) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  prerr_string Pr.(top ~{pctxt=pctxt} Pprintf.empty_pc (CG.g cg)) ;
-  Fmt.(pf stderr "\n================================================================\n%!") ;
+  Codegen.dump_gram stderr cg msg ;
   cg
 }
 ;
@@ -4418,10 +4434,10 @@ value codegen loc ?{bootstrap=False} s =
   |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> Follow.exec
-  |> Dump.exec "final grammar before codegen"
   |> BuildATN.exec
   |> ATNFirst.exec
   |> CheckATNFirst.exec
+  |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
 

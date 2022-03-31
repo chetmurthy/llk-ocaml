@@ -243,6 +243,9 @@ ATN.Raw.dump stdout atn ;;
 #trace CG.watch_follow ;;
 "revised_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
+Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
+open ATN ;;
+open TP ;;
 #trace ATN.extend_branches ;;
 #trace ATNFirst.compute_firstk ;;
 "xx.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;

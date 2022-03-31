@@ -24,10 +24,10 @@ module PatternBaseToken = struct
     | OUTPUT n -> Printf.sprintf "#%d" n
     ]
   ;
+  value pp pps t = Fmt.(pf pps "%s" (print t)) ;
   value compare t1 t2 = Stdlib.compare t1 t2 ;                            
   value equal t1 t2 = 0 = compare t1 t2 ;
   value is_output = fun [ OUTPUT _ -> True | _ -> False ] ;
-
 end ;
 module PatternRegexp = Regexp(PatternBaseToken) ;
 module PSyn = RESyntax(PatternBaseToken)(PatternRegexp) ;
