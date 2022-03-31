@@ -2961,6 +2961,9 @@ value dump_gram oc cg msg = do {
   Fmt.(pf stderr "================================================================\n") ;
   (CG.gram_entries cg)
   |> List.iter (fun e ->  do {
+    Fmt.(pf stderr "Entry: %s\n"
+           Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
+    ) ;
     (match CG.atn_first cg e.ae_name with [
        atnfi ->
        let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} PatternBaseToken.pp) l n) in
