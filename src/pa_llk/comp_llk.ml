@@ -2724,25 +2724,25 @@ value expand_macros (cg : CG.t) e =
 
       | ASflag loc g sym ->
          let sym = dt.migrate_a_symbol dt sym in
-         let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
-         let rule1_psl = if g then [ps_eps] else [] in
+         let prio_ps = {ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1} in
+         let prio_psl = if g then [prio_ps] else [] in
          ASrules loc
            {au_loc = loc;
             au_rules =
               [{ ar_loc = loc
                ; ar_psymbols =
-                   [{ ap_loc = loc; ap_patt = None
+                   prio_psl@[{ ap_loc = loc; ap_patt = None
                       ; ap_symb = sym
                    }]
                ; ar_action = Some <:expr< True >>}
                ;{ ar_loc = loc
-                ; ar_psymbols = rule1_psl
+                ; ar_psymbols = []
                 ; ar_action = Some <:expr< False >>}]}
 
       | ASopt loc g sym ->
          let sym = dt.migrate_a_symbol dt sym in
-         let ps_eps = {ap_loc=loc; ap_patt=None; ap_symb = ASregexp loc check_eps} in
-         let rule1_psl = if g then [ps_eps] else [] in
+         let prio_ps = {ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1} in
+         let prio_psl = if g then [prio_ps] else [] in
          let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
 
          ASrules loc
@@ -2750,10 +2750,10 @@ value expand_macros (cg : CG.t) e =
                   au_rules =
                    [{ar_loc = loc;
                      ar_psymbols =
-                      [{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                       prio_psl@[{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
                         ap_symb = sym}];
                      ar_action = Some <:expr< Some $lid:x$ >>};
-                    {ar_loc = loc; ar_psymbols = rule1_psl;
+                    {ar_loc = loc; ar_psymbols = [];
                      ar_action = Some <:expr< None >>}]}
 
       | s -> fallback_migrate_a_symbol dt s

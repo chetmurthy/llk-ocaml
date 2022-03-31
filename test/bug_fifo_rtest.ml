@@ -6,11 +6,6 @@ GRAMMAR Revised:
     with_constr
     ;
 
-REGEXPS:
-  check_arrow = "->" ;
-  check_not_arrow = eps ;
-END;
-
   str_item:
     [ "top"
       [ "module"; "type"; i = V LIDENT "";  "="; mt = module_type →
@@ -57,8 +52,8 @@ END;
       ]
     | "below_alg_attribute" [ t = NEXT -> t ]
     | "arrow" NONA
-      [ t1 = NEXT; check_arrow ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
-      | t1 = NEXT ; check_not_arrow -> t1
+      [ t1 = NEXT ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
+      | t1 = NEXT -> t1
       ]
     | "simple"
       [ i = LIDENT → <:ctyp< $lid:i$ >>

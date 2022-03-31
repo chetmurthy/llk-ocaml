@@ -277,11 +277,8 @@ END;
 {foo|
 GRAMMAR Neg:
 EXPORT: e;
-REGEXPS:
-  check_not_let = eps;
-END ;
   e: [ [ "let" ; s = STRING -> Right ("let "^s)
-       | check_not_let ; e = e1 -> e ] ] ;
+       |  e = e1 -> e ] ] ;
 
   e1:
     [
@@ -391,13 +388,10 @@ END;
 {foo|
 GRAMMAR Greedy_LEFTA2:
 EXPORT: e e1 e2;
-REGEXPS:
-  check_dot_uid =  "." (UIDENT | $uid | $_uid) ;
-END;
 e: [ [ h = e1 -> h ] ];
 e1: [ LEFTA [ (x,l) = SELF ; "." ; z = LIDENT -> (x, l@[z]) ]
     | [ x = e2 -> (x, []) ] ] ;
-e2: [ GREEDY LEFTA [ (x,l) = SELF ; check_dot_uid ; "." ; z = UIDENT -> (x, l@[z]) ]
+e2: [ GREEDY LEFTA [ (x,l) = SELF ; "." ; z = UIDENT -> (x, l@[z]) ]
     | [ x = LIDENT -> (x, []) ] ] ;
 END;
 

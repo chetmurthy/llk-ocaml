@@ -5,13 +5,9 @@ GRAMMAR Mod:
 EXPORT: ident functor_parameter uidopt module_declaration mod_decl_binding
         sig_item;
 
-REGEXPS:
-  check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
-  check_module_decl_binding = "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") ;
-END;
 sig_item: [ [
-       "module" ; check_module_decl_binding ; rf = V (FLAG "rec"); d = mod_decl_binding → 1
-      | "module" ; check_uident_coloneq ; i = V UIDENT "uid" ; ":="  → 2
+       "module" ; rf = V (FLAG "rec"); d = mod_decl_binding → 1
+      | "module" ; i = V UIDENT "uid" ; ":="  → 2
       | "module"; "type"; i = V ident ""; "=" → 3
       | "module"; "type"; i = V ident ""; ":="  → 4
       | "module"; "alias"; i = V UIDENT "uid"; "=" → 5

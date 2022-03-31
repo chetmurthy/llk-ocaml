@@ -60,7 +60,7 @@ EXTEND
           ; gram_id=gid
           ; gram_exports=expl
           ; gram_external_asts=extl
-          ; gram_regexp_asts=Llk_types.default_regexps @ rl
+          ; gram_regexp_asts=rl
           ; gram_entries=el
     } ] ]
   ;

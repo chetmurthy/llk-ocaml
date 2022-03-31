@@ -127,11 +127,3 @@ value loc_of_a_symbol = fun [
   | ASpriority loc _ -> loc
   ]
 ;
-
-value check_eps = Name.mk "check_eps" ;
-value default_regexps =
-  let open Llk_regexps in
-  [
-    (check_eps, EPS Ploc.dummy)
-  ]
-;
