@@ -72,7 +72,7 @@ concatenation:
   [ [ x = repetition; y = concatenation2 → CONC [x :: y] ] ]
 ;
 concatenation2:
-  [ [ INFER 2 ; x__0004 = repetition; y__0004 = concatenation2 → [x__0004 :: y__0004]
+  [ [ x__0004 = repetition; y__0004 = concatenation2 → [x__0004 :: y__0004]
     | → [] ] ]
 ;
 

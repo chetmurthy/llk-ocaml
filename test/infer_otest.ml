@@ -4,7 +4,6 @@
 GRAMMAR Mod:
 EXPORT: ident functor_parameter uidopt module_declaration mod_decl_binding
         sig_item;
-
 sig_item: [ [
        "module" ; rf = V (FLAG "rec"); d = mod_decl_binding → 1
       | "module" ; i = V UIDENT "uid" ; ":="  → 2
@@ -41,6 +40,7 @@ REGEXPS:
   check_type_binder = 
         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
          (tyvar tyvar * | ($list | $_list)) "." ;
+  check_eps = eps ;
 END;
 
 (*
@@ -154,7 +154,7 @@ END;
   ;
   type_binder_opt: [ [
     check_type_binder ; ls = V (LIST1 typevar) ; "." -> ls
-  | -> <:vala< [] >>
+  | check_eps -> <:vala< [] >>
   ] ]
   ;
 

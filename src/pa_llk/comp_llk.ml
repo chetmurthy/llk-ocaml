@@ -366,8 +366,6 @@ module CompilingGrammar = struct
     ; gram_alphabet : mutable list token
     ; gram_regexps: mutable list (Name.t * regexp)
     ; gram_externals: mutable list (Name.t * regexp)
-    ; firsts : mutable SM.t (option token)
-    ; follows : mutable SM.t token
     ; errors : mutable list error_t
     ; atn : mutable ATN0.Raw.t
     ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
@@ -383,8 +381,6 @@ module CompilingGrammar = struct
                 ; gram_alphabet = []
                 ; gram_regexps = []
                 ; gram_externals = []
-                ; firsts = SM.mt
-                ; follows = SM.mt
                 ; errors = []
                 ; atn = ATN0.Raw.mk ()
                 ; eclosure = MHM.mk 23
@@ -420,32 +416,6 @@ module CompilingGrammar = struct
   value gram_atn cg = (snd cg).atn ;
   value gram_eclosure cg = (snd cg).eclosure ;
   value gram_atn_ec cg = ((snd cg).atn, (snd cg).eclosure) ;
-
-  value firstmap cg = (snd cg).firsts ;
-
-  value first cg nt = do {
-    assert (exists_entry cg nt) ;
-    SM.lookup nt (snd cg).firsts
-  };
-
-  value add_first cg nt fi =
-    (snd cg).firsts := SM.addset (snd cg).firsts (nt, fi) ;
-
-  value followmap cg = (snd cg).follows ;
-
-  value follow cg nt = do {
-    assert (exists_entry cg nt) ;
-    SM.lookup nt (snd cg).follows
-  };
-
-  value trace_follow = ref False ;
-  value watch_follow ((nt : Name.t), (from:string), (ti : TS.t token)) = () ;
-  value add_follow (cg : t) ~{from:string} nt fi = do {
-    watch_follow (nt, from, fi) ;
-    (snd cg).follows := SM.addset (snd cg).follows (nt, fi)
-  }
-  ;
-
 
   value adjust0_loc loc loc' =
     Ploc.(make_loc
@@ -1502,449 +1472,6 @@ value left_factorize_levels cg l = do {
 value exec0 cg e = {(e) with ae_levels = left_factorize_levels cg e.ae_levels } ;
 
 value exec cg = CG.withg cg {(CG.g cg) with gram_entries = List.map (exec0 cg) (CG.gram_entries cg)} ;
-
-end ;
-
-module First = struct
-
-exception ExternalEntry of Name.t ;
-
-value rec psymbols cg = fun [
-  [] -> TS.mk [None]
-| [{ap_symb=ASregexp _ _} :: t] -> psymbols cg t
-| [{ap_symb=ASpriority _ _} :: t] -> psymbols cg t
-| [{ap_symb=ASsyntactic _ _} :: t] -> psymbols cg t
-| [h::t] ->
-   let fh = psymbol cg h in
-   if TS.mem None fh then
-     TS.(union (except None fh) (psymbols cg t))
-   else fh
-]
-
-and psymbol cg ps = symbol cg ps.ap_symb
-
-and symbol cg = fun [
-      ASflag _ _ s -> TS.(union (symbol cg s) (mk[None]))
-    | ASkeyw _ kw -> TS.mk [Some (SPCL kw)]
-    | (ASlist loc _ lml elem_s sepb_opt) as s ->
-       let felem = symbol cg elem_s in
-       if TS.mem None felem then
-         raise_failwithf (CG.adjust_loc cg loc) "First.symbol: LIST element MUST NOT be nullable: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
-       else 
-         match (lml, sepb_opt) with [
-             (LML_1, None) -> felem
-           | (LML_1, _) -> felem
-           | (LML_0, _) -> TS.(union felem (mk [None]))
-           ]
-
-    | ASnext _ _ -> assert False
-
-    | ASnterm _ nt _ _ when CG.exists_entry cg nt -> CG.first cg nt
-    | ASnterm _ nt _ _ when CG.exists_external_ast cg nt ->
-     let rex = CG.gram_external cg nt in
-     let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
-     let is_nullable = C.BEval.nullable rex in
-     let nulls = if is_nullable then [None] else [] in
-     let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
-     TS.mk (toks@nulls)
-
-    | ASopt _ _ s -> TS.(union (mk [None]) (symbol cg s))
-
-  | ASleft_assoc _ _ s1 s2 _ ->
-     let fs1 = symbol cg s1 in
-     if not (TS.mem None fs1) then fs1
-     else TS.(union (except None fs1) (symbol cg s2))
-
-  | ASrules _ rl -> rules cg rl
-  | ASself _ _ -> assert False
-  | AStok _ cls tokopt -> TS.mk[Some (CLS cls tokopt)]
-  | ASvala loc s anti_kinds ->
-     TS.(union (symbol cg s) (anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk))
-  | ASanti loc anti_kinds ->
-     TS.(anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk)
-  | ASregexp loc _ as s ->
-     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
-  | ASpriority loc _ as s ->
-     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
-  | ASsyntactic loc _ as s ->
-     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
-]
-
-and rule cg r = psymbols cg r.ar_psymbols
-
-and rules cg l =
-  let rules = l.au_rules in
-  TS.unionl (List.map (rule cg) rules)
-;
-
-value level cg l = rules cg l.al_rules ;
-
-value comp1_entry cg e =
-try
-  let fi =
-    e.ae_levels
-    |> List.map (level cg)
-    |> TS.unionl in
-  CG.add_first cg e.ae_name fi
-with ExternalEntry _ -> ()
-;
-
-value comp1 el cg = List.iter (comp1_entry cg) el ;
-
-value rec comprec cg el = do {
-  let m0 = CG.firstmap cg in
-  comp1 el cg ;
-  let m1 = CG.firstmap cg in
-  if m0 = m1 then cg else comprec cg el
-}
-;
-
-value exec0 cg el = comprec cg el ;
-value exec cg = exec0 cg (CG.gram_entries cg) ;
-
-end ;
-
-module Follow = struct
-
-value nullable l = TS.mem None l ;
-
-(** [fifo_concat ~{must} ~{if_nullable} fi fo]
-
-    when must is true: concat fi.fo, removing eps if present.
-
-    when must is false:
-
-    when if_nullable is true, concats fi.fo IF fi is nullable.
-
-    when if_nullable is false, checks that fi is NOT nullable, and concats.
-
- *)
-value fifo_concat cg loc ?{must=False} ?{if_nullable=False} fi fo =
-  match (must, if_nullable, nullable fi) with [
-      (True, True, _) ->
-      raise_failwithf (CG.adjust_loc cg loc) "fifo_concat: incompatible arguments with must=True, if_nullable=True"
-    | (_, True, True) -> TS.(union (map Std.outSome (TS.except None fi)) fo)
-    | (_, True, False) -> TS.map Std.outSome fi
-    | (_, False, True) ->
-       raise_failwithf (CG.adjust_loc cg loc) "fifo_concat: [fi] is nullable, but if_nullable=False"
-    | (_, False, False) -> TS.(union (TS.map Std.outSome fi) fo)
-    ]
-;
-
-value fi2fo cg loc fi = fifo_concat cg loc ~{must=True} fi TS.mt ;
-
-(** Compute "FI-FO" First(s).[Follow(s) when first contains epsilon].
-
-    We pass:
-
-    fimap: map for computing FIRST
-    mm: the current mutable map of FOLLOW
-    ff: "full follow" of whatever might follow the current symbol
-
-    Procedure:
-
-    We invoke fifo on all sub-symbols.  When invoked on a nonterminal, we
-    add "full follow" to the FOLLOW set of the nonterminal.
-
- *)
-
-value watch_follow (nt : Name.t) (ff : TS.t token) = () ;
-
-
-value rec fifo_psymbols cg e ff = fun [
-      [] -> ff
-    | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg e ff t
-    | [{ap_symb=ASpriority _ _} :: t] -> fifo_psymbols cg e ff t
-    | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg e ff t
-    | [h::t] ->
-       let ft = fifo_psymbols cg e ff t in
-       fifo_psymbol cg e ft h
-       
-]
-
-and fifo_psymbol cg e ff ps =
-  fifo_symbol cg e ff ps.ap_symb
-
-(** [fifo_symbol cg e ff]
-
-    fimap: the result of First.exec, the map from nonterminal to
-   FIRST-set mm: mutable map of FOLLOW sets ff: full-follow for the
-   current symbol in the current production
-
-    "full follow" means the current best approximation of the
-   follow-set for this symbol in this production.
-
-    For FLAG/OPT/LIST composite symbols, we check that they are not nullable,
-    but the code should be OK with them being nullable.  I don't know any
-    good reason why they should be nullable ( *esp* for LIST) but I'll leave
-    the code as-is until I get a really good reason to change it.
-
- *)
-
-and fifo_symbol cg e ff = fun [
-      ASflag loc _ s | ASopt loc _ s ->
-      (* the fifo of [FLAG s] is always the concat of the FIRST of s
-         (minus eps) and the full-follow of [FLAG s], since [FLAG s]
-         is nullable.
-       *)
-      let _ = fifo_symbol cg e ff s in
-      let fi_s = First.symbol cg s in do {
-        if nullable fi_s then
-          raise_failwith (CG.adjust_loc cg loc) "FLAG/OPT must not be nullable"
-        else
-          fifo_concat cg ~{must=True} loc fi_s ff
-      }
-
-    | ASkeyw _ kw -> TS.mk[(SPCL kw)]
-
-    | ASlist loc _ lml s sepopt_opt ->
-       (* A. if a LIST has element that is NOT nullable, OR is LIST0,
-          then the fifo is just the firsts of that element.
-
-          B. if the element is nullable, then combine fifo_element,
-          fifo_sep (if any) and full-follow
-
-          Procedure: by cases:
-           
-          0. call [ff] argument "full-follow"
-        *)
-
-       let fi_s = First.symbol cg s in
-       if nullable fi_s then
-         raise_failwithf (CG.adjust_loc cg loc) "LIST element must not be nullable"
-       else
-       match (lml, sepopt_opt) with [
-           (*
-             1. LIST1, no SEP:
-
-                a. fifo is [FIRST s].{if_nullable}.full-follow
-                b. compute [FIFO s] with ff=[FIRST s].full-follow
-            *)
-
-           (LML_1, None) ->
-
-           let _ = 
-             let ff = fifo_concat cg loc ~{must=True} fi_s ff in
-             fifo_symbol cg e ff s in
-
-           fifo_concat cg loc ~{if_nullable=True} fi_s ff
-
-         (*
-           2. LIST1, mandatory SEP s2:
-
-             a. fifo is [FIRST s].{if_nullable}.(([FIRST s2].[]) union full-follow)
-             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
-             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.([FIRST s2].full-follow)
-          *)
-
-         | (LML_1, Some (s2, False)) ->
-           let fi_s2 = First.symbol cg s2 in
-           if nullable fi_s2 then
-             raise_failwithf (CG.adjust_loc cg loc) "LIST separator must not be nullable"
-           else
-
-           let _ =
-             let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg e ff s in
-
-           let _ =
-             let ff = (fifo_concat cg loc ~{if_nullable=True} fi_s (fifo_concat cg loc fi_s2 ff)) in
-             fifo_symbol cg e ff s2 in
-
-           fifo_concat cg loc ~{if_nullable=True} fi_s (TS.union (fi2fo cg loc fi_s2) ff)
-
-         (*
-
-          2'. LIST1, optional last SEP s2:
-
-             a. fifo is [FIRST s].{if_nullable}.([FIRST s2] union full-follow)
-             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
-             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2] union full-follow
-          *)
-
-         | (LML_1, Some (s2, True)) ->
-           let fi_s2 = First.symbol cg s2 in
-           if nullable fi_s2 then
-             raise_failwithf (CG.adjust_loc cg loc) "LIST separator must not be nullable"
-           else
-
-           let _ =
-             let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg e ff s in
-
-           let _ =
-             let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff) in
-             fifo_symbol cg e ff s2 in
-
-           fifo_concat cg loc ~{if_nullable=True} fi_s (TS.union (fi2fo cg loc fi_s2) ff)
-
-         (*
-          3. LIST0, no SEP:
-
-             a. fifo is [FIRST s].full-follow
-             b. compute [FIFO s] with ff=[FIRST s].full-follow
-          *)
-
-         | (LML_0, None) ->
-           let _ = 
-             let ff = fifo_concat cg loc ~{must=True} fi_s ff in
-             fifo_symbol cg e ff s in
-
-           fifo_concat cg loc ~{must=True} fi_s ff
-
-         (*
-          4. LIST0, mandatory SEP s2:
-
-             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].[]) union full-follow
-             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
-             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2]
-          *)
-
-         | (LML_0, Some (s2, False)) ->
-           let fi_s2 = First.symbol cg s2 in
-           if nullable fi_s2 then
-             raise_failwithf (CG.adjust_loc cg loc) "LIST separator must not be nullable"
-           else
-
-           let _ =
-             let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg e ff s in
-
-           let _ =
-             let ff = (fifo_concat cg loc ~{if_nullable=True} fi_s (fifo_concat cg loc fi_s2 ff)) in
-             fifo_symbol cg e ff s2 in
-
-           TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff)
-
-         (*
-          4. LIST0, optional last SEP s2:
-
-             a. fifo is [FIRST s].{if_nullable}.([FIRST s2].[]) union full-follow
-             b. compute [FIFO s] with ff=([FIRST s2].{if_nullable}.[FIRST s]) union full-follow
-             c. compute [FIFO s2] with ff=[FIRST s].{if_nullable}.[FIRST s2] union full-follow
-          *)
-
-         | (LML_0, Some (s2, True)) ->
-           let fi_s2 = First.symbol cg s2 in
-           if nullable fi_s2 then
-             raise_failwithf (CG.adjust_loc cg loc) "LIST separator must not be nullable"
-           else
-
-           let _ =
-             let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s2 (fi2fo cg loc fi_s)) ff) in
-             fifo_symbol cg e ff s in
-
-           let _ =
-             let ff = TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff) in
-             fifo_symbol cg e ff s2 in
-
-           TS.(union (fifo_concat cg loc ~{if_nullable=True} fi_s (fi2fo cg loc fi_s2)) ff)
-
-         ]
-
-  | ASnext loc _ | ASself loc _ -> raise_failwithf (CG.adjust_loc cg loc) "fifo_symbol: internal error: NEXT should not occur here"
-  | ASnterm loc nt _ _ as s when CG.exists_entry cg nt -> do {
-        watch_follow nt ff ;
-        CG.add_follow cg ~{from=Name.print e.ae_name} nt ff ;
-        let fi_s = First.symbol cg s in
-        fifo_concat cg loc ~{if_nullable=True} fi_s ff
-      }
-
-  | ASnterm loc nt _ _ as s when CG.exists_external_ast cg nt ->
-     let rex = CG.gram_external cg nt in
-     let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
-     C.BEval.OutputDfa.first_tokens rex
-
-  | ASleft_assoc loc _ s1 s2 _ ->
-  (* 1. fifo is [FIRST s1].{is_nullable}.[FIRST s2].{is_nullable}.full-follow
-     2. compute [FIFO s1] with ff=[FIRST s2] union full-follow
-     3. compute [FIFO s2] with ff=[FIRST s2].{is_nullable}.full-follow
-   *)                               
-     let fi_s1 = First.symbol cg s1 in
-     let fi_s2 = First.symbol cg s2 in
-
-     let _ =
-       let ff = TS.(union (fi2fo cg loc fi_s2) ff) in
-       fifo_symbol cg e ff s1 in
-
-     let _ =
-       let ff = TS.(union (fi2fo cg loc fi_s2) ff) in
-       fifo_symbol cg e ff s2 in
-
-     fifo_concat cg loc ~{if_nullable=True} fi_s1
-       (fifo_concat cg loc ~{if_nullable=True} fi_s2 ff)
-
-  | ASrules loc rs ->
-     fifo_rules cg e ff rs
-
-  | AStok loc cls tokopt -> TS.mk [CLS cls tokopt]
-
-  | ASvala loc s sl as s0 ->
-     let _ = fifo_symbol cg e ff s in
-
-     let fi_vala = First.symbol cg s0 in
-     fifo_concat cg loc ~{if_nullable=True} fi_vala ff
-
-  | ASanti loc sl as s0 ->
-     let fi_vala = First.symbol cg s0 in
-     fifo_concat cg loc ~{if_nullable=True} fi_vala ff
-
-  | s -> raise_failwithf (CG.adjust_loc cg (loc_of_a_symbol s)) "fifo_symbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s)
-]
-
-and fifo_rule cg e ff r =
-  fifo_psymbols cg e ff r.ar_psymbols
-
-and fifo_rules cg e ff rs =
-  let loc = rs.au_loc in
-  let rl = rs.au_rules in
-  let fi_rs = rl |> List.map (First.rule cg) |> TS.unionl in do {
-    rl |> List.iter (fun r ->
-              ignore (fifo_rule cg e ff r)) ;
-    fifo_concat cg loc ~{if_nullable=True} fi_rs ff
-  }
-
-and fifo_level cg e ff lev =
-  fifo_rules  cg e ff lev.al_rules
-;
-
-value comp1_entry cg e =
-try
-  let ll = e.ae_levels in do {
-  assert (1 = List.length ll) ;
-  let e_ff = CG.follow cg e.ae_name in
-  ignore (fifo_level cg e e_ff (List.hd ll))
-}
-with First.ExternalEntry _ -> ()
-;
-  
-
-value comp1 cg el =
-  List.iter (comp1_entry cg) el ;
-
-value rec comprec el cg = do {
-  let m0 = CG.followmap cg in
-  comp1 cg el ;
-  let m1 = CG.followmap cg in
-  if m0 = m1 then cg else comprec el cg ;
-}
-;
-
-value exec0 cg ~{tops} el = do {
-  ignore (First.exec0 cg el) ;
-  tops |> List.iter (fun t ->
-              CG.add_follow cg ~{from="entrypoint"} t [CLS "EOI" None]) ;
-  comprec el cg
-}
-;
-
-value exec1 ~{tops} cg = exec0 cg ~{tops=tops} (CG.gram_entries cg) ;
-
-value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg) = do {
-  exec0 cg ~{tops=expl} el ;
-  cg
-}
-;
 
 end ;
 
@@ -3387,50 +2914,6 @@ value exec cg = do {
 
 end ;
 
-module CheckATNFirst = struct
-
-value compute_fifo cg loc ff r =
-  let fi = First.rule cg r in
-  (fi, ff, r)
-;
-
-value entry_branches_fifo cg e =
-  let loc = e.ae_loc in
-  let ff = CG.follow cg e.ae_name in
-  let fi_fo_rule_list =
-    match (List.hd e.ae_levels).al_rules.au_rules
-          |> List.map (compute_fifo cg loc ff) with [
-      x -> x
-    | exception First.ExternalEntry eename -> do {
-        CG.add_warning cg (CG.adjust_loc cg loc) eename "compile1a_entry: entry is external, FIRST/FOLLOW disallowed" ;
-        failwith "caught"
-      }
-    ] in
-  fi_fo_rule_list
-  |> List.mapi (fun i (fi, fo, r) ->
-         let raw_tokens =
-           TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
-         (i, raw_tokens)
-       )
-;
-
-
-value exec cg = do {
-  (CG.gram_entries cg)
-  |> List.iter (fun e ->
-      let loc = e.ae_loc in
-      let atn_branch_fifo = CG.atn_first cg e.ae_name in
-      let fifo_branch_fifo = entry_branches_fifo cg e in
-      if atn_branch_fifo <> fifo_branch_fifo then
-        raise_failwithf  (CG.adjust_loc cg loc) "CheckATNFirst: fifo sets differ"
-      else ()
-    ) ;
-  cg
-}
-; 
-
-end ;
-
 (** Codegen:
 
   0. compute the set of all tokens/classes.
@@ -3470,22 +2953,6 @@ value all_tokens el =
   }
 ;
 
-value compute_fifo cg loc ff r =
-  let fi = First.rule cg r in
-  (fi, ff, r)
-;
-
-value disjoint cg loc ll =
-  let rec drec acc = fun [
-        [] -> True
-      | [(fi, ff,_) :: t] ->
-         let h = Follow.fifo_concat cg loc ~{if_nullable=True} fi ff in
-         TS.disjoint acc h
-         && drec (TS.union h acc) t
-      ] in
-  drec TS.mt ll
-;
-
 value report_verbose = ref False ;
 
 value dump_gram oc cg msg = do {
@@ -3494,12 +2961,6 @@ value dump_gram oc cg msg = do {
   Fmt.(pf stderr "================================================================\n") ;
   (CG.gram_entries cg)
   |> List.iter (fun e ->  do {
-    let fi = CG.first cg e.ae_name in
-    let fo = CG.follow cg e.ae_name in
-    Fmt.(pf stderr "Entry: %s\nFirst: %s\nFollow: %s\n"
-           Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
-           (TS.print print_token_option fi) (TS.print PatternBaseToken.print fo)
-        ) ;
     (match CG.atn_first cg e.ae_name with [
        atnfi ->
        let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} PatternBaseToken.pp) l n) in
@@ -3775,124 +3236,6 @@ value tokens_to_match_branches loc i toks =
   in specific_branches @ rest_branches @ anti_branches
 ;
 
-value match_nest_branches (cg : CG.t) (e : a_entry) i (fi, fo, r) =
-  let loc = r.ar_loc in
-  let raw_tokens =
-    TS.export (Follow.fifo_concat cg loc ~{if_nullable=True} fi fo) in
-  let nullable_branch =
-    if Follow.nullable fi && TS.mt = fo then
-      [(<:patt< _ >>, <:vala< None >>, <:expr< $int:string_of_int i$ >>)]
-    else [] in
-  ((tokens_to_match_branches loc i raw_tokens) @ nullable_branch, raw_tokens)
-;
-
-value build_match_nest loc (cg : CG.t) (e : a_entry) fi_fo_rule_list =
-  let branches_fifo_list =
-    fi_fo_rule_list
-    |> List.mapi (match_nest_branches cg e) in
-  let branches = branches_fifo_list |> List.concat_map fst  in
-  let fifo = branches_fifo_list |> List.concat_map snd in
-  let fifotxt =
-    fifo
-    |> List.map PSyn.token
-    |> PSyn.disjunction
-    |> PSyn.print in
-  let (null_branches, normal_branches) =
-    Ppxutil.filter_split (fun [ (<:patt< _ >>, _, _) -> True | _ -> False ]) branches in
-  let null_branches = match null_branches with [
-        [] ->
-        (match e.ae_preceding_psymbols with [
-             [] ->
-             [(<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)]
-           | left_syms ->
-              let psl =
-                fi_fo_rule_list
-                |> List.map (fun (_, _, r) ->
-                       match r.ar_psymbols with [ [] -> None | [h :: _] -> Some h ]) in
-              let msg = expected_psymbols_msg e left_syms psl in
-              [(<:patt< _ >>, <:vala< None >>, <:expr< raise (Stream.Error $str:msg$) >>)]
-           ])
-      | [_] as l -> l
-      | _ ->  do {
-         CG.add_failure cg (CG.adjust_loc cg loc) e.ae_name "internal error in build_match_nest: entry has more than one NULL branch" ;
-         failwith "caught"
-        }
-      ] in
-  let branches = normal_branches @ null_branches in
-  (<:expr< fun __strm__ -> match Stream.peek __strm__ with [ $list:branches$ ] >>,
-   fifotxt)
-;
-
-value compile1a_branch cg e i (fi, fo, r) =
-  let loc = r.ar_loc in
-  let body = compile1_rule cg e r in
-  (<:patt< $int:string_of_int i$ >>, <:vala< None >>, body)
-;
-
-(** FIRST/FOLLOW compilation strategy.
-
-    1. compute FIRST/FOLLOW for each branch of the rule
-    2. combine FIRST.{if_nullable}.FOLLOW -> FFO
-    3. if these sets are not disjoint, then we can't use them to compile the entry.
-    4. If they are disjoint, but more than one FIRST set is nullable, again, can't compile the entry.
-    5. compile a match, with each case_branch one of the rule-branches, and the pattern being the FFO set.
- *)
-value compile1a_entry cg e = do {
-  let loc = e.ae_loc in
-  let ename = e.ae_name in
-  if ((List.hd e.ae_levels).al_rules.au_rules
-      |> List.exists (fun [
-                          {ar_psymbols=[{ap_symb=(ASregexp _ _)} :: _]} -> True
-                        | _ -> False
-     ])) then do {
-      CG.add_warning cg (CG.adjust_loc cg loc) ename "compile1a_entry: single-rule entry, starts with regexp: FIRST/FOLLOW disallowed" ;
-      failwith "caught"
-    }
-  else () ;
-  let ff = CG.follow cg ename in
-  let fi_fo_rule_list =
-    match (List.hd e.ae_levels).al_rules.au_rules
-          |> List.map (compute_fifo cg loc ff) with [
-      x -> x
-    | exception First.ExternalEntry eename -> do {
-        CG.add_warning cg (CG.adjust_loc cg loc) eename "compile1a_entry: entry is external, FIRST/FOLLOW disallowed" ;
-        failwith "caught"
-      }
-      ] in do {
-    if not (disjoint cg loc fi_fo_rule_list) then do {
-    CG.add_warning cg (CG.adjust_loc cg loc) e.ae_name "compile1_entry: FIFO sets were not disjoint" ;
-    failwith "caught"
-    }
-    else if 1 < List.length (List.filter (fun (fi, _, _) -> Follow.nullable fi) fi_fo_rule_list) then do {
-      CG.add_warning cg (CG.adjust_loc cg loc) e.ae_name "compile1a_entry: more than one branch is nullable" ;
-      failwith "caught"
-    }
-    else () ;
-    let (match_nest, fifotxt) = build_match_nest loc cg e fi_fo_rule_list in
-    let matcher_name = (Name.print ename)^"_matcher" in
-    let branches =
-      fi_fo_rule_list
-    |> List.mapi (compile1a_branch cg e) in
-    let rhs =
-      match branches with [
-        [] -> <:expr< fun __strm__ -> raise Stream.Failure >>
-      | _ ->
-         let branches =
-           branches
-         |> List.map (fun (p,wo,e) -> (p,wo,<:expr< $e$ __strm__ >>)) in
-         let branches = branches @ [
-               (<:patt< _ >>, <:vala< None >>, <:expr< raise Stream.Failure >>)
-             ] in
-         <:expr< fun __strm__ -> match ($lid:matcher_name$ __strm__) [@llk.first_follow $str:String.escaped fifotxt$ ;] with [ $list:branches$ ] >> ]
-    in
-    let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-    [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)
-    ;(<:patt< $lid:matcher_name$ >>, match_nest, <:vala< [] >>)
-    ]
-  }
-}
-;
-
 value token_pattern loc = fun [
         CLS s None -> (<:patt< Some ($str:s$, _) >>, None)
       | CLS s (Some tok) -> (<:patt< Some ($str:s$, $str:String.escaped tok$) >>, None)
@@ -4063,15 +3406,6 @@ value compile1b_branch cg ename branchnum r =
   (<:patt< Some (_, $int:string_of_int branchnum$ ) >>, <:vala< None >>, body)
 ;
 
-value fifo_to_regexp cg e r =
-  let loc = e.ae_loc in
-  let ff = CG.follow cg e.ae_name in
-  let (fi, ff, r) = compute_fifo cg loc ff r in
-  let ffo = Follow.fifo_concat cg loc ~{if_nullable=True} fi ff in
-  ffo |> List.map PSyn.token
-  |> PSyn.disjunction
-;
-
 (** infer_regexp [stk] [r]
 
     infers the regexp for rule [r], and if this requires recursing into
@@ -4091,8 +3425,19 @@ value infer_regexp loc cg e r =
      | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
         CG.gram_external cg nt
 
-    | _ ->
-       fifo_to_regexp cg e r
+     | [ {ap_symb=ASnterm _ nt _ _} :: _ ]
+          when CG.exists_entry cg nt &&
+                 MHM.in_dom (snd cg).atn_first nt ->
+        let l = CG.atn_first cg nt in
+        l |> List.concat_map snd |> List.map PSyn.token |> PSyn.disjunction
+
+     | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
+
+    | ps -> do {
+        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: cannot infer regexp for rule %s"
+          Pr.(rule_psymbols ~{pctxt=errmsg} Pprintf.empty_pc r.ar_psymbols) ;
+        failwith "caught"
+      }
     ]
 ;
 
@@ -4250,22 +3595,6 @@ value compile_entries cg el = do {
 }
 ;
 
-value compute_follow (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg) =
-  try
-    Follow.exec0 cg ~{tops=expl} el
-  with
-    [
-      exn ->
-      let open Printexc in
-       let rbt = get_raw_backtrace() in
-       let bts = (rbt |> raw_backtrace_to_string) in do {
-        CG.add_exn cg Ploc.dummy (Name.mk "<all-entries>") (bts, exn) ;
-        report_compilation_errors cg "FIRST/FOLLOW computation FAILED" ;
-        raise_with_backtrace exn rbt
-      }
-    ]
-;
-
 value compile_top_entry cg e =
   let loc = e.ae_loc in
   let n = Name.print e.ae_name in
@@ -4278,7 +3607,6 @@ value compile_top_entry cg e =
   (<:patt< $lid:n$ >>, rhs, <:vala< [] >>)
 ;
 value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _) as cg)  =
-let _ = compute_follow cg in
   let fdefs = compile_entries cg el in
   let top_defs =
     (CG.g cg).gram_exports
@@ -4460,23 +3788,10 @@ value separate_syntactic loc ?{bootstrap=False} s =
   |> S9SeparateSyntactic.exec
 ;
 
-value first loc ?{bootstrap=False} s =
-  s
-  |> separate_syntactic loc ~{bootstrap=bootstrap}
-  |> First.exec
-;
-
-value follow loc ?{bootstrap=False} ~{tops} s =
-  s
-  |> separate_syntactic loc ~{bootstrap=bootstrap}
-  |> Follow.exec1 ~{tops=tops}
-;
-
 value atn loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
-  |> Follow.exec
   |> BuildATN.exec
   |> Dump.exec "grammar before firstk"
 ;
@@ -4485,7 +3800,6 @@ value firstk loc ?{bootstrap=False} s =
   s
   |> atn loc ~{bootstrap=bootstrap}
   |> ATNFirst.exec
-  |> CheckATNFirst.exec
 ;
 
 value codegen loc ?{bootstrap=False} s =
