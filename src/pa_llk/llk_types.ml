@@ -76,7 +76,6 @@ and a_symbol =
   | ASnext of loc and list expr
   | ASnterm of loc and Name.t and list expr and option string
   | ASregexp of loc and Name.t
-  | ASinfer of loc and int
   | ASopt of loc and bool and a_symbol
   | ASleft_assoc of loc and bool and a_symbol and a_symbol and expr
   | ASrules of loc and a_rules
@@ -115,7 +114,6 @@ value loc_of_a_symbol = fun [
   | ASnext loc _ -> loc
   | ASnterm loc _ _ _ -> loc
   | ASregexp loc _ -> loc
-  | ASinfer loc _ -> loc
   | ASopt loc _ _ -> loc
   | ASleft_assoc loc _ _ _ _ -> loc
   | ASrules loc _ -> loc

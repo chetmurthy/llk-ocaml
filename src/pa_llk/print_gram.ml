@@ -203,8 +203,6 @@ and simple_symbol~{pctxt} pc sy =
     pprintf pc "PREDICT %s" (Name.print id)
   | ASpriority _ n ->
     pprintf pc "PRIORITY %d" n
-  | ASinfer _ n ->
-    pprintf pc "INFER %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
     pprintf pc "%s%p" (Name.print id) (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt

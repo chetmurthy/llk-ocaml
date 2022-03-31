@@ -180,8 +180,6 @@ EXTEND
 
       | UIDENT "PREDICT" ; id = LIDENT ->
         ASregexp loc (Name.mk id)
-      | UIDENT "INFER" ; n = INT ->
-        ASinfer loc (int_of_string n)
       | UIDENT "PRIORITY" ; n = INT ->
         ASpriority loc (int_of_string n)
 

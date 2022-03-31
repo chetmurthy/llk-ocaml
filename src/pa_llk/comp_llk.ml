@@ -757,7 +757,6 @@ value rec check_symbol cg env = fun [
   | ASnext _ _ -> ()
   | ASnterm _ _ _ _ -> ()
   | ASregexp _ _ -> ()
-  | ASinfer _ _ -> ()
   | ASpriority _ _ -> ()
   | ASopt _ _ s -> check_symbol cg env s
   | ASleft_assoc _ _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
@@ -1436,12 +1435,8 @@ value extract_left_factors1 rl =
          (let left_psymbol = List.hd (List.hd rl).ar_psymbols in
           rl |> List.for_all (fun r -> equal_a_psymbol left_psymbol (List.hd r.ar_psymbols))) then
     let left_psymbol = List.hd (List.hd rl).ar_psymbols in
-    match left_psymbol with [
-        {ap_symb=ASinfer _ _} -> ([], rl)
-      | _ ->
-         ([left_psymbol],
-          rl |> List.map (fun r -> {(r) with ar_psymbols = List.tl r.ar_psymbols }))
-      ]
+    ([left_psymbol],
+     rl |> List.map (fun r -> {(r) with ar_psymbols = List.tl r.ar_psymbols }))
   else ([], rl)
 ;
 
@@ -1517,7 +1512,6 @@ exception ExternalEntry of Name.t ;
 value rec psymbols cg = fun [
   [] -> TS.mk [None]
 | [{ap_symb=ASregexp _ _} :: t] -> psymbols cg t
-| [{ap_symb=ASinfer _ _} :: t] -> psymbols cg t
 | [{ap_symb=ASpriority _ _} :: t] -> psymbols cg t
 | [{ap_symb=ASsyntactic _ _} :: t] -> psymbols cg t
 | [h::t] ->
@@ -1569,8 +1563,6 @@ and symbol cg = fun [
   | ASanti loc anti_kinds ->
      TS.(anti_kinds |> List.concat_map (fun s -> [Some (ANTI s); Some (ANTI ("_"^s))]) |> mk)
   | ASregexp loc _ as s ->
-     raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
-  | ASinfer loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
   | ASpriority loc _ as s ->
      raise_failwithf (CG.adjust_loc cg loc) "First.symbol: internal error: unrecognized %a" pp_a_symbol s
@@ -1662,7 +1654,6 @@ value watch_follow (nt : Name.t) (ff : TS.t token) = () ;
 value rec fifo_psymbols cg e ff = fun [
       [] -> ff
     | [{ap_symb=ASregexp _ _} :: t] -> fifo_psymbols cg e ff t
-    | [{ap_symb=ASinfer _ _} :: t] -> fifo_psymbols cg e ff t
     | [{ap_symb=ASpriority _ _} :: t] -> fifo_psymbols cg e ff t
     | [{ap_symb=ASsyntactic _ _} :: t] -> fifo_psymbols cg e ff t
     | [h::t] ->
@@ -2071,7 +2062,6 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
   | ASregexp _ _ as s -> s
-  | ASinfer _ _ as s -> s
   | ASpriority _ _ as s -> s
   | ASopt loc g s -> ASopt loc g (lift_symbol cg acc e0 [] revpats s)
 
@@ -2995,7 +2985,6 @@ and infer_psymbols cg stk ename = fun [
       [ {ap_symb = (ASregexp _ _ as s)} :: _ ] ->
       infer_symbol cg stk ename s
 
-    | [ {ap_symb = (ASinfer _ _)} :: t ] -> infer_psymbols cg stk ename t
     | [ {ap_symb = (ASpriority _ _)} :: t ] -> infer_psymbols cg stk ename t
 
     | [ h :: t ] ->
@@ -3082,7 +3071,6 @@ value symbol it (snode, enode) = fun [
   }
 
   | ASregexp _ _
-  | ASinfer _ _
   | ASpriority _ _
   | ASsyntactic _ _
 
@@ -3718,7 +3706,6 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
 value compile1_psymbols cg loc e psl =
   let rec crec must lefts = fun [
         [({ap_symb=ASregexp _ _} as ps) :: t] -> crec must (lefts@[ps]) t
-      | [({ap_symb=ASinfer _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [({ap_symb=ASpriority _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [] -> []
       | [h ::t] -> [compile1_psymbol cg loc e must lefts h :: crec True (lefts@[h]) t]
@@ -3839,7 +3826,7 @@ value compile1a_entry cg e = do {
   let ename = e.ae_name in
   if ((List.hd e.ae_levels).al_rules.au_rules
       |> List.exists (fun [
-                          {ar_psymbols=[{ap_symb=(ASregexp _ _|ASinfer _ _)} :: _]} -> True
+                          {ar_psymbols=[{ap_symb=(ASregexp _ _)} :: _]} -> True
                         | _ -> False
      ])) then do {
       CG.add_warning cg (CG.adjust_loc cg loc) ename "compile1a_entry: single-rule entry, starts with regexp: FIRST/FOLLOW disallowed" ;
@@ -4084,9 +4071,6 @@ value infer_regexp loc cg e r =
            }
          | x -> x
       ])
-
-    | [ ({ap_symb=ASinfer _ depth}) :: _ ] ->
-       Infer.length_regexp_of_rule cg e.ae_name r depth
 
      | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
         CG.gram_external cg nt
