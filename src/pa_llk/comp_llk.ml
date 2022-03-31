@@ -3248,11 +3248,23 @@ value extend1 loc cg t =
     (2) any partition has length>1 and priorities are not distinct
  *)
 
+value ambiguous_partition (l : list TP.t) =
+  match l with [
+      [{TP.tokpath=[]} :: _] -> True
+    | l -> not (Std.distinct (List.map TP.priority l))
+    ]
+;
+
 value ambiguous (ll : list (list TP.t)) =
-  ll |> List.exists (fun [
-    [{TP.tokpath=[]} :: _] -> True
-  | l -> not (Std.distinct (List.map TP.priority l))
-  ])
+  List.exists ambiguous_partition ll
+;
+
+value separate_paths l =
+  let open TP in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let (ambig_ll, ok_ll) = Ppxutil.filter_split ambiguous_partition ll in
+  (List.sort_uniq Stdlib.compare (List.concat ambig_ll),
+   List.sort_uniq Stdlib.compare (List.concat ok_ll))
 ;
 
 (** extend_branches:
@@ -3264,10 +3276,9 @@ value ambiguous (ll : list (list TP.t)) =
   (5) partition by (branch-num, token-list) and union the state-sets
  *)
 type branches_toks_list = list TP.t ;
-value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (bool * branches_toks_list) =
+value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_list * branches_toks_list) =
   let open TP in
   let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
-  if not (ambiguous ll) then (True, l) else
   let l = ll |> List.concat_map (fun [
     [{tokpath=[_ :: _]}] as l -> l
   | l -> l |> List.concat_map (extend1 loc cg)
@@ -3276,7 +3287,7 @@ value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (bool * branche
   let l = ll |> List.map (fun l ->
     let p0 = List.hd l in
     {(p0) with states = List.concat_map TP.states l}) in
-  (False, l)
+  separate_paths l
 ;
 
 end ;
@@ -3299,16 +3310,20 @@ value store_entry_branch_first cg e =
   CG.set_atn_first cg e.ae_name l
 ;
 
-value rec compute_firstk_depth loc cg ename ~{depth} l =
+value rec compute_firstk_depth loc cg ename ~{depth} (ambig_l, ok_l) = do {
+  Fmt.(pf stderr "compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+         (Name.print ename) depth (List.length ambig_l) (List.length ok_l)) ;
   if depth = 0 then
     raise_failwithf (CG.adjust_loc cg loc) "compute_firstk_depth(%s): exceeded depth and still ambiguous" (Name.print ename)
   else
-    let (complete, l') = ATN.extend_branches loc cg l in
-    if complete then l
-    else compute_firstk_depth loc cg ename ~{depth=depth-1} l'
+    let (ambig_l', ok_l') = ATN.extend_branches loc cg ambig_l in
+    if ambig_l'=[] then ok_l' @ ok_l
+    else compute_firstk_depth loc cg ename ~{depth=depth-1} (ambig_l', ok_l' @ ok_l)
+}
 ;
 
-value compute_firstk ~{depth} cg e =
+value compute_firstk ~{depth} cg e = do {
+  Fmt.(pf stderr "START compute_first(%s)\n%!" (Name.print e.ae_name)) ;
   let open ATN in
   let open TP in
   let (atn,ec) = CG.gram_atn_ec cg in
@@ -3321,7 +3336,7 @@ value compute_firstk ~{depth} cg e =
            | _ -> None
            ] in
            {branchnum=i; priority=priority; tokpath=[]; states=[node]}) in
-  let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} l in
+  let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} (l, []) in
   let l =
     l
     |> Std.nway_partition (fun p1 p2 -> TP.tokpath p1 = TP.tokpath p2)
@@ -3346,6 +3361,7 @@ value compute_firstk ~{depth} cg e =
   |> List.map (fun l ->
          let p0 = List.hd l in
          (p0.branchnum, List.map TP.tokpath l))
+}
 ;
 
 value store_firstk cg e =
@@ -4456,14 +4472,25 @@ value follow loc ?{bootstrap=False} ~{tops} s =
   |> Follow.exec1 ~{tops=tops}
 ;
 
-value codegen loc ?{bootstrap=False} s =
+value atn loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> Follow.exec
   |> BuildATN.exec
+  |> Dump.exec "grammar before firstk"
+;
+
+value firstk loc ?{bootstrap=False} s =
+  s
+  |> atn loc ~{bootstrap=bootstrap}
   |> ATNFirst.exec
   |> CheckATNFirst.exec
+;
+
+value codegen loc ?{bootstrap=False} s =
+  s
+  |> firstk loc ~{bootstrap=bootstrap}
   |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
