@@ -246,6 +246,8 @@ ATN.Raw.dump stdout atn ;;
 Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
 open ATN ;;
 open TP ;;
+#trace Node ;;
 #trace ATN.extend_branches ;;
 #trace ATNFirst.compute_firstk ;;
+#trace ATN.branch_first ;;
 "xx.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;

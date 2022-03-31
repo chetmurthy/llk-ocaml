@@ -3219,7 +3219,7 @@ value entry_first cg e =
   node_first e.ae_loc (atn, ec) snode
 ;
 
-value branch_first cg e =
+value branch_first (cg : CG.t) e =
   let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   rl
@@ -3285,10 +3285,9 @@ value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (bool * branche
   | l -> l |> List.concat_map (extend1 loc cg)
   ]) in
   let ll = Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum && p1.tokpath=p2.tokpath) l in
-  let states_of p = p.states in
   let l = ll |> List.map (fun l ->
     let p0 = List.hd l in
-    {(p0) with states = List.concat_map states_of l}) in
+    {(p0) with states = List.concat_map TP.states l}) in
   (False, l)
 ;
 
@@ -3335,12 +3334,30 @@ value compute_firstk ~{depth} cg e =
            ] in
            {branchnum=i; priority=priority; tokpath=[]; states=[node]}) in
   let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} l in
-  let tokpath_of p = p.tokpath in
+  let l =
+    l
+    |> Std.nway_partition (fun p1 p2 -> TP.tokpath p1 = TP.tokpath p2)
+    |> List.map (fun [
+         [] -> assert False
+       | [x] -> x
+       | l -> do {
+           assert (Std.distinct (List.map TP.priority l)) ;
+           List.fold_left (fun p1 p2 ->
+               match (p1.priority, p2.priority) with [
+                   (None, Some _) -> p2
+                 | (Some _, None) -> p1
+                 | (Some n, Some m) when n < m -> p1
+                 | (Some n, Some m) when n > m -> p1
+                 | _ -> assert False
+                 ]
+             ) (List.hd l) (List.tl l)
+         }
+       ]) in
   l
   |> Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum)
   |> List.map (fun l ->
          let p0 = List.hd l in
-         (p0.branchnum, List.map tokpath_of l))
+         (p0.branchnum, List.map TP.tokpath l))
 ;
 
 value store_firstk cg e =
@@ -3474,7 +3491,7 @@ value dump_gram oc cg msg = do {
         ) ;
     (match CG.atn_first cg e.ae_name with [
        atnfi ->
-       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
+       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} PatternBaseToken.pp) l n) in
        Fmt.(pf stderr "ATN First:\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
      | exception Not_found -> ()
      ]) ;
@@ -3489,7 +3506,7 @@ value dump_gram oc cg msg = do {
      Fmt.(pf stderr "\n====\n%!")
   }) ;
   Fmt.(pf stderr "================================================================\n") ;
-  prerr_string Pr.(top Pprintf.empty_pc (CG.g cg)) ;
+  prerr_string Pr.(top ~{pctxt=pctxt} Pprintf.empty_pc (CG.g cg)) ;
   Fmt.(pf stderr "\n%!")
 }
 ;
@@ -3692,6 +3709,7 @@ value compile1_psymbols cg loc e psl =
   let rec crec must lefts = fun [
         [({ap_symb=ASregexp _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [({ap_symb=ASinfer _ _} as ps) :: t] -> crec must (lefts@[ps]) t
+      | [({ap_symb=ASpriority _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [] -> []
       | [h ::t] -> [compile1_psymbol cg loc e must lefts h :: crec True (lefts@[h]) t]
       ] in crec False e.ae_preceding_psymbols psl
@@ -4081,19 +4099,25 @@ value compute_entry_regexp cg e =
   PSyn.disjunction re_branches
 ;
 
-(** user-provided regexps as fallback to FIRST/FOLLOW.
+value compute_firstk_regexp cg e =
+  let fk = CG.atn_firstk cg e.ae_name in
+  fk
+  |> List.concat_map (fun (branchnum, tll) ->
+         tll |> List.map (fun tl -> (branchnum, tl))
+       )
+  |> List.map (fun (branchnum, tl) ->
+         let re = List.fold_left (fun re t -> PSyn.(re @@ token t)) PSyn.epsilon tl in
+         PSyn.(re @@ token (OUTPUT branchnum))
+       )
+  |> PSyn.disjunction
+;
 
-    1. do as above, computing FIRST/FOLLOW
-    2. compute FFO
-    3. don't bother computing disjointness or nullability test.
-    4. Instead, pull out the first ASregexp in each rule-branch (if any) and replace the FFO with that.
-    5. construct the multi-way regexp with this hybrid set.
- *)
+
 value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let fullre = compute_entry_regexp cg e in
+  let fullre = compute_firstk_regexp cg e in
   let retxt = String.escaped (PSyn.print fullre) in
   let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
   let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
