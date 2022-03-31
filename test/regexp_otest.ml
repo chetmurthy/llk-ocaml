@@ -4,13 +4,9 @@ GRAMMAR Mod:
 EXPORT: ident functor_parameter uidopt module_declaration mod_decl_binding
         sig_item;
 
-REGEXPS:
-  check_uident_coloneq = (UIDENT | $uid | $_uid) ":=" ;
-  check_module_decl_binding = "rec"? ( UIDENT | "_" | $_uidopt | $uidopt) (":" | "(") ;
-END;
 sig_item: [ [
-       "module"; check_module_decl_binding ; rf = V (FLAG "rec"); d = mod_decl_binding → 1
-      | "module"; check_uident_coloneq ; i = V UIDENT "uid" ; ":="  → 2
+       "module" ; rf = V (FLAG "rec"); d = mod_decl_binding → 1
+      | "module" ; i = V UIDENT "uid" ; ":="  → 2
       | "module"; "type"; i = V ident ""; "=" → 3
       | "module"; "type"; i = V ident ""; ":="  → 4
       | "module"; "alias"; i = V UIDENT "uid"; "=" → 5
@@ -41,15 +37,10 @@ END ;
 GRAMMAR Mod2:
 EXPORT: top;
 
-REGEXPS:
-  check_uident_coloneq = UIDENT ":=" ;
-  check_uident = UIDENT ;
-
-END;
   top: [ [ s = sub1 ; ";" -> s ] ] ;
   sub1:
-    [ [ check_uident_coloneq; u=uident1 ; ":=" → (u, true)
-      | check_uident ; u=uident2 → (u, false) ] ]
+    [ [ u=uident1 ; ":=" → (u, true)
+      | u=uident2 → (u, false) ] ]
   ;
   uident1: [ [ u = UIDENT -> u ] ] ;
   uident2: [ [ u = UIDENT -> u ] ] ;
@@ -64,15 +55,10 @@ END ;
 GRAMMAR Mod3:
 EXPORT: top;
 
-REGEXPS:
-  check_uident_uident_coloneq = UIDENT UIDENT ":=" LIDENT ;
-  check_uident_lident = UIDENT LIDENT LIDENT ;
-
-END;
   top: [ [ s = sub1 ; ";" -> s ] ] ;
   sub1:
-    [ [ check_uident_uident_coloneq; u=uident1 ; ":=" ; l=LIDENT → (u, true, l)
-      | check_uident_lident ; l=lident2 ; l2 = LIDENT → (l, false, l2) ] ]
+    [ [ u=uident1 ; ":=" ; l=LIDENT → (u, true, l)
+      | l=lident2 ; l2 = LIDENT → (l, false, l2) ] ]
   ;
   uident1: [ [ u=UIDENT ; v = UIDENT -> (u,v) ] ] ;
   lident2: [ [ u=UIDENT ; v = LIDENT -> (u,v) ] ] ;
@@ -86,14 +72,10 @@ END ;
 {foo|
 GRAMMAR Specific:
 EXPORT: top;
-REGEXPS:
-  check_u1 = UIDENT/"foo" UIDENT ;
-  check_u2 = UIDENT/"foo" LIDENT ;
-END;
 
-  top: [ [ check_u1 ; u1 ; l = LIDENT -> (1,l)
+  top: [ [ u1 ; l = LIDENT -> (1,l)
          | u = UIDENT -> (2,u)
-         | check_u2 ; u2 ; u = UIDENT -> (3,u)
+         | u2 ; u = UIDENT -> (3,u)
          ] ] ;
   u1: [ [ UIDENT/"FOO" -> () ] ];
   u2: [ [ UIDENT/"FOO" -> () ] ];
