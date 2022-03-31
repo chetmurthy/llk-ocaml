@@ -87,7 +87,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           {al_loc = loc; al_label = lab; al_assoc = ass; al_rules = rules} ] ]
   ;
   assoc:
-    [ [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LEFTA" -> LEFTA g
+    [ [ g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LEFTA" -> LEFTA g
       | UIDENT/"RIGHTA" -> RIGHTA
       | UIDENT/"NONA" -> NONA ] ]
   ;
@@ -125,15 +125,15 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   ;
   symbol:
     [ "top" NONA
-      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
+      [ g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LIST0"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_0, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LIST1"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_1, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"OPT"; s = NEXT ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"OPT"; s = NEXT ->
          ASopt (loc, g, s)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc (loc, g, s1, s2, e)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"FLAG"; s = NEXT ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"FLAG"; s = NEXT ->
           ASflag (loc, g, s)
       | s = NEXT -> s
       ]

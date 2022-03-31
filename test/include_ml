@@ -8,23 +8,23 @@
 #require "bos";;
 #require "str";;
 
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
-
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
 
 (*
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
  *)
 
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
-
+ *)
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -34,8 +34,9 @@ open Pa_ppx_utils.Std ;;
 open Pa_ppx_testutils.Papr_util ;;
 
 #require "pa_ppx.base";;
-Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := true ;;
-let pp_loc = Pa_ppx_base.Pp_MLast.Ploc.pp Fmt.stdout ;;
+open Pa_ppx_base ;;
+Pp_MLast.Ploc.pp_loc_verbose := true ;;
+let pp_loc = Pp_MLast.Ploc.pp Fmt.stdout ;;
 #install_printer pp_loc ;;
 
 #print_length 1048576 ;;
@@ -53,6 +54,7 @@ let pp_token_stream strm =
 ;;
 #install_printer pp_token_stream ;;
 
+let pp_longident ty = Fmt.(pf stdout "#<longident< %s >>" (Eprinter.apply Pcaml.pr_longident Pprintf.empty_pc ty));;
 let pp_ctyp ty = Fmt.(pf stdout "#<ctyp< %s >>" (Eprinter.apply Pcaml.pr_ctyp Pprintf.empty_pc ty));;
 let pp_expr ty = Fmt.(pf stdout "#<expr< %s >>" (Eprinter.apply Pcaml.pr_expr Pprintf.empty_pc ty));;
 let pp_module_expr ty = Fmt.(pf stdout "#<module_expr< %s >>" (Eprinter.apply Pcaml.pr_module_expr Pprintf.empty_pc ty));;
@@ -69,8 +71,11 @@ let pp_expr ty = Fmt.(pf stdout "#<expr< %a >>" Pa_ppx_base.Pp_MLast.pp_expr ty)
 let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty);;
 *)
 
+#install_printer pp_longident ;;
 #install_printer pp_ctyp ;;
+(*
 #install_printer pp_expr ;;
+ *)
 #install_printer pp_module_expr ;;
 #install_printer pp_module_type ;;
 #install_printer pp_patt ;;
@@ -174,7 +179,20 @@ open Regexp_test ;;
 
 #load "error_rtest.cmo";;
 open Error_rtest ;;
-
+ *)
+#load "longident_rtest.cmo";;
+open Longident_rtest ;;
+open Longident.F ;;
+#trace longident ;;
+(*
+#trace longident__0003 ;;
+#trace longident__0006 ;;
+#trace longident__0005 ;;
+ *)
+#trace expr ;;
+#trace expr_longident ;;
+#trace expr__0003;;
+(*
 #load "simple_otest.cmo";;
 open Simple_otest ;;
 
@@ -244,17 +262,19 @@ ATN.Raw.dump stdout atn ;;
 #trace CG.watch_follow ;;
 "revised_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
-Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
+Pp_MLast.Ploc.pp_loc_verbose := false ;;
 (*
 #trace ATN.extend_branches ;;
 #trace ATNFirst.compute_firstk ;;
 #trace ATN.branch_first ;;
 
  *)
+(*
 open ATN ;;
 open TP ;;
 open Node ;;
 #trace ATNFirst.compute_firstk ;;
 #trace ATNFirst.compute_firstk_depth ;;
 let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
-let e = CG.gram_entry cg (Name.mk0 "patt_ident" 1) ;;
+let e = CG.gram_entry cg (Name.mk0 "longident" 6) ;;
+ *)

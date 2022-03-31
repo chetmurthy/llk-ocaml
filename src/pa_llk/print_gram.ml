@@ -48,7 +48,7 @@ value label pctxt pc =
 ;
 
 value assoc pc = fun [
-    LEFTA g -> pprintf pc "%sLEFTA" (if g then "GREEDY " else "")
+    LEFTA g -> pprintf pc "%sLEFTA" (if g then "GREEDY " else "NONGREEDY ")
   | RIGHTA -> pprintf pc "RIGHTA"
   | NONA -> pprintf pc "NONA"
   ]
@@ -165,30 +165,30 @@ and symbol~{pctxt} pc =
   fun [
       ASlist _ g lml symb None ->
        pprintf pc "%sLIST%s@;%p"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
     | ASlist _ g lml symb (Some (sep,b)) ->
        pprintf pc "%sLIST%s@;%p@ @[SEP@;%p%s@]"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
          (simple_symbol ~{pctxt=pctxt}) symb
          (simple_symbol ~{pctxt=pctxt}) sep
          (if b then " OPT_SEP" else "")
 
     | ASopt _ g sym -> pprintf pc "%sOPT@;%p" 
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASleft_assoc _ g sym1 sym2 e ->
        pprintf pc "%sLEFT_ASSOC@;%p@;ACCUMULATE %p WITH %p"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym1
          (simple_symbol ~{pctxt=pctxt}) sym2
          expr e
 
     | ASflag _ g sym ->
        pprintf pc "%sFLAG@;%p"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASvala _ sy sl ->

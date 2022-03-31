@@ -1145,15 +1145,15 @@ END;
       | "_" → None ] ]
   ;
   longident:
-    [ GREEDY LEFTA
-      [ me1 = SELF ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
+    [ LEFTA
+      [ me1 = SELF ; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
   extended_longident:
-    [ GREEDY LEFTA
+    [ LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
-      | me1 = SELF ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
+      | me1 = SELF ; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
       ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]

@@ -370,7 +370,9 @@ module CompilingGrammar = struct
     ; atn : mutable ATN0.Raw.t
     ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
     ; atn_first: MHM.t Name.t (list (int * list token))
+    ; atn_follow: MHM.t Name.t (list token)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list token))))
+    ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -385,7 +387,9 @@ module CompilingGrammar = struct
                 ; atn = ATN0.Raw.mk ()
                 ; eclosure = MHM.mk 23
                 ; atn_first = MHM.mk 23
+                ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
+                ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
   value withg cg g = (g, snd cg) ;
@@ -453,12 +457,92 @@ module CompilingGrammar = struct
   value set_atn_first cg ename l = MHM.add (snd cg).atn_first (ename, l) ;
   value atn_first cg ename = MHM.map (snd cg).atn_first ename ;
 
+  value set_atn_follow cg ename l = MHM.add (snd cg).atn_follow (ename, l) ;
+  value atn_follow cg ename = MHM.map (snd cg).atn_follow ename ;
+
   value set_atn_firstk cg ename l = MHM.add (snd cg).atn_firstk (ename, l) ;
   value atn_firstk cg ename = MHM.map (snd cg).atn_firstk ename ;
+
+  value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
+  value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
 
 end ;
 module CG = CompilingGrammar ;
 
+
+module Dump = struct
+
+value report_verbose = ref False ;
+
+value dump_gram oc cg msg = do {
+  Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
+  let pctxt = if report_verbose.val then Pr.normal else Pr.errmsg in
+  Fmt.(pf stderr "================================================================\n") ;
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->  do {
+    Fmt.(pf stderr "Entry: %s\n"
+           Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
+    ) ;
+    (match CG.atn_first cg e.ae_name with [
+       atnfi ->
+       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} PatternBaseToken.pp) l n) in
+       Fmt.(pf stderr "ATN First:\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
+     | exception Not_found -> ()
+     ]) ;
+    (match CG.atn_follow cg e.ae_name with [
+       fo ->
+       Fmt.(pf stderr "ATN Follow: %a\n" (list ~{sep=const string " "} PatternBaseToken.pp) fo)
+     | exception Not_found -> ()
+     ]) ;
+    (match CG.atn_firstk cg e.ae_name with [
+       Some atnfi ->
+       let pp_branch pps (n, ll) =
+         let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
+         Fmt.(pf pps "%a" (list ~{sep=const string "\n\t"} pp1) ll) in
+       Fmt.(pf stderr "ATN First(k):\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
+
+     | None -> Fmt.(pf stderr "ATN First(k): failed to compute\n")
+
+     | exception Not_found -> ()
+     ]) ;
+    (match CG.entry_branch_regexps cg e.ae_name with [
+         l ->
+         let pp1 pps (n,re) = Fmt.(pf pps "%s -> %d" (PSyn.print re) n) in
+         Fmt.(pf stderr "Entry Branch Regexps:\n\t%a\n" (list ~{sep=const string "\n\t"} pp1) l)
+       | exception Not_found -> ()
+    ]) ;
+     Fmt.(pf stderr "\n====\n%!")
+  }) ;
+  Fmt.(pf stderr "================================================================\n") ;
+  prerr_string Pr.(top ~{pctxt=pctxt} Pprintf.empty_pc (CG.g cg)) ;
+  Fmt.(pf stderr "\n%!")
+}
+;
+
+value report_compilation_errors cg msg = do {
+  dump_gram stderr cg msg ;
+  Fmt.(pf stderr "================================================================\n") ;
+  (cg |> CG.errors |> List.rev)
+  |> List.iter CG.(fun err ->
+         Fmt.(pf stderr "%s%s: entry %s: %s\n%s\n"
+                (Ploc.string_of_location err.loc)
+                err.kind
+                (Name.print err.ename)
+                err.msg
+                (if report_verbose.val then err.backtrace else "")
+         )
+       ) ;
+  Fmt.(pf stderr "\n%!")
+}
+;
+
+value exec msg cg = do {
+  let pctxt = if report_verbose.val then Pr.normal else Pr.errmsg in
+  dump_gram stderr cg msg ;
+  cg
+}
+;
+end ;
 
 module DebugCompile(S : sig value rexs : string ; value cg : CG.t; end) = struct
   open Print_gram ;
@@ -2301,10 +2385,20 @@ value is_syntactic_predicate_rule = fun [
 ]
 ;
 
-value is_syntactic_predicate_entry e =
+value split_rules e =
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rl in
+  (sp_rl, nonsp_rl)
+;
+
+value is_syntactic_predicate_entry e =
+  let (sp_rl, nonsp_rl) = split_rules e in
   sp_rl <> []
+;
+
+value is_separated_syntactic_predicate_entry e =
+  let (sp_rl, nonsp_rl) = split_rules e in
+  sp_rl <> [] && List.length nonsp_rl = 1
 ;
 
 value sep1_entry cg e = do {
@@ -2740,6 +2834,12 @@ value entry_first cg e =
   node_first e.ae_loc (atn, ec) snode
 ;
 
+value entry_follow cg e =
+  let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
+  let (_, enode) = Raw.entry_nodes atn e.ae_name in
+  node_first e.ae_loc (atn, ec) enode
+;
+
 value branch_first (cg : CG.t) e =
   let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
@@ -2836,11 +2936,16 @@ value exec cg = do {
 ;
 end ;
 
-module ATNFirst = struct
+module ATNFirstFollow = struct
 
 value store_entry_branch_first cg e =
   let l = ATN.branch_first cg e in
   CG.set_atn_first cg e.ae_name l
+;
+
+value store_entry_follow cg e =
+  let l = ATN.entry_follow cg e in
+  CG.set_atn_follow cg e.ae_name l
 ;
 
 value rec compute_firstk_depth loc cg ename ~{depth} (ambig_l, ok_l) = do {
@@ -2925,7 +3030,122 @@ value exec cg = do {
     |> List.iter (store_firstk cg) ;
     (CG.gram_entries cg)
     |> List.iter (store_entry_branch_first cg) ;
+    (CG.gram_entries cg)
+    |> List.iter (store_entry_follow cg) ;
     cg
+}
+;
+
+end ;
+
+module EntryRegexps = struct
+
+
+(** infer_regexp [stk] [r]
+
+    infers the regexp for rule [r], and if this requires recursing into
+    an entry already on [stk], will raise Failure
+ *)
+value rec infer_regexp loc cg e r = infer_psymbols loc cg e r.ar_psymbols
+
+and infer_psymbols loc cg e psl =
+  match psl with [
+      [ ({ap_symb=ASregexp _ rexname} as h) :: _ ] ->
+      (match CG.gram_regexp cg rexname with [
+           exception Not_found -> do {
+             CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: undefined regexp %s" (Name.print rexname) ;
+             failwith "caught"
+           }
+         | x -> x
+      ])
+
+     | [ {ap_symb=ASpriority _ _} :: t ] -> infer_psymbols loc cg e t
+
+     | [ {ap_symb=ASsyntactic _ _} :: t ] -> infer_psymbols loc cg e t
+
+     | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
+        CG.gram_external cg nt
+
+     | [ {ap_symb=ASnterm _ nt _ _} :: _ ]
+          when CG.exists_entry cg nt &&
+                 MHM.in_dom (snd cg).atn_first nt ->
+        let l = CG.atn_first cg nt in
+        l |> List.concat_map snd |> List.map PSyn.token |> PSyn.disjunction
+
+     | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
+
+     | [ {ap_symb=AStok _ cls tokopt} :: _ ] -> PSyn.token (CLS cls tokopt)
+
+    | ps -> do {
+        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: cannot infer regexp for rule %s"
+          Pr.(rule_psymbols ~{pctxt=errmsg} Pprintf.empty_pc psl) ;
+        failwith "caught"
+      }
+    ]
+;
+
+value infer_branch_regexp1 cg e i r =
+  let loc = e.ae_loc in
+  let rex = infer_regexp loc cg e r in
+  (i, rex)
+;
+
+value infer_branch_regexps cg e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+    List.mapi (infer_branch_regexp1 cg e) rl
+;
+
+value firstk_branch_regexps cg e =
+  match CG.atn_firstk cg e.ae_name with [
+      None -> None
+    | Some fk ->
+       let l =
+         fk
+         |> List.concat_map (fun (branchnum, tll) ->
+                tll |> List.map (fun tl -> (branchnum, tl))
+              )
+         |> List.map (fun (branchnum, tl) ->
+                let re = List.fold_left (fun re t -> PSyn.(re @@ token t)) PSyn.epsilon tl in
+                (branchnum, re)
+              ) in
+      let l =
+        l
+        |> Std.nway_partition (fun (b1, _) (b2, _) -> b1=b2)
+        |> List.map (fun l ->
+               let bn = fst (List.hd l) in
+               (bn, l |> List.map snd |> PSyn.disjunction)) in
+       Some l
+    ]
+;
+
+value compute_branch_regexps cg e =
+  let l = match firstk_branch_regexps cg e with [
+        None -> infer_branch_regexps cg e
+      | Some l -> l
+    ] in
+  l
+;
+
+value store_entry_branch_regexps cg e =
+  let l = compute_branch_regexps cg e in
+  CG.set_entry_branch_regexps cg e.ae_name l
+;
+
+
+value exec cg = do {
+    let errors = ref False in
+    (CG.gram_entries cg)
+    |> List.iter (fun e ->
+           try
+             store_entry_branch_regexps cg e
+           with [ (Failure _) -> errors.val := True ]
+         ) ;
+    if errors.val then do {
+      Dump.report_compilation_errors cg "Regexp computation FAILED" ;
+      failwith "Regexp computation FAILED"
+    }
+    else
+      cg
 }
 ;
 
@@ -2968,59 +3188,6 @@ value all_tokens el =
     List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) el ;
     List.sort_uniq Stdlib.compare acc.val
   }
-;
-
-value report_verbose = ref False ;
-
-value dump_gram oc cg msg = do {
-  Fmt.(pf stderr "================================ %s ================================\n%!" msg) ;
-  let pctxt = if report_verbose.val then Pr.normal else Pr.errmsg in
-  Fmt.(pf stderr "================================================================\n") ;
-  (CG.gram_entries cg)
-  |> List.iter (fun e ->  do {
-    Fmt.(pf stderr "Entry: %s\n"
-           Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
-    ) ;
-    (match CG.atn_first cg e.ae_name with [
-       atnfi ->
-       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} PatternBaseToken.pp) l n) in
-       Fmt.(pf stderr "ATN First:\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
-     | exception Not_found -> ()
-     ]) ;
-    (match CG.atn_firstk cg e.ae_name with [
-       Some atnfi ->
-       let pp_branch pps (n, ll) =
-         let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
-         Fmt.(pf pps "%a" (list ~{sep=const string "\n\t"} pp1) ll) in
-       Fmt.(pf stderr "ATN First(k):\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
-
-     | None -> Fmt.(pf stderr "ATN First(k): failed to compute\n")
-
-     | exception Not_found -> ()
-     ]) ;
-     Fmt.(pf stderr "\n====\n%!")
-  }) ;
-  Fmt.(pf stderr "================================================================\n") ;
-  prerr_string Pr.(top ~{pctxt=pctxt} Pprintf.empty_pc (CG.g cg)) ;
-  Fmt.(pf stderr "\n%!")
-}
-;
-
-value report_compilation_errors cg msg = do {
-  dump_gram stderr cg msg ;
-  Fmt.(pf stderr "================================================================\n") ;
-  (cg |> CG.errors |> List.rev)
-  |> List.iter CG.(fun err ->
-         Fmt.(pf stderr "%s%s: entry %s: %s\n%s\n"
-                (Ploc.string_of_location err.loc)
-                err.kind
-                (Name.print err.ename)
-                err.msg
-                (if report_verbose.val then err.backtrace else "")
-         )
-       ) ;
-  Fmt.(pf stderr "\n%!")
-}
 ;
 
 open Exparser ;
@@ -3426,78 +3593,18 @@ value compile1b_branch cg ename branchnum r =
   (<:patt< Some (_, $int:string_of_int branchnum$ ) >>, <:vala< None >>, body)
 ;
 
-(** infer_regexp [stk] [r]
-
-    infers the regexp for rule [r], and if this requires recursing into
-    an entry already on [stk], will raise Failure
- *)
-value infer_regexp loc cg e r =
-  match r.ar_psymbols with [
-      [ ({ap_symb=ASregexp _ rexname} as h) :: _ ] ->
-      (match CG.gram_regexp cg rexname with [
-           exception Not_found -> do {
-             CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: undefined regexp %s" (Name.print rexname) ;
-             failwith "caught"
-           }
-         | x -> x
-      ])
-
-     | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
-        CG.gram_external cg nt
-
-     | [ {ap_symb=ASnterm _ nt _ _} :: _ ]
-          when CG.exists_entry cg nt &&
-                 MHM.in_dom (snd cg).atn_first nt ->
-        let l = CG.atn_first cg nt in
-        l |> List.concat_map snd |> List.map PSyn.token |> PSyn.disjunction
-
-     | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
-
-     | [ {ap_symb=AStok _ cls tokopt} :: _ ] -> PSyn.token (CLS cls tokopt)
-
-    | ps -> do {
-        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: cannot infer regexp for rule %s"
-          Pr.(rule_psymbols ~{pctxt=errmsg} Pprintf.empty_pc r.ar_psymbols) ;
-        failwith "caught"
-      }
-    ]
+value compute_full_regexp cg e =
+  let l = CG.entry_branch_regexps cg e.ae_name in
+  l
+  |> List.map (fun (bn, rex) -> PSyn.(rex @@ token (OUTPUT bn)))
+  |> PSyn.disjunction
 ;
-
-value compute_branch_regexp cg e i r =
-  let loc = e.ae_loc in
-  let rex = infer_regexp loc cg e r in
-  PSyn.(rex @@ PSyn.token (OUTPUT i))  
-;
-
-value compute_entry_regexp cg e =
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let re_branches =
-    List.mapi (compute_branch_regexp cg e) rl in
-  PSyn.disjunction re_branches
-;
-
-value compute_firstk_regexp cg e =
-  match CG.atn_firstk cg e.ae_name with [
-      None -> compute_entry_regexp cg e
-    | Some fk ->
-      fk
-      |> List.concat_map (fun (branchnum, tll) ->
-             tll |> List.map (fun tl -> (branchnum, tl))
-           )
-      |> List.map (fun (branchnum, tl) ->
-             let re = List.fold_left (fun re t -> PSyn.(re @@ token t)) PSyn.epsilon tl in
-             PSyn.(re @@ token (OUTPUT branchnum))
-           )
-      |> PSyn.disjunction
-    ]
-;
-
 
 value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let fullre = compute_firstk_regexp cg e in
+  let fullre = compute_full_regexp cg e in
   let predictor =
     if PSyn.(equal zero fullre) then
       <:expr< fun __strm__ -> raise Stream.Failure >>
@@ -3525,34 +3632,14 @@ value compile1b_entry cg e =
   ;(<:patt< $lid:predictor_name$ >>, predictor, <:vala< [] >>)
   ]
   ;
-(*
-value compile1_entry cg e =
-  match compile1a_entry cg e with [
-      exception Failure "caught" -> do {
-        let locs =
-          (List.hd e.ae_levels).al_rules.au_rules
-          |> List.map (fun [
-                           {ar_psymbols=[] ; ar_loc=loc} -> loc
-                         | {ar_psymbols=[ {ap_loc=loc} :: _]} -> loc
-               ]) in
-        CG.add_warningf cg e.ae_loc e.ae_name "compile1_entry: FIRST/FOLLOW strategy failed\n%!%a"
-               Fmt.(list string)
-               (locs |> List.map (CG.adjust_loc cg) |> List.map Ploc.string_of_location) ;
-        compile1b_entry cg e
-      }
-    | x -> x
-    ]
-;
-  *)
+
 value compile1_entry cg e = compile1b_entry cg e ;
 
 value compile_sp_entry cg e = do {
   let loc = e.ae_loc in
   let ename = e.ae_name in
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let (sp_rl, nonsp_rl) = Ppxutil.filter_split S9SeparateSyntactic.is_syntactic_predicate_rule rl in
-  assert (List.length nonsp_rl = 1) ;
-  assert (sp_rl <> []) ;
+  assert (S9SeparateSyntactic.is_separated_syntactic_predicate_entry e) ;
+  let (sp_rl, nonsp_rl) = S9SeparateSyntactic.split_rules e in
   let fallback = match List.hd nonsp_rl with [
         {ar_psymbols = psl ; ar_action = Some _} as r ->
         <:expr< $compile1_rule cg e r$ __strm__ >>
@@ -3581,9 +3668,51 @@ value compile_sp_entry cg e = do {
 }
 ;
 
+value rule2priority = fun [
+    {ar_psymbols=[{ap_symb=ASpriority _ n} :: _]} -> Some n
+  | _ -> None
+  ]
+;
+
+value is_prioritized_entry e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let prios = rl |> List.map rule2priority in
+  List.length rl > 1 && Std.distinct prios
+;
+
+value compile_prio_entry cg e = do {
+  let loc = e.ae_loc in
+  let ename = e.ae_name in
+  assert (is_prioritized_entry e) ;
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let rl =
+    let (prio_rl, non_rl) = Ppxutil.filter_split (fun r -> None <> rule2priority r) rl in
+    (List.stable_sort Stdlib.compare prio_rl)@non_rl in
+
+  let fallback = <:expr< raise Stream.Failure >> in
+  let rhs = List.fold_right (fun r fallback ->
+      let r = match r with [
+            {ar_psymbols=[{ap_loc=loc; ap_symb=ASpriority _ _} :: t]} ->
+            {(r) with ar_psymbols = t}
+          | _ -> r
+          ] in
+      let body = compile1_rule cg e r in
+      <:expr<
+        try $body$ __strm__
+        with [ Stream.Failure -> $fallback$ ]
+             >>
+    ) rl fallback in
+  let rhs = <:expr< fun __strm__ -> $rhs$ >> in
+  let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
+  [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)]
+}
+;
+
 value compile_entry cg e =
-  if (List.hd e.ae_levels).al_rules.au_rules |>  List.exists S9SeparateSyntactic.is_syntactic_predicate_rule then
+  if S9SeparateSyntactic.is_syntactic_predicate_entry e then
     compile_sp_entry cg e
+  else if is_prioritized_entry e then
+    compile_prio_entry cg e
   else
     compile1_entry cg e
 ;
@@ -3604,7 +3733,7 @@ value compile_entries cg el = do {
          ]) in do {
     let failed = List.exists ((=) None) lol in
     if [] <> CG.errors cg then
-      report_compilation_errors cg
+      Dump.report_compilation_errors cg
         Fmt.(str "Compilation %s" (if failed then "FAILED" else "WARNINGS"))
     else () ;
     if failed then
@@ -3685,16 +3814,6 @@ value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _)
  do { $list:token_actions$ } ;
  declare $list:exported_entries$ end ;
  end >>
-;
-end ;
-
-module Dump = struct
-
-value exec msg cg = do {
-  let pctxt = if Codegen.report_verbose.val then Pr.normal else Pr.errmsg in
-  Codegen.dump_gram stderr cg msg ;
-  cg
-}
 ;
 end ;
 
@@ -3821,12 +3940,18 @@ value atn loc ?{bootstrap=False} s =
 value firstk loc ?{bootstrap=False} s =
   s
   |> atn loc ~{bootstrap=bootstrap}
-  |> ATNFirst.exec
+  |> ATNFirstFollow.exec
+;
+
+value entry_regexps loc ?{bootstrap=False} s =
+  s
+  |> firstk loc ~{bootstrap=bootstrap}
+  |> EntryRegexps.exec
 ;
 
 value codegen loc ?{bootstrap=False} s =
   s
-  |> firstk loc ~{bootstrap=bootstrap}
+  |> entry_regexps loc ~{bootstrap=bootstrap}
   |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
@@ -3834,5 +3959,5 @@ value codegen loc ?{bootstrap=False} s =
 end ;
 
 Pcaml.add_option "-llk-report-verbose"
-  (Arg.Unit (fun _ → Codegen.report_verbose.val := True))
+  (Arg.Unit (fun _ → Dump.report_verbose.val := True))
   "Enable verbose reporting from the LLK parser-generator.";
