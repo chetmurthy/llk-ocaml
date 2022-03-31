@@ -372,7 +372,7 @@ module CompilingGrammar = struct
     ; atn : mutable ATN0.Raw.t
     ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
     ; atn_first: MHM.t Name.t (list (int * list token))
-    ; atn_firstk: MHM.t Name.t (list (int * list (list token)))
+    ; atn_firstk: MHM.t Name.t (option (list (int * list (list token))))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
@@ -3361,8 +3361,15 @@ value compute_firstk ~{depth} cg e =
 ;
 
 value store_firstk cg e =
-  let l = compute_firstk ~{depth=4} cg e in
-  CG.set_atn_firstk cg e.ae_name l
+  let lopt = match compute_firstk ~{depth=4} cg e with [
+        x -> Some x
+      | exception exn ->
+         let msg = Printexc.to_string exn in do {
+          Fmt.(pf stderr "%s\n%!" msg) ;
+          None
+        }
+      ] in
+  CG.set_atn_firstk cg e.ae_name lopt
 ;
 
 value exec cg = do {
@@ -3496,11 +3503,14 @@ value dump_gram oc cg msg = do {
      | exception Not_found -> ()
      ]) ;
     (match CG.atn_firstk cg e.ae_name with [
-       atnfi ->
+       Some atnfi ->
        let pp_branch pps (n, ll) =
          let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
          Fmt.(pf pps "%a" (list ~{sep=const string "\n\t"} pp1) ll) in
        Fmt.(pf stderr "ATN First(k):\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
+
+     | None -> Fmt.(pf stderr "ATN First(k): failed to compute\n")
+
      | exception Not_found -> ()
      ]) ;
      Fmt.(pf stderr "\n====\n%!")
@@ -4100,16 +4110,19 @@ value compute_entry_regexp cg e =
 ;
 
 value compute_firstk_regexp cg e =
-  let fk = CG.atn_firstk cg e.ae_name in
-  fk
-  |> List.concat_map (fun (branchnum, tll) ->
-         tll |> List.map (fun tl -> (branchnum, tl))
-       )
-  |> List.map (fun (branchnum, tl) ->
-         let re = List.fold_left (fun re t -> PSyn.(re @@ token t)) PSyn.epsilon tl in
-         PSyn.(re @@ token (OUTPUT branchnum))
-       )
-  |> PSyn.disjunction
+  match CG.atn_firstk cg e.ae_name with [
+      None -> compute_entry_regexp cg e
+    | Some fk ->
+      fk
+      |> List.concat_map (fun (branchnum, tll) ->
+             tll |> List.map (fun tl -> (branchnum, tl))
+           )
+      |> List.map (fun (branchnum, tl) ->
+             let re = List.fold_left (fun re t -> PSyn.(re @@ token t)) PSyn.epsilon tl in
+             PSyn.(re @@ token (OUTPUT branchnum))
+           )
+      |> PSyn.disjunction
+    ]
 ;
 
 
