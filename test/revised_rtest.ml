@@ -497,7 +497,7 @@ END;
 
   type_binder_opt: [ [
     check_type_binder ; ls = V (LIST1 typevar) ; "." -> ls
-  | -> <:vala< [] >>
+  | check_eps -> <:vala< [] >>
   ] ]
   ;
   str_item:
@@ -562,9 +562,9 @@ END;
           <:module_type< functor $_fp:arg$ → $mt$ >>
       ]
     | "->" NONA
-       [ mt1=NEXT ; "->" ; mt2=SELF ->
+       [ mt1=NEXT ; PRIORITY 1 ; "->" ; mt2=SELF ->
          <:module_type< $mt1$ → $mt2$ >>
-       | mt1=NEXT ; check_eps -> mt1
+       | mt1=NEXT -> mt1
        ]
     | "alg_attribute" GREEDY LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
@@ -579,8 +579,8 @@ END;
       | x = NEXT -> x
       ]
     | "simple"
-      [ li = extended_longident; "."; i = V LIDENT → <:module_type< $longid:li$ . $_lid:i$ >>
-      | li = extended_longident ; check_eps → <:module_type< $longid:li$ >>
+      [ li = extended_longident; PRIORITY 1 ; "."; i = V LIDENT → <:module_type< $longid:li$ . $_lid:i$ >>
+      | li = extended_longident → <:module_type< $longid:li$ >>
       | i = V LIDENT → <:module_type< $_lid:i$ >>
       | e = alg_extension -> <:module_type< [% $_extension:e$ ] >>
       | "'"; i = V ident "" → <:module_type< ' $_:i$ >>
@@ -687,7 +687,7 @@ END;
   expr:
     [ "top" NONA
       [ check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ;
-        "of" ; tyl = V (LIST1 ctyp_below_alg_attribute) ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
+        "of" ; tyl = V (GREEDY LIST1 ctyp_below_alg_attribute) ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ of $_list:tyl$ $_algattrs:alg_attrs$ in $x$ >>
       | check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
         "in" ; x = SELF ->
@@ -728,7 +728,7 @@ END;
           expr_to_inline <:expr< while $e$ do { $_list:seq$ } >> ext attrs
       | e = NEXT -> e
       ]
-    | "where" LEFTA
+    | "where" GREEDY LEFTA
       [ e = SELF; "where"; (ext,attrs) = ext_attributes; rf = V (FLAG "rec"); lb = where_binding →
           expr_to_inline <:expr< let $_flag:rf$ $list:[lb]$ in $e$ >> ext attrs
       ]
@@ -807,7 +807,7 @@ END;
           expr_to_inline <:expr< lazy $e$ >> ext attrs
       | e = NEXT -> e
       ]
-    | "." LEFTA
+    | "." GREEDY LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
       | e1 = SELF; "."; "("; check_operator_rparen ; op = operator_rparen ->
@@ -880,19 +880,19 @@ END;
   ;
   expr_longident:
     [
-      [ li = longident ; check_eps -> <:expr< $longid:li$ >>
-      | li = longident ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
+      [ li = longident -> <:expr< $longid:li$ >>
+      | li = longident ; PRIORITY 1 ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
             <:expr< $longid:li$ . $lid:op$ >>
 
-      | li = longident ; "." ; "(" ; e = expr ; ")" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; id = V LIDENT "lid" ->
+      | li = longident ; PRIORITY 1 ; "." ; "(" ; e = expr ; ")" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; id = V LIDENT "lid" ->
         <:expr< $longid:li$ . $_lid:id$ >>
-      | li = longident ; "." ; check_lbracket ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; check_lbrace ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; check_lbracketbar ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; check_lbracket ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; check_lbrace ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; check_lbracketbar ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
       ]
     ]
   ;
@@ -906,39 +906,39 @@ END;
   ;
   sequence:
     [
-      [ "let"; rf = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and");
+      [ PRIORITY 1 ; "let"; rf = V (FLAG "rec"); l = V (LIST1 let_binding SEP "and");
         "in"; el = SELF →
           [<:expr< let $_flag:rf$ $_list:l$ in $mksequence loc el$ >>]
-      | "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in";
+      | PRIORITY 1 ; "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in";
         el = SELF →
           [expr_to_inline <:expr< let module $_uidopt:m$ = $mb$ in $mksequence loc el$ >> ext attrs]
-      | "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; el = SELF →
+      | PRIORITY 1 ; "let"; "open"; ovf = V (FLAG "!") "!"; (ext,attrs) = ext_attributes; m = module_expr; "in"; el = SELF →
           [expr_to_inline <:expr< let open $_!:ovf$ $m$ in $mksequence loc el$ >> ext attrs]
-      | check_eps ; e = expr; ";"; el = SELF → [e :: el]
-      | check_eps ; e = expr; ";" → [e]
-      | check_eps ; e = expr → [e]
+      | e = expr; ";"; el = SELF → [e :: el]
+      | e = expr; ";" → [e]
+      | e = expr → [e]
       ]
     ]
   ;
   where_binding:
-    [ [ p = ipatt; check_colon ; e = fun_binding →
+    [ [ p = ipatt; PRIORITY 1 ; e = fun_binding →
           let (p,e) = match e with [
             <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
           | _ -> (p,e)
           ] in
           (p, e, <:vala< [] >>)
-      | p = ipatt ; check_eps ; e = fun_binding →
+      | p = ipatt ; e = fun_binding →
           (p, e, <:vala< [] >>)
       ] ]
   ;
   let_binding:
-    [ [ p = ipatt; check_colon ; e = fun_binding ; attrs = item_attributes →
+    [ [ p = ipatt; PRIORITY 1 ; e = fun_binding ; attrs = item_attributes →
           let (p,e) = match e with [
             <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
           | _ -> (p,e)
           ] in
           (p, e, attrs)
-      | p = ipatt ; check_eps ; e = fun_binding ; attrs = item_attributes →
+      | p = ipatt ; e = fun_binding ; attrs = item_attributes →
           (p, e, attrs)
       ] ]
   ;
@@ -981,7 +981,7 @@ END;
         <:patt< $longid:li$ >>
       | _ -> <:patt< $longid:li$ . $p$ >>
       ]
-    | li = longident ; check_lparen_type ; "("; "type";
+    | li = longident ; PRIORITY 1 ; "("; "type";
       loc_ids = V (LIST1 [ s = LIDENT -> (loc,s) ]) ; ")" → 
       <:patt< $longid:li$ (type $_list:loc_ids$ ) >>
     | li = longident → <:patt< $longid:li$ >>
@@ -1145,15 +1145,15 @@ END;
       | "_" → None ] ]
   ;
   longident:
-    [ LEFTA
-      [ me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
+    [ GREEDY LEFTA
+      [ me1 = SELF ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
   extended_longident:
-    [ LEFTA
+    [ GREEDY LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
-      | me1 = SELF; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
+      | me1 = SELF ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
       ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
@@ -1184,10 +1184,10 @@ END;
       | "type"; pl = V (LIST1 LIDENT); "."; t = SELF →
           <:ctyp< type $_list:pl$ . $t$ >> ]
     | "arrow" NONA
-      [ t1 = NEXT; check_arrow ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
-      | t1 = NEXT ; check_eps -> t1
+      [ t1 = NEXT; PRIORITY 1 ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
+      | t1 = NEXT -> t1
       ]
-    | "apply" LEFTA
+    | "apply" GREEDY LEFTA
       [ t1 = SELF; t2 = SELF → <:ctyp< $t1$ $t2$ >> ]
     | "simple"
       [ t = ctyp_ident → t
@@ -1222,7 +1222,7 @@ END;
       ] ]
   ;
   rest_constructor_declaration:
-    [ [ "of"; ls = type_binder_opt ; cal = V (LIST1 ctyp_below_alg_attribute SEP "and") ;
+    [ [ "of"; ls = type_binder_opt ; cal = V (GREEDY LIST1 ctyp_below_alg_attribute SEP "and") ;
         rto = V (OPT [ ":"; t = ctyp_below_alg_attribute -> t ]) "rto" ; attrs = alg_attributes →
           (ls, cal, rto, attrs)
       | rto = V (OPT [ ":"; t = ctyp_below_alg_attribute -> t ]) "rto" ; attrs = alg_attributes →
@@ -1473,7 +1473,7 @@ END;
   ctyp: LEVEL "simple"
     [ [ "#"; cli = V extended_longident_lident "lilongid" → <:ctyp< # $_lilongid:cli$ >>
 
-      | "<"; ml = V (LIST0 field SEP ";"); v = V (FLAG ".."); ">" →
+      | "<"; ml = V (GREEDY LIST0 field SEP ";"); v = V (FLAG ".."); ">" →
           <:ctyp< < $_list:ml$ $_flag:v$ > >> ] ]
   ;
   field:
@@ -1570,8 +1570,8 @@ END;
     [ [ p = ipatt_tcon; po = V (OPT [ "="; p' = patt → p' ]) → (p, po) ] ]
   ;
   ipatt_tcon:
-    [ [ p = ipatt ; check_eps → p
-      | p = ipatt; ":"; t = ctyp → <:patt< ($p$ : $t$) >> ] ]
+    [ [ p = ipatt → p
+      | p = ipatt; PRIORITY 1 ; ":"; t = ctyp → <:patt< ($p$ : $t$) >> ] ]
   ;
   patt_option_label:
     [ [ i = V QUESTIONIDENTCOLON; "("; j = V LIDENT; ":"; t = ctyp; "=";

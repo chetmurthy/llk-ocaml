@@ -8,23 +8,23 @@
 #require "bos";;
 #require "str";;
 
-
+(*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
-
-(*
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
  *)
 
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
 
 (*
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+ *)
+
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
- *)
+
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -80,6 +80,7 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 #require "camlp5.extend" ;;
 #require "pa_llk_compiler" ;;
 #require "pa_llk_runtime" ;;
+open Pa_ppx_utils ;;
 open Primtypes ;;
 open Parse_gram ;;
 open Print_gram ;;
@@ -170,10 +171,10 @@ open Llkr2official_test ;;
 (*
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
+
 #load "error_rtest.cmo";;
 open Error_rtest ;;
-(*
+
 #load "simple_otest.cmo";;
 open Simple_otest ;;
 
@@ -245,12 +246,15 @@ ATN.Raw.dump stdout atn ;;
  *)
 Pa_ppx_base.Pp_MLast.Ploc.pp_loc_verbose := false ;;
 (*
-open ATN ;;
-open TP ;;
-#trace Node ;;
 #trace ATN.extend_branches ;;
 #trace ATNFirst.compute_firstk ;;
 #trace ATN.branch_first ;;
 
-"xx.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
+open ATN ;;
+open TP ;;
+open Node ;;
+#trace ATNFirst.compute_firstk ;;
+#trace ATNFirst.compute_firstk_depth ;;
+let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
+let e = CG.gram_entry cg (Name.mk0 "patt_ident" 1) ;;

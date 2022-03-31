@@ -2301,6 +2301,12 @@ value is_syntactic_predicate_rule = fun [
 ]
 ;
 
+value is_syntactic_predicate_entry e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rl in
+  sp_rl <> []
+;
+
 value sep1_entry cg e = do {
   let loc = e.ae_loc in
   let lev = List.hd e.ae_levels  in
@@ -2849,8 +2855,19 @@ value rec compute_firstk_depth loc cg ename ~{depth} (ambig_l, ok_l) = do {
 }
 ;
 
+value is_regexp_prediction_entry e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
+;
+
 value compute_firstk ~{depth} cg e = do {
   Fmt.(pf stderr "START compute_first(%s)\n%!" (Name.print e.ae_name)) ;
+  if S9SeparateSyntactic.is_syntactic_predicate_entry e then
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" (Name.print e.ae_name)
+  else if is_regexp_prediction_entry e then
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
+  else () ;
   let open ATN in
   let open TP in
   let (atn,ec) = CG.gram_atn_ec cg in
@@ -3435,6 +3452,8 @@ value infer_regexp loc cg e r =
         l |> List.concat_map snd |> List.map PSyn.token |> PSyn.disjunction
 
      | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
+
+     | [ {ap_symb=AStok _ cls tokopt} :: _ ] -> PSyn.token (CLS cls tokopt)
 
     | ps -> do {
         CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: cannot infer regexp for rule %s"
