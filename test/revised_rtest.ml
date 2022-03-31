@@ -932,13 +932,13 @@ END;
       ] ]
   ;
   let_binding:
-    [ [ p = ipatt; PRIORITY 1 ; e = fun_binding ; attrs = item_attributes →
+    [ [ p = ipatt ; e = colon_fun_binding ; attrs = item_attributes →
           let (p,e) = match e with [
             <:expr< ( $e$ : $t$ ) >> -> (<:patt< ($p$ : $t$) >>, e)
           | _ -> (p,e)
           ] in
           (p, e, attrs)
-      | p = ipatt ; e = fun_binding ; attrs = item_attributes →
+      | p = ipatt ; e = not_colon_fun_binding ; attrs = item_attributes →
           (p, e, attrs)
       ] ]
   ;
@@ -950,6 +950,13 @@ END;
       [ p = ipatt; e = SELF → <:expr< fun $p$ → $e$ >> ]
     | [ "="; e = expr → <:expr< $e$ >>
       | ":"; t = ctyp; "="; e = expr → <:expr< ($e$ : $t$) >> ] ]
+  ;
+  colon_fun_binding:
+    [ [ ":"; t = ctyp; "="; e = expr → <:expr< ($e$ : $t$) >> ] ]
+  ;
+  not_colon_fun_binding:
+    [ [ p = ipatt; e = fun_binding → <:expr< fun $p$ → $e$ >>
+      | "="; e = expr → <:expr< $e$ >> ] ]
   ;
   match_case:
     [ [ p = patt; aso = as_patt_opt; w = V (OPT when_expr); "->"; e = expr →
