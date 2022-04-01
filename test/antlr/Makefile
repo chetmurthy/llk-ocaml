@@ -18,10 +18,10 @@ antlr: antlrlexer.cmo antlr.cmo
 antlr.opt: antlrlexer.cmx antlr.cmx
 	$(OCAMLFIND) ocamlopt $(DEBUG) -package $(PACKAGES) -linkpkg -syntax camlp5r $^ -o $@
 
+ANTLREG = $(HOME)/Hack/Github/antlr/grammars-v4
+
 test:: all
-	cat examples/iri.antlr | ./antlr
-	cat examples/postal.antlr | ./antlr
-	cat examples/rfc5322.antlr | ./antlr
+	./antlr examples/abbParser.g4
 
 .SUFFIXES: .mll .ml .cmo .cmx
 

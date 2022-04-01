@@ -4,8 +4,8 @@
 open Pa_ppx_base ;
 open Pp_MLast ;
 open Ord_MLast ;
-
-value input_file = ref "" ;
+open Pa_ppx_testutils ;
+open Papr_util ;
 value nonws_re = Pcre.regexp "\\S" ;
 value has_nonws s = Pcre.pmatch ~{rex=nonws_re} s;
 
@@ -87,9 +87,14 @@ Pretty.line_length.val := 100 ;
 
 if not Sys.interactive.val then
 try
-    let l = parse_grammar_eoi (Stream.of_channel stdin) in do {
-      printf "OK\n%!"
-    }
+  let (ic, ifname) = match Sys.argv.(1) with [
+      x -> (open_in x, x)
+    | exception (Invalid_argument _) -> (stdin, "<stdin>")
+  ] in do {
+    Antlrlexer.input_file.val := ifname ;
+    let l = parse_grammar_eoi (Stream.of_channel ic) in
+    printf "OK\n%!"
+  }
 with [ Ploc.Exc loc exc ->
     Fmt.(pf stderr "%s%a@.%!" (Ploc.string_of_location loc) exn exc)
   | exc -> Fmt.(pf stderr "%a@.%!" exn exc)

@@ -1,8 +1,9 @@
 {
 
+let input_file = ref "" ;;
+
 let locate ?(comments="") lb v =
-  let loc = Ploc.make_unlined (Lexing.lexeme_start lb, Lexing.lexeme_end lb) in
-  let loc = Ploc.with_comment loc comments in
+  let loc = Ploc.make_loc !input_file 1 0 (Lexing.lexeme_start lb, Lexing.lexeme_end lb) comments in
   (v, loc)
 
 let kw_ht = Hashtbl.create 23
@@ -17,7 +18,7 @@ let kwd_or_id s =
     let lcs = String.lowercase_ascii s in
     match Hashtbl.find mixedcase_ht lcs with
       ty -> (ty, lcs)
-    | exception Not_found -> ("IDENTIFIER",s)
+    | exception Not_found -> ("ID",s)
 }
 
 let hex_digit = ['0'-'9' 'a'-'f' 'A'-'F']
@@ -45,7 +46,7 @@ rule _token = parse
 | ws     { _token lexbuf }
 | string_literal as s { locate lexbuf ("STRING", s) }
 | int as s { locate lexbuf ("INT", s) }
-| id as s { locate lexbuf ("ID", s) }
+| id as s { locate lexbuf (kwd_or_id s) }
 | special { locate lexbuf ("",Lexing.lexeme lexbuf) }
 | eof { locate lexbuf ("EOI","") }
 
