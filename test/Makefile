@@ -25,10 +25,10 @@ RML = bug_fifo_rtest.ml  original_rtest.ml  revised_rtest.ml \
 	llko2official_test.ml \
 	llkr2official_test.ml \
 	error_rtest.ml \
-	 longident_rtest.ml
+	longident_rtest.ml
 
 OML = external_otest.ml  regexp_otest.ml  simple_otest.ml \
-	infer_otest.ml	   self_otest.ml longident_rtest.ml
+	infer_otest.ml	   self_otest.ml
 
 
 test:: $(TESTS)

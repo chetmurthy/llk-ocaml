@@ -1,9 +1,9 @@
-error_rtest.cmo :
-error_rtest.cmx :
 external_otest.cmo :
 external_otest.cmx :
 infer_otest.cmo :
 infer_otest.cmx :
+longident_rtest.cmo :
+longident_rtest.cmx :
 regexp_otest.cmo :
 regexp_otest.cmx :
 self_otest.cmo :
@@ -36,6 +36,8 @@ llkr2official_test.cmo : \
 llkr2official_test.cmx : \
     revised_rtest.cmx \
     papr_test_matrix.cmx
+longident_rtest.cmo :
+longident_rtest.cmx :
 o2official_test.cmo : \
     papr_test_matrix.cmo
 o2official_test.cmx : \
