@@ -167,17 +167,27 @@ module MSM = MutSetMap ;
 module ATN0 = struct
 
 module Node = struct
-  type t = [ NODE of int ] ;
-  value mk n = NODE n ;
-  value print = fun [ NODE n -> Fmt.(str "%d" n) ] ;
+  type t = [
+      ENTER of Name.t
+    | EXIT of Name.t
+    | BRANCH of Name.t and int
+    | IN_BRANCH of Name.t and int and int
+    | BHOLE of Name.t and int
+  ] ;
+  value print = fun [
+    ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
+  | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
+  | BRANCH n i -> Fmt.(str "BRANCH %s %d" (Name.print n) i)
+  | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
+  | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
+  ] ;
 end ;
 
 module Raw = struct
 type edge_t = (Node.t * option token * Node.t) ;
 
 type t = {
-  next_node : ref int
-; nodes : ref (list Node.t)
+  nodes : ref (list Node.t)
 ; node_labels : MHM.t Node.t string
 ; entry_map : MHM.t Name.t (Node.t * Node.t)
 ; entry_branch_map : MHM.t (Name.t * int) Node.t
@@ -190,8 +200,7 @@ type t = {
 } ;
 
 value mk () =
-  { next_node = ref 0
-  ; nodes = ref []
+  { nodes = ref []
   ; node_labels = MHM.mk 23
   ; tokens = MHS.mk 23
   ; entry_map = MHM.mk 23
@@ -204,17 +213,9 @@ value mk () =
   }
 ;
 
+value add_node it n = do { Std.push it.nodes n ; n } ;
 value nodes it = it.nodes.val ;
 value tokens it = MHS.toList it.tokens ;
-
-value new_node it = do {
-  let n = it.next_node.val in 
-  incr it.next_node ;
-  let node = Node.mk n in
-  Std.push it.nodes node ;
-  node
-}
-;
 
 value add_node_label it n s = MHM.add it.node_labels (n, s) ;
 value node_label it n =
@@ -226,8 +227,8 @@ value node_label it n =
 
 value new_entry it ename = do {
   assert (not (MHM.in_dom it.entry_map ename)) ;
-  let snode = new_node it in
-  let enode = new_node it in
+  let snode = add_node it (Node.ENTER ename) in
+  let enode = add_node it (Node.EXIT ename) in
   MHM.add it.entry_map (ename, (snode, enode)) ;
   add_node_label it snode Fmt.(str "ENTER %s" (Name.print ename)) ;
   add_node_label it enode Fmt.(str "EXIT %s" (Name.print ename)) ;
@@ -306,7 +307,7 @@ value add_entry_branch it ename i n = do {
 
 value start_entry_branch it ename i = do {
   let (snode, _) = entry_nodes it ename in
-  let n' = new_node it in
+  let n' = add_node it (BRANCH ename i) in
   let edge = (snode, None, n') in
   add_edge it edge ;
   add_entry_branch it ename i n' ;
@@ -2713,19 +2714,19 @@ value symbol it (snode, enode) = fun [
   ]
 ;
 
-value rec psymbols it (snode, enode) = fun [
+value rec psymbols it (e, bnum) i (snode, enode) = fun [
   [] -> Raw.add_edge it (snode, None, enode)
 | [h] -> symbol it (snode, enode) h.ap_symb
 | [h :: t] -> do {
-    let mid = Raw.new_node it in
+    let mid = Raw.add_node it (Node.IN_BRANCH e.ae_name bnum i) in
     symbol it (snode, mid) h.ap_symb ;
-    psymbols it (mid, enode) t
+    psymbols it (e, bnum) (i+1) (mid, enode) t
   }
 ]
 ;
 
-value rule it (snode, enode) r =
-  psymbols it (snode, enode) r.ar_psymbols ;
+value rule it e (snode, enode) bnum r =
+  psymbols it (e, bnum) 1 (snode, enode) r.ar_psymbols ;
 
 value entry it e =
   let (e_snode, e_enode) = Raw.entry_nodes it e.ae_name in
@@ -2733,7 +2734,7 @@ value entry it e =
   rl
   |> List.iteri (fun i r ->
          let r_snode = Raw.start_entry_branch it e.ae_name i in
-         rule it (r_snode, e_enode) r
+         rule it e (r_snode, e_enode) i r
        )
 ;
 
@@ -2744,9 +2745,9 @@ value external_entry cg it (ename, rex) =
   let nulls = if is_nullable then [None] else [] in
   let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
   (toks@nulls)
-  |> List.iter (fun [
+  |> List.iteri (fun i -> fun [
     Some tok ->
-    let n' = Raw.new_node it in do {
+    let n' = Raw.add_node it (Node.BHOLE ename i) in do {
       Raw.add_edge it (snode, Some tok, n') ;
       Raw.mark_bhole it n'
     }

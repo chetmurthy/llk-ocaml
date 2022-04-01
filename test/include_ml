@@ -77,9 +77,7 @@ let pp_patt ty = Fmt.(pf stdout "#<patt< %a >>" Pa_ppx_base.Pp_MLast.pp_patt ty)
 #install_printer pp_module_expr ;;
 #install_printer pp_module_type ;;
 #install_printer pp_patt ;;
-(*
 #install_printer pp_str_item ;;
- *)
 #install_printer pp_sig_item ;;
 
 #require "camlp5.extend" ;;
@@ -263,6 +261,7 @@ ATN.Raw.dump stdout atn ;;
 #trace CG.watch_follow ;;
 "revised_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
+
 Pp_MLast.Ploc.pp_loc_verbose := false ;;
 
 #trace ATN.extend_branches ;;
@@ -277,5 +276,5 @@ open Node ;;
 #trace ATNFirstFollow.compute_firstk ;;
 #trace ATNFirstFollow.compute_firstk_depth ;;
 let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
-let e = CG.gram_entry cg (Name.mk0 "class_expr" 7) ;;
+let e = CG.gram_entry cg (Name.mk0 "class_expr" 13) ;;
 
