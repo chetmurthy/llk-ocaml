@@ -20,6 +20,8 @@ abnf.opt: abnflexer.cmx abnf.cmx
 
 test:: all
 	cat examples/iri.abnf | ./abnf
+	cat examples/postal.abnf | ./abnf
+	cat examples/rfc5322.abnf | ./abnf
 
 .SUFFIXES: .mll .ml .cmo .cmx
 
