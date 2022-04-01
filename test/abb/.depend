@@ -1,0 +1,6 @@
+abblexer.cmo :
+abblexer.cmx :
+abb.cmo : \
+    abblexer.cmo
+abb.cmx : \
+    abblexer.cmx
