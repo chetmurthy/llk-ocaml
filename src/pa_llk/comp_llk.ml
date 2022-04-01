@@ -467,6 +467,8 @@ module CompilingGrammar = struct
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
 
+  value epsilon_closure cg st = MHM.map (snd cg).eclosure st ;
+
 end ;
 module CG = CompilingGrammar ;
 
@@ -2319,7 +2321,8 @@ value expand_macros (cg : CG.t) e =
                ar_action = Some <:expr< Ploc.VaVal $lid:x$ >>};
                {ar_loc = loc;
                 ar_psymbols =
-                  [{ ap_loc = loc
+                  [{ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1}
+                  ;{ ap_loc = loc
                    ; ap_patt = Some <:patt< $lid:x$ >>
                    ; ap_symb = ASanti loc anti_kinds}];
                 ar_action = Some <:expr< $lid:x$ >>}]}
@@ -2804,12 +2807,12 @@ value epsilon_closure it : MHM.t Node.t (list Node.t) = do {
     returning the list of (tok * st) that are reached.
  *)
 
-value step1 loc (it, ec) (st : Node.t) = do {
+value step1 loc (cg : CG.t) (it, ec) (st : Node.t) = do {
   if Raw.is_bhole it st then
     raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
   else () ;
   let acc = ref [] in
-  MHM.map ec st
+  CG.epsilon_closure cg st
   |> List.iter (fun st ->
          let labs = Raw.edge_labels it st in
          labs
@@ -2824,21 +2827,21 @@ value step1 loc (it, ec) (st : Node.t) = do {
 }
 ;
 
-value node_first loc ((atn : Raw.t),ec) node =
-  let l = step1 loc (atn, ec) node in
+value node_first loc cg ((atn : Raw.t),ec) node =
+  let l = step1 loc cg (atn, ec) node in
   List.map fst l |> List.sort_uniq PatternBaseToken.compare
 ;
 
 value entry_first cg e =
   let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let (snode, _) = Raw.entry_nodes atn e.ae_name in
-  node_first e.ae_loc (atn, ec) snode
+  node_first e.ae_loc cg (atn, ec) snode
 ;
 
 value entry_follow cg e =
   let ((atn : Raw.t),ec) = CG.gram_atn_ec cg in
   let (_, enode) = Raw.entry_nodes atn e.ae_name in
-  node_first e.ae_loc (atn, ec) enode
+  node_first e.ae_loc cg (atn, ec) enode
 ;
 
 value branch_first (cg : CG.t) e =
@@ -2847,7 +2850,7 @@ value branch_first (cg : CG.t) e =
   rl
   |> List.mapi (fun i _ ->
          let node = Raw.entry_branch atn e.ae_name i in
-         (i, node_first e.ae_loc (atn, ec) node))
+         (i, node_first e.ae_loc cg (atn, ec) node))
 ;
 
 module TokPath = struct
@@ -2871,7 +2874,7 @@ module TP = TokPath ;
 value extend1 loc cg t =
   t.states
 |> List.concat_map (fun st ->
-       step1 loc (CG.gram_atn_ec cg) st
+       step1 loc cg (CG.gram_atn_ec cg) st
        |> List.map (fun (tok, st') -> {TP.branchnum=t.TP.branchnum; priority=t.priority; tokpath = t.tokpath@[tok]; states= [st']})
      )
 ;

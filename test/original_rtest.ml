@@ -237,6 +237,10 @@ REGEXPS:
   check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
 
   check_constr_decl = UIDENT [^ "." "("] | "true" | "false" | "|" | "[" "]";
+  check_lident_colon = LIDENT ":" ;
+  check_uident_coloneq = UIDENT ":=" ;
+  check_uident_eq = UIDENT "=" ;
+
 END;
 
 external e_phony : PREDICTION empty ;
@@ -505,10 +509,10 @@ external p_phony : PREDICTION empty ;
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs attrs in
           let h = (i,me,attrs) in
           str_item_to_inline <:str_item< module $_flag:r$ $list:[h::t]$ >> ext
-      | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident ""; "="; mt = module_type ; item_attrs = item_attributes ->
+      | "module"; PRIORITY 1; "type"; (ext,alg_attrs) = ext_attributes; i = V ident ""; "="; mt = module_type ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-module-type"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           str_item_to_inline <:str_item< module type $_:i$ = $mt$ $_itemattrs:attrs$ >> ext
-      | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident "" ; item_attrs = item_attributes ->
+      | "module"; PRIORITY 1; "type"; (ext,alg_attrs) = ext_attributes; i = V ident "" ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-module-type"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           str_item_to_inline <:str_item< module type $_:i$ = 'abstract $_itemattrs:attrs$ >> ext
       | "open"; (ext,alg_attrs) = ext_attributes; ovf = V (FLAG "!") "!"; me = module_expr ; item_attrs = item_attributes ->
@@ -530,15 +534,15 @@ external p_phony : PREDICTION empty ;
           let te = { (te) with MLast.teAttributes = attrs } in
           str_item_to_inline <:str_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >> ext
 
-      | "let" ; "exception" ; id = V UIDENT "uid" ;
+      | PRIORITY 1; "let" ; PRIORITY 1; "exception" ; id = V UIDENT "uid" ;
         "of" ; tyl = V (LIST1 ctyp LEVEL "apply") ; alg_attrs = alg_attributes ; "in" ; x = expr ; attrs = item_attributes ->
         let e = <:expr< let exception $_uid:id$ of $_list:tyl$ $_algattrs:alg_attrs$ in $x$ >> in
         <:str_item< $exp:e$ $_itemattrs:attrs$ >>
-      | "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
+      | PRIORITY 1; "let" ; PRIORITY 1; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
         "in" ; x = expr ; attrs = item_attributes ->
         let e = <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >> in
         <:str_item< $exp:e$ $_itemattrs:attrs$ >>
-      | "let"; check_eps ; (ext, alg_attrs) = ext_attributes ; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
+      | PRIORITY 1; "let" ; (ext, alg_attrs) = ext_attributes ; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
         x = expr ->
           let (a, b, item_attrs) = h in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
@@ -547,7 +551,7 @@ external p_phony : PREDICTION empty ;
           let e = expr_to_inline <:expr< let $_flag:r$ $list:l$ in $x$ >> ext [] in
           <:str_item< $exp:e$ >>
 
-      | "let"; check_eps ; (ext, alg_attrs) = ext_attributes; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding ->
+      | PRIORITY 1; "let"; (ext, alg_attrs) = ext_attributes; r = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding ->
           let (a, b, item_attrs) = h in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           let h = (a, b, attrs) in
@@ -560,16 +564,16 @@ external p_phony : PREDICTION empty ;
           | _ -> <:str_item< value $_flag:r$ $list:l$ >> ] in
           str_item_to_inline si ext
 
-      | "let"; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in";
+      | PRIORITY 1; "let"; PRIORITY 1; "module"; (ext,attrs) = ext_attributes; m = V uidopt "uidopt"; mb = mod_fun_binding; "in";
         e = expr ->
           let e = expr_to_inline <:expr< let module $_uidopt:m$ = $mb$ in $e$ >> ext attrs in
           <:str_item< $exp:e$ >>
 
-      | "let"; "open"; ovf = V (FLAG "!") "!"; (ext, attrs) = ext_attributes; m = module_expr; "in"; e = expr ->
+      | PRIORITY 1; "let"; PRIORITY 1; "open"; ovf = V (FLAG "!") "!"; (ext, attrs) = ext_attributes; m = module_expr; "in"; e = expr ->
           let e = expr_to_inline <:expr< let open $_!:ovf$ $m$ in $e$ >> ext attrs in
           <:str_item< $exp:e$ >>
 
-      | check_eps ; e = expr ; attrs = item_attributes -> <:str_item< $exp:e$ $_itemattrs:attrs$ >>
+      | e = expr ; attrs = item_attributes -> <:str_item< $exp:e$ $_itemattrs:attrs$ >>
       | attr = floating_attribute -> <:str_item< [@@@ $_attribute:attr$ ] >>
       | e = item_extension ; attrs = item_attributes ->
         <:str_item< [%% $_extension:e$ ] $_itemattrs:attrs$ >>
@@ -648,27 +652,24 @@ external p_phony : PREDICTION empty ;
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-include"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< include $mt$ $_itemattrs:attrs$ >> ext
 
-      | "module" ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
+      | "module"; check_uident_coloneq; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
         <:sig_item< module $_uid:i$ := $longid:li$ $_itemattrs:attrs$ >>
 
-      | "module"; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
+      | "module"; check_eps; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
         h = first_mod_decl_binding ; t = LIST0 rest_mod_decl_binding ->
           let (i, mt, item_attrs) = h in
           let item_attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           let h = (i, mt, item_attrs) in
           sig_item_to_inline <:sig_item< module $flag:rf$ $list:[h::t]$ >> ext
 
-      | "module"; (ext,alg_attrs) = ext_attributes ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
+      | "module"; check_eps; (ext,alg_attrs) = ext_attributes; check_uident_eq; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
-(*
-MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
-*)
           sig_item_to_inline <:sig_item< module alias $_uid:i$ = $longid:li$ $_itemattrs:attrs$ >> ext
 
-      | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident ""; "="; mt = module_type ; item_attrs = item_attributes ->
+      | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident ""; PRIORITY 1; "="; mt = module_type ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module-type"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< module type $_:i$ = $mt$ $_itemattrs:attrs$ >> ext
-      | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident ""; ":="; mt = module_type ; item_attrs = item_attributes ->
+      | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident ""; PRIORITY 1; ":="; mt = module_type ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module-type"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< module type $_:i$ := $mt$ $_itemattrs:attrs$ >> ext
       | "module"; "type"; (ext,alg_attrs) = ext_attributes; i = V ident "" ; item_attrs = item_attributes ->
@@ -1222,7 +1223,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
         <:patt< $longid:li$ >>
       | _ -> <:patt< $longid:li$ . $p$ >>
       ]
-    | li = longident ; "("; "type";
+    | li = longident ; PRIORITY 1; "("; "type";
       loc_ids = V (LIST1 [ s = LIDENT -> (loc,s) ]) ; ")" → 
       <:patt< $longid:li$ (type $_list:loc_ids$ ) >>
     | li = longident → <:patt< $longid:li$ >>
@@ -1619,7 +1620,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   str_item: AFTER "top"
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_declaration SEP "and") ->
           str_item_to_inline <:str_item< class $_list:cd$ >> ext
-      | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
+      | "class"; PRIORITY 1; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
           str_item_to_inline <:str_item< class type $_list:ctd$ >> ext
       | x = NEXT -> x
       ] ]
@@ -1627,7 +1628,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
   sig_item: AFTER "top"
     [ [ "class"; ext = ext_opt; cd = V (LIST1 class_description SEP "and") ->
           sig_item_to_inline <:sig_item< class $_list:cd$ >> ext
-      | "class"; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
+      | "class"; PRIORITY 1; "type"; ext = ext_opt; ctd = V (LIST1 class_type_declaration SEP "and") ->
           sig_item_to_inline <:sig_item< class type $_list:ctd$ >> ext
       | x = NEXT -> x
       ] ]
@@ -1665,7 +1666,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | "let"; rf = V (FLAG "rec"); lb = V (LIST1 let_binding SEP "and");
         "in"; ce = SELF ->
           <:class_expr< let $_flag:rf$ $_list:lb$ in $ce$ >>
-      | "let"; PRIORITY 1 ; "open"; ovf = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; i = extended_longident; "in"; ce = SELF →
+      | "let"; PRIORITY 1 ; "open"; PRIORITY 1 ; ovf = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; i = extended_longident; "in"; ce = SELF →
           class_expr_wrap_attrs <:class_expr< let open $_!:ovf$ $longid:i$ in $ce$ >> alg_attrs
       | x = NEXT -> x
       ]
@@ -1911,7 +1912,7 @@ MLast.SgMtyAlias loc <:vala< i >> <:vala< li >> attrs
       | f = field -> [f] ] ]
   ;
   field:
-    [ [ lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
+    [ [ check_lident_colon; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (Some lab, t, alg_attrs)
       | t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (None, t, alg_attrs)
