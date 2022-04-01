@@ -1,6 +1,7 @@
 
 module Name = struct
   type t = (string * int)[@@deriving (show,eq,ord) ;] ;
+  value mk0 s n = (s, n) ;
   value mk s = (s, -1) ;
   value fresh (s, _) n = (s, n) ;
   value print = fun [

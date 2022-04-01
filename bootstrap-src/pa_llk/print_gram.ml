@@ -48,7 +48,7 @@ value label pctxt pc =
 ;
 
 value assoc pc = fun [
-    LEFTA -> pprintf pc "LEFTA"
+    LEFTA g -> pprintf pc "%sLEFTA" (if g then "GREEDY " else "NONGREEDY ")
   | RIGHTA -> pprintf pc "RIGHTA"
   | NONA -> pprintf pc "NONA"
   ]
@@ -165,29 +165,30 @@ and symbol~{pctxt} pc =
   fun [
       ASlist _ g lml symb None ->
        pprintf pc "%sLIST%s@;%p"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) (simple_symbol ~{pctxt=pctxt}) symb
     | ASlist _ g lml symb (Some (sep,b)) ->
        pprintf pc "%sLIST%s@;%p@ @[SEP@;%p%s@]"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (match lml with [ LML_0 -> "0" | LML_1 -> "1" ]) 
          (simple_symbol ~{pctxt=pctxt}) symb
          (simple_symbol ~{pctxt=pctxt}) sep
          (if b then " OPT_SEP" else "")
 
     | ASopt _ g sym -> pprintf pc "%sOPT@;%p" 
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym
 
-    | ASleft_assoc _ sym1 sym2 e ->
-       pprintf pc "LEFT_ASSOC@;%p@;%p WITH %p"
+    | ASleft_assoc _ g sym1 sym2 e ->
+       pprintf pc "%sLEFT_ASSOC@;%p@;ACCUMULATE %p WITH %p"
+         (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym1
          (simple_symbol ~{pctxt=pctxt}) sym2
          expr e
 
     | ASflag _ g sym ->
        pprintf pc "%sFLAG@;%p"
-         (if g then "GREEDY " else "")
+         (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym
 
     | ASvala _ sy sl ->
@@ -200,8 +201,8 @@ and simple_symbol~{pctxt} pc sy =
   match sy with
   [ ASregexp _ id ->
     pprintf pc "PREDICT %s" (Name.print id)
-  | ASinfer _ n ->
-    pprintf pc "INFER %d" n
+  | ASpriority _ n ->
+    pprintf pc "PRIORITY %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
     pprintf pc "%s%p" (Name.print id) (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
@@ -237,7 +238,7 @@ and simple_symbol~{pctxt} pc sy =
   | ASanti _ sl ->
      pprintf pc "ANTI @[<2>%p@]" (string_list pctxt) sl
 
-  | ASlist _ _ _ _ _ | ASopt _ _ _ | ASleft_assoc _ _ _ _ | ASflag _ _ _ | ASvala _ _ _ as sy ->
+  | ASlist _ _ _ _ _ | ASopt _ _ _ | ASleft_assoc _ _ _ _ _ | ASflag _ _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 

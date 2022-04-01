@@ -60,7 +60,7 @@ EXTEND
           ; gram_id=gid
           ; gram_exports=expl
           ; gram_external_asts=extl
-          ; gram_regexp_asts=Llk_types.default_regexps @ rl
+          ; gram_regexp_asts=rl
           ; gram_entries=el
     } ] ]
   ;
@@ -106,7 +106,7 @@ EXTEND
           {al_loc = loc; al_label = lab; al_assoc = ass; al_rules = rules} ] ]
   ;
   assoc:
-    [ [ UIDENT "LEFTA" -> LEFTA
+    [ [ g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "LEFTA" -> LEFTA g
       | UIDENT "RIGHTA" -> RIGHTA
       | UIDENT "NONA" -> NONA ] ]
   ;
@@ -139,16 +139,16 @@ EXTEND
   ;
   symbol:
     [ "top" NONA
-      [ g = FLAG (UIDENT "GREEDY") ; UIDENT "LIST0"; s = SELF; sep = OPT sep_opt_sep ->
+      [ g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "LIST0"; s = SELF; sep = OPT sep_opt_sep ->
          ASlist loc g LML_0 s sep
-      | g = FLAG (UIDENT "GREEDY") ; UIDENT "LIST1"; s = SELF; sep = OPT sep_opt_sep ->
+      | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "LIST1"; s = SELF; sep = OPT sep_opt_sep ->
          ASlist loc g LML_1 s sep
-      | g = FLAG (UIDENT "GREEDY") ; UIDENT "OPT"; s = SELF ->
+      | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "OPT"; s = SELF ->
          ASopt loc g s
-      | g = FLAG (UIDENT "GREEDY") ; UIDENT "FLAG"; s = SELF ->
+      | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "FLAG"; s = SELF ->
           ASflag loc g s
-      | UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
-         ASleft_assoc loc s1 s2 e
+      | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
+         ASleft_assoc loc g s1 s2 e
       ]
   | "vala"
       [ UIDENT "V"; s = NEXT; al = LIST0 STRING ->
@@ -180,8 +180,8 @@ EXTEND
 
       | UIDENT "PREDICT" ; id = LIDENT ->
         ASregexp loc (Name.mk id)
-      | UIDENT "INFER" ; n = INT ->
-        ASinfer loc (int_of_string n)
+      | UIDENT "PRIORITY" ; n = INT ->
+        ASpriority loc (int_of_string n)
 
       | "("; s_t = SELF; ")" -> s_t
       | "("; s_t = SELF; ")" ; "?" -> ASsyntactic loc s_t
