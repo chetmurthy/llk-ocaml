@@ -20,6 +20,7 @@ calc.opt: calclexer.cmx calc.cmx
 
 test:: all
 	echo '1+1 ; 1 - 1; 1 + (2 * 3)' | ./calc
+	echo 'x := 1 ; x+1' | ./calc
 
 .SUFFIXES: .mll .ml .cmo .cmx
 
