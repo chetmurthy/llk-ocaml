@@ -174,7 +174,7 @@ open Llkr2official_test ;;
 #trace Revised.F.fun_binding ;;
 #trace Revised.F.let_binding ;;
 
- *)
+
 #load "original_rtest.cmo";;
 #require "camlp5.pr_official";;
 #load "papr_test_matrix.cmo";;
@@ -186,7 +186,7 @@ open Llko2official_test ;;
 #trace Original.F.sig_item__0007 ;;
 #trace Original.F.sig_item__0012 ;;
 
-(*
+
 
 #load "regexp_test.cmo";;
 open Regexp_test ;;
@@ -213,11 +213,12 @@ open Simple_otest ;;
 
 #load "external_test.cmo";;
 open External_test ;;
+*)
 
-#directory "abnf" ;;
-#load "abnflexer.cmo";;
-#load "abnf.cmo";;
- *)
+#directory "antlr" ;;
+#load "antlrlexer.cmo";;
+#load "antlr.cmo";;
+
 
 (*
 ;;; Local Variables: ***

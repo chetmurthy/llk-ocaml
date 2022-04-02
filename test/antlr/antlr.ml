@@ -80,6 +80,9 @@ END;
 
 value parse_grammar_eoi = Grammar.Entry.parse ANTLR.grammar_eoi ;
 
+module Conv = struct
+  let grammar 
+end
 
 open Printf;
 
