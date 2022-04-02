@@ -30,6 +30,7 @@ value equal_loc _ _ = True ;
 
 type expression = [
     EXid of loc and string
+  | EXkeyw of loc and string
   | EXquestion of loc and expression
   | EXstar of loc and expression
   | EXplus of loc and expression
@@ -40,6 +41,7 @@ type expression = [
 
 value loc_of_expression = fun [
     EXid loc _ -> loc
+  | EXkeyw loc _ -> loc
   | EXquestion loc _ -> loc
   | EXstar loc _ -> loc
   | EXplus loc _ -> loc
@@ -100,6 +102,7 @@ GRAMMAR ANTLR:
       ]
     | "simple" [
         id = ID -> EXid loc id
+      | s = STRING -> EXkeyw loc s
       | "(" ; e = expression ; ")" -> e
     ] ]
   ;
@@ -113,11 +116,13 @@ value parse_grammar_eoi = Grammar.Entry.parse ANTLR.grammar_eoi ;
 module Conv = struct
   open Llk_types ;
 
+  value conv_string v =
+    let vlen = String.length v in
+    String.sub v 1 (vlen-2)
+  ;
   value keyword = fun [
     RULEkeyword _ k v ->
-    let vlen = String.length v in
-    let v = String.sub v 1 (vlen-2) in
-    (k,v)
+    (k,conv_string v)
   ]
   ;
 
@@ -129,6 +134,8 @@ module Conv = struct
            | exception Not_found ->
               ASnterm loc (Name.mk nt) [] None
         ])
+      | EXkeyw loc s -> ASkeyw loc (conv_string s)
+
       | EXquestion loc e ->
          ASopt loc True (expression kwmap e) 
 
@@ -176,6 +183,19 @@ module Conv = struct
                      [(EXid _ _ as sym);
                       (EXid _ _ as sep)]);
      (EXid _  _ as sym') :: t] when equal_expression sym sym' ->
+     let t = expression_conclist kwmap t in
+     let sym = expression kwmap sym in
+     let sep = expression kwmap sep in
+     let ps = { ap_loc = loc ; ap_patt = None ;
+                ap_symb = ASlist loc True LML_1 sym (Some(sep, False)) } in
+     [ps :: t]
+
+  | [(EXid _  _ as sym');
+     EXstar loc
+             (EXconc _
+                     [(EXid _ _ as sep);
+                      (EXid _ _ as sym)])
+      :: t] when equal_expression sym sym' ->
      let t = expression_conclist kwmap t in
      let sym = expression kwmap sym in
      let sep = expression kwmap sep in
@@ -238,19 +258,26 @@ module Conv = struct
   ]
   ;
 
+  value process_keywords l =
+    let isalpha = fun [ 'a'..'z' | 'A'..'Z' -> True | _ -> False ] in
+    l |> List.map snd |> Ppxutil.filter_split (fun s -> isalpha (String.get s 0))
+  ;
+
   value grammar (loc, gname, l) =
     let (prods, keywords) = Ppxutil.filter_split (fun [ RULEprod _ _ _ -> True | _ -> False ]) l in
     let kwmap = List.map keyword keywords in
+    let (words, spcls) = process_keywords kwmap in
     let entries = List.map (entry kwmap) prods in
-    {
-      gram_loc = loc
-    ; gram_id = String.capitalize_ascii gname
-    ; gram_extend = None
-    ; gram_exports = prods |> List.map (fun [ RULEprod _ id _ -> Name.mk id ])
-    ; gram_external_asts = []
-    ; gram_regexp_asts = []
-    ; gram_entries = entries
-  }
+    let g = {
+        gram_loc = loc
+      ; gram_id = String.capitalize_ascii gname
+      ; gram_extend = None
+      ; gram_exports = prods |> List.map (fun [ RULEprod _ id _ -> Name.mk id ])
+      ; gram_external_asts = []
+      ; gram_regexp_asts = []
+      ; gram_entries = entries
+      } in
+    (g, words, spcls)
   ;
 end
 ;
@@ -266,7 +293,11 @@ try
   ] in do {
     Antlrlexer.input_file.val := ifname ;
     let g = parse_grammar_eoi (Stream.of_channel ic) in
-    let g = Conv.grammar g in
+    let (g,keywords,specials) = Conv.grammar g in
+    Fmt.(pf stdout "(*\nkeywords: %a\nspecials: %a\n*)\n"
+           (list ~{sep=const string "; "} (quote string)) keywords
+           (list ~{sep=const string " | "} (quote string)) specials
+    ) ;
     print_string Pr.(top ~{pctxt=normal} Pprintf.empty_pc g)
   }
 with [ Ploc.Exc loc exc ->

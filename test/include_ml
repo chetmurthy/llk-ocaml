@@ -42,7 +42,7 @@ let pp_loc = Pp_MLast.Ploc.pp Fmt.stdout ;;
 #print_length 1048576 ;;
 #print_depth 1048576 ;;
 let pp_stream_length = ref 1024 ;;
-pp_stream_length :=  1024 ;;
+pp_stream_length :=  32 ;;
 let pp_token_stream strm =
   let l = Stream.npeek !pp_stream_length strm in
   let rec trim_eoi = function
@@ -213,12 +213,18 @@ open Simple_otest ;;
 
 #load "external_test.cmo";;
 open External_test ;;
-*)
+
 
 #directory "antlr" ;;
 #load "antlrlexer.cmo";;
 #load "antlr.cmo";;
 open Antlr ;;
+ *)
+
+#directory "acme" ;;
+#load "acmelexer.cmo";;
+#load "acme.cmo";;
+open Acme ;;
 
 (*
 ;;; Local Variables: ***

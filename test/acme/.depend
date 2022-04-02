@@ -1,0 +1,6 @@
+acmelexer.cmo :
+acmelexer.cmx :
+acme.cmo : \
+    acmelexer.cmo
+acme.cmx : \
+    acmelexer.cmx
