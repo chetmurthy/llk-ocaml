@@ -19,6 +19,7 @@ value loc_strip_comment loc = Ploc.with_comment loc "" ;
 {foo|
 GRAMMAR Abb:
 EXTEND g ;
+  
     EXPORT: module_ moduleData moduleName dataList procedure procCall procName procParameter
       functionCall functionParameter declaration type_ init_ expression array_ primitive;
     
@@ -91,7 +92,7 @@ EXTEND g ;
     ;
     array_:
       
-      [ [ "["; GREEDY LIST1  expression SEP ","; "]" ] ]
+      [ [ "["; GREEDY LIST1 expression SEP ","; "]" ] ]
     ;
     primitive:
       
