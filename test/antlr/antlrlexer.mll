@@ -25,7 +25,6 @@ let hex_digit = ['0'-'9' 'a'-'f' 'A'-'F']
 let digit = ['0'-'9']
 let bit = ['0'-'1']
 let letter = ['a'-'z' 'A'-'Z']
-let string = ( "%s" | "%i" )? '"' ( [^ '"'] )* '"'
 let ws = ( ' ' | '\t' | '\r' | '\n' )
 let int = ['0'-'9']+
 let id = letter ( letter | digit | '_' )*

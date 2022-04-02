@@ -19,7 +19,7 @@ abb.opt: abblexer.cmx abb.cmx
 	$(OCAMLFIND) ocamlopt $(DEBUG) -package $(PACKAGES) -linkpkg -syntax camlp5r $^ -o $@
 
 test:: all
-	./abb < examples/robdata.sys
+	./abb examples/robdata.sys
 
 .SUFFIXES: .mll .ml .cmo .cmx
 

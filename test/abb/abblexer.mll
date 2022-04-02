@@ -1,8 +1,9 @@
 {
 
+let input_file = ref ""
+
 let locate ?(comments="") lb v =
-  let loc = Ploc.make_unlined (Lexing.lexeme_start lb, Lexing.lexeme_end lb) in
-  let loc = Ploc.with_comment loc comments in
+  let loc = Ploc.make_loc !input_file 1 0 (Lexing.lexeme_start lb, Lexing.lexeme_end lb) comments in
   (v, loc)
 
 let kw_ht = Hashtbl.create 23

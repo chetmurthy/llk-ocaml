@@ -218,7 +218,7 @@ open External_test ;;
 #directory "antlr" ;;
 #load "antlrlexer.cmo";;
 #load "antlr.cmo";;
-
+open Antlr ;;
 
 (*
 ;;; Local Variables: ***

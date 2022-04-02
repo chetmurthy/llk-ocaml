@@ -1,7 +1,7 @@
 grammar abbParser;
 
-module
-    : moduleData EOF
+module_
+    : moduleData EOI
     ;
 
 moduleData
@@ -12,8 +12,7 @@ moduleData
     ;
 
 moduleName
-    : IDENTIFIER
-    | procCall
+    : procCall
     ;
 
 dataList
@@ -78,3 +77,42 @@ primitive
     | (PLUS | MINUS)? FLOATLITERAL
     | (PLUS | MINUS)? INTLITERAL
     ;
+
+MODULE = 'module' ;
+ENDMODULE = 'endmodule' ;
+PROC = 'proc' ;
+ENDPROC = 'endproc';
+LOCAL = 'local' ;
+CONST = 'const' ;
+PERS = 'pers';
+VAR = 'var' ;
+TOOLDATA = 'tooldata' ;
+WOBJDATA = 'wobjdata' ;
+SPEEDDATA = 'speeddata' ;
+ZONEDATA = 'zonedata' ;
+CLOCK = 'clock' ;
+BOOL = 'bool' ;
+SLASH               = '/' ;
+EQUALS              = ':=' ;
+COMMA               = ',';
+CURLY_OPEN          = '{';
+CURLY_CLOSE         = '}';
+COLON               = ':';
+SEMICOLON           = ';';
+BRACKET_OPEN        = '(';
+BRACKET_CLOSE       = ')';
+SQUARE_OPEN         = '[';
+SQUARE_CLOSE        = ']';
+DOT                 = '.';
+DOUBLEDOT           = '..';
+REL_BIGGER          = '>';
+REL_BIGGER_OR_EQUAL = '>=';
+REL_SMALLER         = '<';
+REL_SMALLER_OR_EQUAL= '<=';
+REL_EQUAL           = '==';
+REL_NOTEQUAL        = '<>';
+PLUS                = '+';
+MINUS               = '-';
+MULTIPLY            = '*';
+PERCENT             = '%';
+HASH                = '#';
