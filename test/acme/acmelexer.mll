@@ -11,16 +11,16 @@ let _ = [] |> List.iter (fun s -> Hashtbl.add kw_ht s ())
 let mixedcase_ht = Hashtbl.create 23
 let _ = ([("BOOLEAN", "true");("BOOLEAN", "false")]@
           (List.map (fun s -> ("",s)) [
-"abstract"; "analysis"; "and"; "any"; "attachment"; "attachments"; 
-"attachedports"; "attachedroles"; "bindings"; "collect"; "component"; 
-"components"; "connector"; "containassign"; "connectors"; "design"; "distinct"; 
-"double"; "element"; "enum"; "extended"; "extends"; "external"; "exists"; 
-"family"; "final"; "forall"; "float"; "group"; "groups"; "heuristic"; 
-"import"; "in"; "int"; "integer"; "invariant"; "new"; "members"; "or"; 
-"public"; "private"; "power"; "port"; "ports"; "property"; "properties"; 
-"record"; "representation"; "representations"; "role"; "rule"; "roles"; 
-"sequence"; "seq"; "select"; "set"; "string"; "style"; "system"; "to"; 
-"type"; "unique"; "with"; "view"
+"abstract"; "analysis"; "and"; "any"; "attachedports"; "attachedroles"; 
+"attachment"; "attachments"; "bindings"; "collect"; "component"; "components"; 
+"connector"; "connectors"; "containassign"; "design"; "distinct"; "double"; 
+"element"; "enum"; "exists"; "extended"; "extends"; "external";
+"family"; "final"; "float"; "forall"; "group"; "groups"; "heuristic"; 
+"import"; "in"; "int"; "integer"; "invariant"; "members"; "new"; "or"; 
+"port"; "ports"; "power"; "private"; "properties"; "property"; "public"; 
+"record"; "representation"; "representations"; "role"; "roles"; "rule"; 
+"select"; "seq"; "sequence"; "set"; "string"; "style"; "system"; "to"; 
+"type"; "unique"; "view"; "with"
 ]))
         |> List.iter (fun (ty,s) -> Hashtbl.add mixedcase_ht s ty) ;;
 
@@ -51,10 +51,11 @@ rule _token = parse
 | line_comment { _token lexbuf }
 | ws+     { _token lexbuf }
 | '\r'? '\n' as s { locate lexbuf ("NEWLINE", s) }
-| ("=" | "!" | 
-":" | "," | "." | "..." | "==" | ">=" | "<->" | "->" | "{" | "}" | "[" | 
-"]" | "(" | ")" | "<" | ">" | "<=" | "!=" | "-" | "+" | "<<" | ">>" | 
-"%" | ";" | ":!" | "/" | "*" | "|" | "." | ":" | "-" | "+" | "\\" | "\\\\" | "/" | "$" | "%"
+| (
+"!" | "!=" | "$" | 
+"%" | "(" | ")" | "*" | "+" | "," | "-" | "->" | "." | "..." | "/" | 
+":" | ":!" | ";" | "<" | "<->" | "<<" | "<=" | "=" | "==" | ">" | ">=" | 
+">>" | "[" | "\\" | "\\\\" | "]" | "{" | "|" | "}"
   ) as s { locate lexbuf ("", s) }
 | string_literal as s { locate lexbuf ("STRING_LITERAL", s) }
 | floating_point_literal as s { locate lexbuf ("FLOATING_POINT_LITERAL", s) }

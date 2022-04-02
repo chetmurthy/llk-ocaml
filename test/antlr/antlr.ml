@@ -115,6 +115,7 @@ value parse_grammar_eoi = Grammar.Entry.parse ANTLR.grammar_eoi ;
 
 module Conv = struct
   open Llk_types ;
+  open Llk_migrate ;
 
   value conv_string v =
     let vlen = String.length v in
@@ -260,13 +261,27 @@ module Conv = struct
 
   value process_keywords l =
     let isalpha = fun [ 'a'..'z' | 'A'..'Z' -> True | _ -> False ] in
-    l |> List.map snd |> Ppxutil.filter_split (fun s -> isalpha (String.get s 0))
+    l |> Ppxutil.filter_split (fun s -> isalpha (String.get s 0))
+  ;
+
+  value extract_keywords g =
+    let acc = ref [] in
+    let dt = make_dt () in
+    let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+    let migrate_a_symbol dt = fun [
+          ASkeyw _ kw as s -> do { Std.push acc kw ; s }
+        | s -> fallback_migrate_a_symbol dt s
+        ] in
+    let dt = { (dt) with migrate_a_symbol = migrate_a_symbol } in do {
+    g.gram_entries |> List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) ;
+    List.sort_uniq String.compare acc.val
+  }
   ;
 
   value grammar (loc, gname, l) =
     let (prods, keywords) = Ppxutil.filter_split (fun [ RULEprod _ _ _ -> True | _ -> False ]) l in
     let kwmap = List.map keyword keywords in
-    let (words, spcls) = process_keywords kwmap in
+    let (words, spcls) = kwmap |> List.map snd |> process_keywords  in
     let entries = List.map (entry kwmap) prods in
     let g = {
         gram_loc = loc
@@ -277,7 +292,10 @@ module Conv = struct
       ; gram_regexp_asts = []
       ; gram_entries = entries
       } in
-    (g, words, spcls)
+    let (words', spcls') = g |> extract_keywords |> process_keywords in
+    (g,
+     List.sort_uniq String.compare (words@words'),
+     List.sort_uniq String.compare (spcls@spcls'))
   ;
 end
 ;
