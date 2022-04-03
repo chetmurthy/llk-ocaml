@@ -28,9 +28,6 @@ value entry_location e = e.ae_loc ;
 
 module Token = Llk_regexps.PatternBaseToken ;
 
-type token = Token.t == [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ]
-;
-
 value print_token_option = fun [
     None -> "eps"
 |   Some t -> Token.print t
@@ -166,6 +163,107 @@ module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
 end ;
 module MSM = MutSetMap ;
 
+
+module type NODESIG = sig
+  type t = 'a [@@deriving (show,eq,ord) ;];
+  value print : t -> string ;
+end ;
+module type LABELSIG = sig
+  type t = 'a [@@deriving (show,eq,ord) ;];
+  value print : t -> string ;
+end;
+
+module Graph(Node: NODESIG)(Label:LABELSIG) = struct
+module Node = Node ;
+module Label = Label ;
+
+type edge_t = (Node.t * Label.t * Node.t) ;
+type t = {
+  nodes : ref (list Node.t)
+; edges: mutable list edge_t
+; edges_ht: MHM.t Node.t (MHM.t Label.t (ref (list Node.t)))
+} ;
+
+value mk () =
+  { nodes = ref []
+  ; edges = []
+  ; edges_ht = MHM.mk 23
+  }
+;
+
+value add_node it n = do { Std.push it.nodes n ; n } ;
+value nodes it = it.nodes.val ;
+
+value add_edge it ((src, lab, dst) as e) = do {
+    it.edges := [e :: it.edges] ;
+    let src_ht = match MHM.map it.edges_ht src with [
+          x -> x
+        | exception Not_found -> do {
+            let x = MHM.mk 23 in
+            MHM.add it.edges_ht (src, x) ;
+            x
+          }
+    ] in
+    let lab_ref = match MHM.map src_ht lab with [
+          x -> x
+        | exception Not_found -> do {
+            let x = ref [] in
+            MHM.add src_ht (lab, x) ;
+            x
+          }
+        ] in
+    Std.push lab_ref dst
+}
+;
+
+value edge_labels it src =
+  match MHM.map it.edges_ht src with [
+      src_ht -> MHM.dom src_ht
+    | exception Not_found -> []
+    ]
+;
+
+value traverse it src lab =
+  match MHM.map it.edges_ht src with [
+      src_ht ->
+      (match MHM.map src_ht lab with [
+           x -> x.val
+         | exception Not_found -> []
+      ])
+    | exception Not_found -> []
+    ]
+;
+
+value dump f it = do {
+  let open Printf in
+  let node2string n = Node.print n in
+  let node2label n = Node.print n in
+  let state_label q = node2label q in
+  (* Header. *)
+  fprintf f "digraph G {\n";
+  fprintf f "rankdir = LR;\n";
+  fprintf f "ratio = auto;\n";
+  (* Vertices. *)
+  (nodes it)
+  |> List.iter (fun q ->
+         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
+           (node2string q)
+           (state_label q)
+           "circle"
+       );
+  (* Edges. *)
+    it.edges
+    |> List.iter (fun (src,lab,dst) ->
+           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
+             (node2string src)
+             (node2string dst)
+             (String.escaped (Label.print lab))
+         ) ;
+    fprintf f "}\n%!"
+}
+;
+end ;
+
 module ATN0 = struct
 
 module Node = struct
@@ -175,7 +273,7 @@ module Node = struct
     | BRANCH of Name.t and int
     | IN_BRANCH of Name.t and int and int
     | BHOLE of Name.t and int
-  ] ;
+  ] [@@deriving (show,eq,ord) ;] ;
   value print = fun [
     ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
   | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
@@ -185,8 +283,16 @@ module Node = struct
   ] ;
 end ;
 
+module Label = struct
+  type t = option Token.t [@@deriving (show,eq,ord) ;] ;
+  value print = fun [
+    None -> "eps"
+  | Some t -> Token.print t
+  ] ;
+end;
+
 module Raw = struct
-type edge_t = (Node.t * option token * Node.t) ;
+type edge_t = (Node.t * Label.t * Node.t) ;
 
 type t = {
   nodes : ref (list Node.t)
@@ -196,8 +302,8 @@ type t = {
 ; initial_nodes : mutable list Node.t
 ; bhole_nodes : MHS.t Node.t
 ; edges: mutable list edge_t
-; edges_ht: MHM.t Node.t (MHM.t (option token) (ref (list Node.t)))
-; tokens : MHS.t (option token)
+; edges_ht: MHM.t Node.t (MHM.t (Label.t) (ref (list Node.t)))
+; tokens : MHS.t (Label.t)
 } ;
 
 value mk () =
@@ -352,7 +458,7 @@ module Node = struct
     | BRANCH of Name.t and int
     | IN_BRANCH of Name.t and int and int
     | BHOLE of Name.t and int
-  ] ;
+  ] [@@deriving (show,eq,ord) ;] ;
   value print = fun [
     ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
   | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
@@ -367,7 +473,7 @@ module Label = struct
       EPS
     | TOKEN of Token.t
     | NTERM of Name.t
-    ]
+    ] [@@deriving (show,eq,ord) ;]
   ;
 
   value print = fun [
@@ -387,7 +493,7 @@ type t = {
 ; edges: mutable list edge_t
 ; edges_ht: MHM.t Node.t (MHM.t Label.t (ref (list Node.t)))
 ; nonterm_edges_ht: MHM.t Name.t (ref (list edge_t))
-; tokens : MHS.t token
+; tokens : MHS.t Token.t
 } ;
 
 value mk () =
@@ -542,15 +648,15 @@ module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
       ctr : Ctr.t
-    ; gram_alphabet : mutable list token
+    ; gram_alphabet : mutable list Token.t
     ; gram_regexps: mutable list (Name.t * regexp)
     ; gram_externals: mutable list (Name.t * regexp)
     ; errors : mutable list error_t
     ; atn : mutable ATN0.Raw.t
     ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
-    ; atn_first: MHM.t Name.t (list (int * list token))
-    ; atn_follow: MHM.t Name.t (list token)
-    ; atn_firstk: MHM.t Name.t (option (list (int * list (list token))))
+    ; atn_first: MHM.t Name.t (list (int * list Token.t))
+    ; atn_follow: MHM.t Name.t (list Token.t)
+    ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; atn' : mutable ATN0'.Raw.t
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
@@ -784,6 +890,7 @@ end
 ;
 
 module S0Alphabet = struct
+  open Token ;
   value alphabet cg =
   let acc = ref [] in
   let dt = Llk_migrate.make_dt () in
@@ -2860,7 +2967,7 @@ end ;
 (** Build the ATN NFA for this grammar
 *)
 module ATN = struct
-
+open Token ;
 include ATN0 ;
 
 module Build = struct
@@ -3036,7 +3143,7 @@ value branch_first (cg : CG.t) e =
 ;
 
 module TokPath = struct
-type t = { branchnum : int ; priority : option int ; tokpath : list token ; states : list Node.t } ;
+type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; states : list Node.t } ;
 value branchnum p = p.branchnum ;
 value priority p = p.priority ;
 value tokpath p = p.tokpath ;
@@ -3111,7 +3218,7 @@ value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_
 
 end ;
 module ATN' = struct
-
+open Token ;
 include ATN0' ;
 
 module Build = struct
