@@ -173,7 +173,22 @@ module type LABELSIG = sig
   value print : t -> string ;
 end;
 
-module Graph(Node: NODESIG)(Label:LABELSIG) = struct
+module type GRAPHSIG = sig
+  module Node : NODESIG ;
+  module Label : LABELSIG ;
+  type t = 'a ;
+  type edge_t = (Node.t * Label.t * Node.t) ;
+  value mk : unit -> t ;
+  value add_node : t -> Node.t -> Node.t ;
+  value nodes : t -> list Node.t ;
+  value add_edge : t -> edge_t -> unit ;
+  value edge_labels : t -> Node.t -> list Label.t ;
+  value traverse : t -> Node.t -> Label.t -> list Node.t ;
+  value dump : out_channel -> t -> unit ;
+end ;
+
+module Graph(Node: NODESIG)(Label:LABELSIG)
+  : (GRAPHSIG with module Node = Node and module Label = Label) = struct
 module Node = Node ;
 module Label = Label ;
 
@@ -3174,7 +3189,50 @@ value grammar it cg = do {
 ;
 end ;
 
-module DFA = struct
+module type CANONICALSIG = sig
+  type t = 'a [@@deriving (show,eq,ord) ;] ;
+  value canon : t -> t ;
+end ;
+module type INTERNEDSIG = sig type t = 'a; end ;
+
+module type SYMTABSIG = sig
+  module Underlying : CANONICALSIG ;
+  module Interned : INTERNEDSIG ;
+
+  type t = 'c ;
+  value mk : unit -> t ;
+  value intern : t -> Underlying.t -> option Interned.t ;
+  value extern : t -> Interned.t -> Underlying.t ;
+  value add : t -> Underlying.t -> Interned.t -> unit ;
+end ;
+
+module Intern(U : CANONICALSIG)(I : INTERNEDSIG)
+     : (SYMTABSIG with module Underlying = U and module Interned = I)
+ = struct
+  module Underlying = U ;
+  module Interned = I ;
+  type t = {
+      m : MHBIJ.t Underlying.t Interned.t
+    } ;
+  value mk () = { m = MHBIJ.mk (23, 23) } ;
+  value intern it x =
+    let x = U.canon x in
+    match MHBIJ.map it.m x with [
+        x -> Some x
+      | exception Not_found -> None
+      ]
+  ;
+
+  value add it x y = do {
+    let x = U.canon x in
+    MHBIJ.add it.m (x,y)
+  }
+  ;
+
+  value extern it y = List.hd (MHBIJ.inv it.m y) ;
+end ;
+
+module BuildDFA = struct
 
 module CFG = struct
 type t = { node : Node.t ; branch : int ; stack : list Node.t } ;
