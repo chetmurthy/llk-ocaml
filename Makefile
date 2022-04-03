@@ -54,7 +54,7 @@ META: META.pl
 clean::
 	$(MAKE) -C src clean
 	$(MAKE) -C test clean
-	$(RM) -rf META local-install
+	$(RM) -rf META local-install bootstrap-src.new
 
 realclean:: clean
 	$(MAKE) -C bootstrap-src clean
