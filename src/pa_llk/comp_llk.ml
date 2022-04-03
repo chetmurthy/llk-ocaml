@@ -415,33 +415,30 @@ module Label = struct
   ] ;
 end ;
 
+module G = Graph(Node)(Label) ;
+
 module Raw = struct
-type edge_t = (Node.t * Label.t * Node.t) ;
 type t = {
-  nodes : ref (list Node.t)
+  g : G.t
 ; entry_map : MHM.t Name.t (Node.t * Node.t)
 ; entry_branch_map : MHM.t (Name.t * int) Node.t
 ; bhole_nodes : MHS.t Node.t
-; edges: mutable list edge_t
-; edges_ht: MHM.t Node.t (MHM.t Label.t (ref (list Node.t)))
-; nonterm_edges_ht: MHM.t Name.t (ref (list edge_t))
+; nonterm_edges_ht: MHM.t Name.t (ref (list G.edge_t))
 ; tokens : MHS.t Token.t
 } ;
 
 value mk () =
-  { nodes = ref []
+  { g = G.mk()
   ; tokens = MHS.mk 23
   ; entry_map = MHM.mk 23
   ; entry_branch_map = MHM.mk 23
   ; bhole_nodes = MHS.mk 23
-  ; edges = []
-  ; edges_ht = MHM.mk 23
   ; nonterm_edges_ht = MHM.mk 23
   }
 ;
 
-value _add_node it n = do { Std.push it.nodes n ; n } ;
-value nodes it = it.nodes.val ;
+value _add_node it n = G.add_node it.g n ;
+value nodes it = G.nodes it.g ;
 value tokens it = MHS.toList it.tokens ;
 
 value new_entry it ename = do {
@@ -465,24 +462,7 @@ value is_bhole it n = MHS.mem n it.bhole_nodes ;
 
 value add_edge it ((src, lab, dst) as e) = do {
     (match lab with [ Label.TOKEN t -> MHS.add t it.tokens | _ -> ()]) ;
-    it.edges := [e :: it.edges] ;
-    let src_ht = match MHM.map it.edges_ht src with [
-          x -> x
-        | exception Not_found -> do {
-            let x = MHM.mk 23 in
-            MHM.add it.edges_ht (src, x) ;
-            x
-          }
-    ] in
-    let lab_ref = match MHM.map src_ht lab with [
-          x -> x
-        | exception Not_found -> do {
-            let x = ref [] in
-            MHM.add src_ht (lab, x) ;
-            x
-          }
-        ] in
-    Std.push lab_ref dst ;
+    G.add_edge it.g e ;
     (match lab with [
          Label.NTERM nt ->
          let nt_ref = match MHM.map it.nonterm_edges_ht nt with [
@@ -502,24 +482,6 @@ value add_edge it ((src, lab, dst) as e) = do {
 value nonterm_edges it nt =
   match MHM.map it.nonterm_edges_ht nt with [
       x -> x.val
-    | exception Not_found -> []
-    ]
-;
-
-value edge_labels it src =
-  match MHM.map it.edges_ht src with [
-      src_ht -> MHM.dom src_ht
-    | exception Not_found -> []
-    ]
-;
-
-value traverse it src lab =
-  match MHM.map it.edges_ht src with [
-      src_ht ->
-      (match MHM.map src_ht lab with [
-           x -> x.val
-         | exception Not_found -> []
-      ])
     | exception Not_found -> []
     ]
 ;
@@ -544,34 +506,7 @@ value start_entry_branch it ename i = do {
 }
 ;
 
-value dump f it = do {
-  let open Printf in
-  let node2string n = Node.print n in
-  let node2label n = Node.print n in
-  let state_label q = node2label q in
-  (* Header. *)
-  fprintf f "digraph G {\n";
-  fprintf f "rankdir = LR;\n";
-  fprintf f "ratio = auto;\n";
-  (* Vertices. *)
-  (nodes it)
-  |> List.iter (fun q ->
-         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
-           (node2string q)
-           (state_label q)
-           "circle"
-       );
-  (* Edges. *)
-    it.edges
-    |> List.iter (fun (src,lab,dst) ->
-           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
-             (node2string src)
-             (node2string dst)
-             (String.escaped (Label.print lab))
-         ) ;
-    fprintf f "}\n%!"
-}
-;
+value dump f it = G.dump f it.g ;
 end ;
 
 end ;
