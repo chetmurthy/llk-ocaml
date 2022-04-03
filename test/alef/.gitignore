@@ -1,0 +1,5 @@
+*.cm*
+*.o
+alef
+alef.opt
+aleflexer.ml
