@@ -190,7 +190,6 @@ type edge_t = (Node.t * option token * Node.t) ;
 
 type t = {
   nodes : ref (list Node.t)
-; node_labels : MHM.t Node.t string
 ; entry_map : MHM.t Name.t (Node.t * Node.t)
 ; entry_branch_map : MHM.t (Name.t * int) Node.t
 ; final_nodes : mutable list Node.t
@@ -203,7 +202,6 @@ type t = {
 
 value mk () =
   { nodes = ref []
-  ; node_labels = MHM.mk 23
   ; tokens = MHS.mk 23
   ; entry_map = MHM.mk 23
   ; entry_branch_map = MHM.mk 23
@@ -219,21 +217,11 @@ value add_node it n = do { Std.push it.nodes n ; n } ;
 value nodes it = it.nodes.val ;
 value tokens it = MHS.toList it.tokens ;
 
-value add_node_label it n s = MHM.add it.node_labels (n, s) ;
-value node_label it n =
-  match MHM.map it.node_labels n with [
-      x -> Some x
-    | exception Not_found -> None
-]
-;
-
 value new_entry it ename = do {
   assert (not (MHM.in_dom it.entry_map ename)) ;
   let snode = add_node it (Node.ENTER ename) in
   let enode = add_node it (Node.EXIT ename) in
   MHM.add it.entry_map (ename, (snode, enode)) ;
-  add_node_label it snode Fmt.(str "ENTER %s" (Name.print ename)) ;
-  add_node_label it enode Fmt.(str "EXIT %s" (Name.print ename)) ;
   (snode, enode)
 }
 ;
@@ -313,7 +301,6 @@ value start_entry_branch it ename i = do {
   let edge = (snode, None, n') in
   add_edge it edge ;
   add_entry_branch it ename i n' ;
-  add_node_label it n' Fmt.(str "%s:%d" (Name.print ename) i) ;
   n'
 }
 ;
@@ -321,12 +308,7 @@ value start_entry_branch it ename i = do {
 value dump f it = do {
   let open Printf in
   let node2string n = Node.print n in
-  let node2label n =
-    let s = Node.print n in
-    match node_label it n with [
-        None -> s
-      | Some l -> Fmt.(str "%s/%s" s l)
-      ] in
+  let node2label n = Node.print n in
   let final q = List.mem q it.final_nodes in
   let initial q = List.mem q it.initial_nodes in
   let state_label q =
@@ -569,6 +551,7 @@ module CompilingGrammar = struct
     ; atn_first: MHM.t Name.t (list (int * list token))
     ; atn_follow: MHM.t Name.t (list token)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list token))))
+    ; atn' : mutable ATN0'.Raw.t
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -586,6 +569,7 @@ module CompilingGrammar = struct
                 ; atn_first = MHM.mk 23
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
+                ; atn' = ATN0'.Raw.mk ()
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -617,6 +601,8 @@ module CompilingGrammar = struct
   value gram_atn cg = (snd cg).atn ;
   value gram_eclosure cg = (snd cg).eclosure ;
   value gram_atn_ec cg = ((snd cg).atn, (snd cg).eclosure) ;
+
+  value gram_atn' cg = (snd cg).atn' ;
 
   value adjust0_loc loc loc' =
     Ploc.(make_loc
@@ -3214,6 +3200,50 @@ value grammar it cg = do {
 ;
 end ;
 
+module DFA = struct
+
+module CFG = struct
+type t = { node : Node.t ; branch : int ; stack : list Node.t } ;
+
+value rec stacks_equiv s1 s2 =
+  s1=[] || s2=[] ||
+  let ls1 = List.length s1 in
+  let ls2 = List.length s2 in
+  if ls1 = ls2 then s1 = s2
+  else if ls1 < ls2 then
+    s1=(Std.nthtail s2 (ls2-ls1))
+  else
+    (Std.nthtail s1 (ls1-ls2))=s2
+;
+
+value equal c1 c2 =
+  c1.node = c2.node
+  && c1.branch = c2.branch
+  && stacks_equiv c1.stack c2.stack 
+;
+
+value strip c = { (c) with stack = [] } ;
+
+end ;
+
+module State = struct
+  value canon l = List.sort_uniq Stdlib.compare l ;
+
+end ;
+
+value create_dfa cg e =
+  let it = CG.gram_atn' cg in
+  let d0 =
+    let (snode, enode) = Raw.entry_nodes it e.ae_name  in
+    (List.hd e.ae_levels).al_rules.au_rules
+    |> List.mapi (fun i r ->
+           let r_snode = Raw.entry_branch it e.ae_name i in
+           { CFG.node = r_snode; branch = i ; stack = [] }
+         ) in
+  ()
+;
+end ;
+
 end ;
 
 module BuildATN = struct
@@ -3222,6 +3252,7 @@ value exec cg = do {
   ATN.Build.grammar (CG.gram_atn cg) cg ;
   let eclosure = ATN.epsilon_closure(CG.gram_atn cg) in
   (snd cg).eclosure := eclosure ;
+  ATN'.Build.grammar (CG.gram_atn' cg) cg ;
   cg
 }
 ;
