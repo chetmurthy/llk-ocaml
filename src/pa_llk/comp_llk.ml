@@ -3105,7 +3105,102 @@ value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_
 ;
 
 end ;
+
+
 module ATN' = struct
+open Token ;
+include ATN0' ;
+
+module Build = struct
+value symbol it (snode, enode) = fun [
+  ASflag _ _ _ | ASopt _ _ _
+  | ASlist _ _ _ _ _
+  | ASnext _ _
+  | ASnterm _ _ _ (Some _)
+  | ASrules _ _
+  | ASself _ _
+  | ASvala _ _ _
+  | ASleft_assoc _ _ _ _ _
+
+  -> assert False
+
+  | ASkeyw _ tok -> Raw.add_edge it (snode, Label.TOKEN (SPCL tok), enode)
+  | ASnterm _ nt _ None -> Raw.add_edge it (snode, Label.NTERM nt, enode)
+
+  | ASregexp _ _
+  | ASpriority _ _
+  | ASsyntactic _ _
+
+    -> Raw.add_edge it (snode, Label.EPS, enode)
+
+  | AStok _ cls tokopt ->
+    Raw.add_edge it (snode, Label.TOKEN (CLS cls tokopt), enode)
+
+  | ASanti _ anti_kinds ->
+    let l = anti_kinds |> List.concat_map (fun s -> [(ANTI s); (ANTI ("_"^s))]) in
+    l |> List.iter (fun tok ->
+        Raw.add_edge it (snode, Label.TOKEN tok, enode))
+  ]
+;
+
+value rec psymbols it (e, bnum) i (snode, enode) = fun [
+  [] -> Raw.add_edge it (snode, Label.EPS, enode)
+| [h] -> symbol it (snode, enode) h.ap_symb
+| [h :: t] -> do {
+    let mid = Raw._add_node it (Node.IN_BRANCH e.ae_name bnum i) in
+    symbol it (snode, mid) h.ap_symb ;
+    psymbols it (e, bnum) (i+1) (mid, enode) t
+  }
+]
+;
+
+value rule it e (snode, enode) bnum r =
+  psymbols it (e, bnum) 1 (snode, enode) r.ar_psymbols ;
+
+value entry it e =
+  let (e_snode, e_enode) = Raw.entry_nodes it e.ae_name in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.iteri (fun i r ->
+         let r_snode = Raw.start_entry_branch it e.ae_name i in
+         rule it e (r_snode, e_enode) i r
+       )
+;
+
+value external_entry cg it (ename, rex) =
+  let (snode, enode) = Raw.entry_nodes it ename in
+  let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
+  let is_nullable = C.BEval.nullable rex in
+  let nulls = if is_nullable then [None] else [] in
+  let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
+  (toks@nulls)
+  |> List.iteri (fun i -> fun [
+    Some tok ->
+    let n' = Raw._add_node it (Node.BHOLE ename i) in do {
+      Raw.add_edge it (snode, Label.TOKEN tok, n') ;
+      Raw.mark_bhole it n'
+    }
+  | None -> Raw.mark_bhole it snode
+  ])
+;
+
+value grammar it cg = do {
+  (CG.gram_entries cg) |> List.iter (entry it) ;
+  (CG.g cg).gram_exports
+  |> List.iter (fun ename -> 
+         let (snode, enode) = Raw.entry_nodes it ename in do {
+                  Raw.add_edge it (enode, Label.TOKEN (CLS "EOI" None), enode)
+                }
+       ) ;
+  (CG.gram_externals cg) |> List.iter (external_entry cg it)
+}
+;
+end ;
+
+
+end ;
+
+module ATNBusted = struct
 open Token ;
 include ATN0' ;
 
