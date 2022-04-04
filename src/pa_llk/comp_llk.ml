@@ -3355,33 +3355,37 @@ type t =
   {
     g : G.t
   ; ctr : Ctr.t
-  ; init : Node.t
+  ; init : mutable Node.t
   ; final : list Node.t
   ; interner : InternState.t
   }
   ;
 
+value new_state dfa rst =
+  let open Node in
+  let rst = InternState.canon dfa.interner rst in
+  match InternState.intern dfa.interner rst with [
+      Some st -> INTERNAL st
+    | None -> do {
+        let n = Ctr.next dfa.ctr in
+        InternState.add dfa.interner rst n ;
+        INTERNAL n
+      }
+    ]
+;
+
 value mk init final = do {
   let open Node in
-  let ctr = Ctr.mk() in
-  let interner = InternState.mk() in
-  let init = InternState.canon interner init in
-  InternState.add interner init (Ctr.next ctr) ;
-  let init = match InternState.intern interner init with [
-        None -> assert False
-       | Some init -> INTERNAL init
-      ] in
-  let g = G.mk() in do {
-    ignore (G.add_node g init) ;
-    final |> List.iter (fun n -> ignore(G.add_node g n)) ;
-    {
-      g = g
-    ; ctr = ctr
-    ; init = init
+  let dfa = {
+      g = G.mk()
+    ; ctr = Ctr.mk()
+    ; init = INTERNAL (-1)
     ; final = final
-    ; interner = interner
-    }
-  }
+    ; interner = InternState.mk()
+    } in
+  dfa.init := new_state dfa init ;
+  final |> List.iter (fun n -> ignore(G.add_node dfa.g n)) ;
+  dfa
 }
 ;
 end ;
