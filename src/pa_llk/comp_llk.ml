@@ -499,6 +499,9 @@ value add_edge it ((src, lab, dst) as e) = do {
        ])
 }
 ;
+value edge_labels it src = G.edge_labels it.g src ;
+
+value traverse it src lab = G.traverse it.g src lab ;
 
 value nonterm_edges it nt =
   match MHM.map it.nonterm_edges_ht nt with [
@@ -541,11 +544,12 @@ module CompilingGrammar = struct
     ; gram_externals: mutable list (Name.t * regexp)
     ; errors : mutable list error_t
     ; atn : mutable ATN0.Raw.t
-    ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
+    ; atn_eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
     ; atn_first: MHM.t Name.t (list (int * list Token.t))
     ; atn_follow: MHM.t Name.t (list Token.t)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; atn' : mutable ATN0'.Raw.t
+    ; atn'_eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -559,11 +563,12 @@ module CompilingGrammar = struct
                 ; gram_externals = []
                 ; errors = []
                 ; atn = ATN0.Raw.mk ()
-                ; eclosure = MHM.mk 23
+                ; atn_eclosure = MHM.mk 23
                 ; atn_first = MHM.mk 23
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
                 ; atn' = ATN0'.Raw.mk ()
+                ; atn'_eclosure = MHM.mk 23
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -593,10 +598,10 @@ module CompilingGrammar = struct
   ;
 
   value gram_atn cg = (snd cg).atn ;
-  value gram_eclosure cg = (snd cg).eclosure ;
-  value gram_atn_ec cg = ((snd cg).atn, (snd cg).eclosure) ;
+  value gram_atn_ec cg = ((snd cg).atn, (snd cg).atn_eclosure) ;
 
   value gram_atn' cg = (snd cg).atn' ;
+  value gram_atn'_ec cg = ((snd cg).atn, (snd cg).atn'_eclosure) ;
 
   value adjust0_loc loc loc' =
     Ploc.(make_loc
@@ -643,7 +648,7 @@ module CompilingGrammar = struct
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
 
-  value epsilon_closure cg st = MHM.map (snd cg).eclosure st ;
+  value epsilon_closure cg st = MHM.map (snd cg).atn_eclosure st ;
 
 end ;
 module CG = CompilingGrammar ;
@@ -3198,6 +3203,35 @@ value grammar it cg = do {
 end ;
 
 
+value eclosure it n =
+  let acc = ref [n] in
+  let rec erec n =
+    Raw.traverse it n Label.EPS
+    |> List.iter (fun n' ->
+           if (not (List.mem n' acc.val)) then do {
+             Std.push acc n' ;
+             erec n'
+           }
+           else ()
+         )
+  in do {
+    erec n ;
+    acc.val
+  }
+;
+
+value epsilon_closure it : MHM.t Node.t (list Node.t) = do {
+  let ht = MHM.mk 23 in
+  (Raw.nodes it)
+  |> List.iter (fun n ->
+         let l = eclosure it n in
+         MHM.add ht (n, l)
+       ) ;
+  ht
+}
+;
+
+
 end ;
 
 module BuildATN = struct
@@ -3205,8 +3239,10 @@ module BuildATN = struct
 value exec cg = do {
   ATN.Build.grammar (CG.gram_atn cg) cg ;
   let eclosure = ATN.epsilon_closure(CG.gram_atn cg) in
-  (snd cg).eclosure := eclosure ;
+  (snd cg).atn_eclosure := eclosure ;
   ATN'.Build.grammar (CG.gram_atn' cg) cg ;
+  let eclosure' = ATN'.epsilon_closure(CG.gram_atn' cg) in
+  (snd cg).atn'_eclosure := eclosure ;
   cg
 }
 ;
