@@ -35,13 +35,19 @@ value print_token_option = fun [
 ;
 
 module Ctr = struct
+  type t = ref int ;
+  value mk ?{initv=0} () = ref initv ;
+  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+end ;
+
+module StringCtr = struct
   type t = { it : Hashtbl.t string (ref int) } ;
   value mk () = { it = Hashtbl.create 23 } ;
   value find {it=it} s =
     match Hashtbl.find it s with [
         x -> x
       | exception Not_found -> do {
-          let v = ref 1 in
+          let v = Ctr.mk ~{initv=1} () in
           Hashtbl.add it s v ;
           v
         }
@@ -50,7 +56,7 @@ module Ctr = struct
   value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
   value fresh_name root it =
     let r = find it (fst root) in
-    let n = next r in
+    let n = Ctr.next r in
     Name.fresh root n
   ;
 end ;
@@ -529,7 +535,7 @@ end ;
 module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
-      ctr : Ctr.t
+      ctr : StringCtr.t
     ; gram_alphabet : mutable list Token.t
     ; gram_regexps: mutable list (Name.t * regexp)
     ; gram_externals: mutable list (Name.t * regexp)
@@ -544,10 +550,10 @@ module CompilingGrammar = struct
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
- value fresh_name cg x = Ctr.fresh_name x (snd cg).ctr ;
+ value fresh_name cg x = StringCtr.fresh_name x (snd cg).ctr ;
 
   value mk t = (t, {
-                  ctr = Ctr.mk()
+                  ctr = StringCtr.mk()
                 ; gram_alphabet = []
                 ; gram_regexps = []
                 ; gram_externals = []
@@ -3190,33 +3196,94 @@ value grammar it cg = do {
 end ;
 
 module type CANONICALSIG = sig
+  type canonicalizer_t = 'b ;
+  value mk : unit -> canonicalizer_t ;
+
+  type t = 'a [@@deriving (show,eq,ord) ;] ;
+  value canon : canonicalizer_t -> t -> t;
+end ;
+
+module type CANONICALIZABLESIG = sig
   type t = 'a [@@deriving (show,eq,ord) ;] ;
   value canon : t -> t ;
+  value strip : t -> t ;
+  value equiv : t -> t -> bool ;
 end ;
+
+module Canonicalize(C : CANONICALIZABLESIG)
+       : (CANONICALSIG with type t = C.t) = struct
+  type t = C.t [@@deriving (show,eq,ord) ;] ;
+  type canonicalizer_t =
+    {
+      stripmap : MHM.t t (ref (list t))
+    ; canonmap : MHM.t t t
+    }
+    ;
+  value mk () = 
+    {
+      stripmap = MHM.mk 23
+    ; canonmap = MHM.mk 23
+    } ;
+  value canon it x =
+    let x = C.canon x in
+    match MHM.map it.canonmap x with [
+        x -> x
+      | exception Not_found ->
+         let stripx = C.strip x in
+         let xref = match MHM.map it.stripmap stripx with [
+               x -> x
+             | exception Not_found -> do {
+                 let xref = ref [] in
+                 MHM.add it.stripmap (stripx, xref) ;
+                 xref
+               }
+             ] in
+         let y = match List.find_opt (C.equiv x) xref.val with [
+               Some y -> y
+             | None -> do {
+                 Std.push xref x ;
+                 x
+               }
+             ] in do {
+          MHM.add it.canonmap (x,y) ;
+          y
+        }
+      ]
+  ;
+
+end ;
+
 module type INTERNEDSIG = sig type t = 'a; end ;
 
-module type SYMTABSIG = sig
+module type INTERNTAB = sig
   module Underlying : CANONICALSIG ;
   module Interned : INTERNEDSIG ;
 
   type t = 'c ;
   value mk : unit -> t ;
+  value canon : t -> Underlying.t -> Underlying.t ;
   value intern : t -> Underlying.t -> option Interned.t ;
   value extern : t -> Interned.t -> Underlying.t ;
   value add : t -> Underlying.t -> Interned.t -> unit ;
 end ;
 
 module Intern(U : CANONICALSIG)(I : INTERNEDSIG)
-     : (SYMTABSIG with module Underlying = U and module Interned = I)
+     : (INTERNTAB with module Underlying = U and module Interned = I)
  = struct
   module Underlying = U ;
   module Interned = I ;
   type t = {
       m : MHBIJ.t Underlying.t Interned.t
+    ; canon: U.canonicalizer_t
     } ;
-  value mk () = { m = MHBIJ.mk (23, 23) } ;
+  value mk () =
+    {
+      m = MHBIJ.mk (23, 23)
+    ; canon = U.mk ()
+    } ;
+  value canon it x = U.canon it.canon x ;
   value intern it x =
-    let x = U.canon x in
+    let x = canon it x in
     match MHBIJ.map it.m x with [
         x -> Some x
       | exception Not_found -> None
@@ -3224,7 +3291,7 @@ module Intern(U : CANONICALSIG)(I : INTERNEDSIG)
   ;
 
   value add it x y = do {
-    let x = U.canon x in
+    let x = canon it x in
     MHBIJ.add it.m (x,y)
   }
   ;
@@ -3235,7 +3302,8 @@ end ;
 module BuildDFA = struct
 
 module CFG = struct
-type t = { node : Node.t ; branch : int ; stack : list Node.t } ;
+type t = { node : Node.t ; branch : int ; stack : list Node.t }
+           [@@deriving (show,eq,ord) ;] ;
 
 value rec stacks_equiv s1 s2 =
   s1=[] || s2=[] ||
@@ -3248,7 +3316,7 @@ value rec stacks_equiv s1 s2 =
     (Std.nthtail s1 (ls1-ls2))=s2
 ;
 
-value equal c1 c2 =
+value equiv c1 c2 =
   c1.node = c2.node
   && c1.branch = c2.branch
   && stacks_equiv c1.stack c2.stack 
@@ -3258,20 +3326,79 @@ value strip c = { (c) with stack = [] } ;
 
 end ;
 
-module State = struct
+module RawState = struct
+  type t = list CFG.t [@@deriving (show,eq,ord) ;] ;
   value canon l = List.sort_uniq Stdlib.compare l ;
+  value strip l = List.map CFG.strip l ;
+  value equiv l1 l2 =
+    l1 |> List.for_all (fun c1 -> l2 |> List.exists (fun c2 -> CFG.equiv c1 c2))
+    &&  l2 |> List.for_all (fun c2 -> l1 |> List.exists (fun c1 -> CFG.equiv c2 c1)) ;
 
+end ;
+
+module CanonState = Canonicalize(RawState) ;
+module InternState = Intern(CanonState)(struct type t = int; end) ;
+
+module DFA = struct
+
+module Node = struct
+  type t = [ FINAL of int | INTERNAL of int ] [@@deriving (show,eq,ord) ;] ;
+  value print = fun [ FINAL n -> Fmt.(str "FINAL %d" n) | INTERNAL n -> Fmt.(str "INTERNAL %d" n) ] ;
+end ;
+module Label = struct
+  type t = Token.t [@@deriving (show,eq,ord) ;] ;
+  value print = Token.print ;
+end ;
+module G = Graph(Node)(Label) ;
+
+type t = 
+  {
+    g : G.t
+  ; ctr : Ctr.t
+  ; init : Node.t
+  ; final : list Node.t
+  ; interner : InternState.t
+  }
+  ;
+
+value mk init final = do {
+  let open Node in
+  let ctr = Ctr.mk() in
+  let interner = InternState.mk() in
+  let init = InternState.canon interner init in
+  InternState.add interner init (Ctr.next ctr) ;
+  let init = match InternState.intern interner init with [
+        None -> assert False
+       | Some init -> INTERNAL init
+      ] in
+  let g = G.mk() in do {
+    ignore (G.add_node g init) ;
+    final |> List.iter (fun n -> ignore(G.add_node g n)) ;
+    {
+      g = g
+    ; ctr = ctr
+    ; init = init
+    ; final = final
+    ; interner = interner
+    }
+  }
+}
+;
 end ;
 
 value create_dfa cg e =
   let it = CG.gram_atn' cg in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
   let d0 =
     let (snode, enode) = Raw.entry_nodes it e.ae_name  in
-    (List.hd e.ae_levels).al_rules.au_rules
+    rl
     |> List.mapi (fun i r ->
            let r_snode = Raw.entry_branch it e.ae_name i in
            { CFG.node = r_snode; branch = i ; stack = [] }
          ) in
+  let d0 = RawState.canon d0 in
+  let finals = rl |> List.mapi (fun i _ -> DFA.Node.FINAL i) in
+  let dfa = DFA.mk d0 finals in
   ()
 ;
 end ;
