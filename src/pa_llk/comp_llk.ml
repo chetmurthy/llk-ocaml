@@ -549,7 +549,7 @@ module CompilingGrammar = struct
     ; atn_follow: MHM.t Name.t (list Token.t)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; atn' : mutable ATN0'.Raw.t
-    ; atn'_eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
+    ; atn'_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -568,7 +568,7 @@ module CompilingGrammar = struct
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
                 ; atn' = ATN0'.Raw.mk ()
-                ; atn'_eclosure = MHM.mk 23
+                ; atn'_firstk = MHM.mk 23
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -599,9 +599,9 @@ module CompilingGrammar = struct
 
   value gram_atn cg = (snd cg).atn ;
   value gram_atn_ec cg = ((snd cg).atn, (snd cg).atn_eclosure) ;
+  value atn_epsilon_closure cg st = MHM.map (snd cg).atn_eclosure st ;
 
   value gram_atn' cg = (snd cg).atn' ;
-  value gram_atn'_ec cg = ((snd cg).atn, (snd cg).atn'_eclosure) ;
 
   value adjust0_loc loc loc' =
     Ploc.(make_loc
@@ -645,10 +645,11 @@ module CompilingGrammar = struct
   value set_atn_firstk cg ename l = MHM.add (snd cg).atn_firstk (ename, l) ;
   value atn_firstk cg ename = MHM.map (snd cg).atn_firstk ename ;
 
+  value set_atn'_firstk cg ename l = MHM.add (snd cg).atn'_firstk (ename, l) ;
+  value atn'_firstk cg ename = MHM.map (snd cg).atn'_firstk ename ;
+
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
-
-  value epsilon_closure cg st = MHM.map (snd cg).atn_eclosure st ;
 
 end ;
 module CG = CompilingGrammar ;
@@ -2994,7 +2995,7 @@ value step1 loc (cg : CG.t) (it, ec) (st : Node.t) = do {
     raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
   else () ;
   let acc = ref [] in
-  CG.epsilon_closure cg st
+  CG.atn_epsilon_closure cg st
   |> List.iter (fun st ->
          let labs = Raw.edge_labels it st in
          labs
@@ -3202,35 +3203,253 @@ value grammar it cg = do {
 ;
 end ;
 
+(** NOTES ON TYPES
 
-value eclosure it n =
-  let acc = ref [n] in
-  let rec erec n =
-    Raw.traverse it n Label.EPS
-    |> List.iter (fun n' ->
-           if (not (List.mem n' acc.val)) then do {
-             Std.push acc n' ;
-             erec n'
-           }
-           else ()
-         )
+    A state of the ATN is always a "node" of the graph.  But a
+    "configuration" is a state plus a possibly-empty stack of states,
+    and it is with these configurations that we work from here down
+    unless otherwise specified.
+
+ *)
+
+
+(** closure cg [cfgs]
+
+    computes the set of configurations reachable from the argument set of
+    configurations by only epsilon-transitions, but also by entering subsidiary
+    nonterminals or by exiting to surrounding/subsequent nonterminals.
+
+    closure is always given a set of configurations and returns a set (b/c
+    this way we minimize excess work.  the result always includes the argument.
+
+    Algorithm:
+
+    For each cfg in the work-list:
+
+      If the cfg.state is an EXIT-state and the cfg.stack is nonempty, then pop a state
+      -- this is the next configuration
+
+      get all edge-labels outbound from cfg.state:
+
+        for an EPS edge-label, all dst states are added to worklist
+
+        for a NONTERM edge-label, get all dst-states; get the start-state of the nonterm's
+        ATN.  next configurations are to enter that ATN, stacking each dst-state.
+ *)
+
+value closure cg cfgs =
+  let acc = ref cfgs in
+  let rec clrec0 = fun [
+        (Node.EXIT _, [h::t]) -> clrec1 (h,t)
+      | (Node.EXIT nt, []) ->
+         let l = Raw.nonterm_edges (CG.gram_atn' cg) nt in
+         l |> List.iter (fun (_, _, dst) ->
+                  clrec1 (dst, []))
+      | (n, stk) ->
+         let labs = Raw.edge_labels (CG.gram_atn' cg) n in
+         labs |> List.iter (fun [
+             Label.EPS as lab ->
+             let dsts = Raw.traverse (CG.gram_atn' cg) n lab in
+             dsts |> List.iter (fun dst -> clrec1 (dst,stk))
+           | TOKEN _ -> ()
+           | NTERM nt as lab ->
+              let (snode, _) = Raw.entry_nodes (CG.gram_atn' cg) nt in
+              let dsts = Raw.traverse (CG.gram_atn' cg) n lab in
+              dsts |> List.iter (fun dst -> clrec1 (snode, [dst :: stk]))
+           ])
+      ]
+  and clrec1 cfg =
+    if not (List.mem cfg acc.val) then do {
+      Std.push acc cfg;
+      clrec0 cfg
+    }
+    else ()
   in do {
-    erec n ;
+    List.iter clrec0 cfgs ;
     acc.val
   }
 ;
+(** step1 [it,ec] [st]:
 
-value epsilon_closure it : MHM.t Node.t (list Node.t) = do {
-  let ht = MHM.mk 23 in
-  (Raw.nodes it)
-  |> List.iter (fun n ->
-         let l = eclosure it n in
-         MHM.add ht (n, l)
-       ) ;
-  ht
+    From state [st], take one non-epsilon step in the ATN
+    returning the list of (tok * st) that are reached.
+
+    NOTE WELL: this assumes that (epsilon-)[closure] will
+    be performed prior to [step1]
+ *)
+
+value step1 loc (cg : CG.t) (st : Node.t) = do {
+  let it = CG.gram_atn' cg in
+  if Raw.is_bhole it st then
+    raise_failwithf loc "ATN'.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
+  else () ;
+  let labs = Raw.edge_labels it st in
+  labs
+  |> List.concat_map (fun [
+       Label.EPS|NTERM _ -> []
+    | (TOKEN tok) as lab ->
+       let dsts = Raw.traverse it st lab in
+       dsts |> List.map (fun dst -> (tok, dst))
+       ])
 }
 ;
 
+module TokPath = struct
+type cfg_t = (Node.t * list Node.t) ;
+type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; cfgs : list cfg_t } ;
+value branchnum p = p.branchnum ;
+value priority p = p.priority ;
+value tokpath p = p.tokpath ;
+value cfgs p = p.cfgs ;
+end ;
+module TP = TokPath ;
+
+
+(** extend1 loc cg [t]
+
+    [t] is a TokPath: extend it by one token.
+
+    To do this, we first apply [closure]: this produces more cfgs, but still only one TP.
+    Then for each cfg, we apply step1, producing pairs of (token * state), which we apply
+    to the current TP, producing a a list of new TP.
+ *)
+value extend1 loc cg t =
+  let open TP in
+  let cfgs = closure cg t.cfgs in
+  cfgs
+  |> List.concat_map (fun ((st, stk) as cfg) ->
+         let token_state_list = step1 loc cg st in
+         let token_cfg_list = token_state_list |> List.map (fun (tok, n) -> (tok,(n,stk))) in
+         token_cfg_list |> List.map (fun (tok, cfg) ->
+                               {(t) with tokpath = t.tokpath@[tok]; cfgs= [cfg]})
+       )
+;
+
+
+(** a partition-set is ambiguous if:
+
+    (1) a partition has empty token-list
+    (2) any partition has length>1 and priorities are not distinct
+ *)
+
+value ambiguous_partition (l : list TP.t) =
+  match l with [
+      [{TP.tokpath=[]} :: _] -> True
+    | l -> not (Std.distinct (List.map TP.priority l))
+    ]
+;
+
+value ambiguous (ll : list (list TP.t)) =
+  List.exists ambiguous_partition ll
+;
+
+value separate_paths l =
+  let open TP in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let (ambig_ll, ok_ll) = Ppxutil.filter_split ambiguous_partition ll in
+  (List.sort_uniq Stdlib.compare (List.concat ambig_ll),
+   List.sort_uniq Stdlib.compare (List.concat ok_ll))
+;
+
+(** extend_branches:
+
+  (1) partition by token-list
+  (2) the current set is ambiguous if any partition has length>1 or token-list=[]
+  (3) if not ambiguous
+  (4) for each length>1 partition, use [extend1] to extend each element
+  (5) partition by (branch-num, token-list) and union the state-sets
+ *)
+type branches_toks_list = list TP.t ;
+value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_list * branches_toks_list) =
+  let open TP in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let l = ll |> List.concat_map (fun [
+    [{tokpath=[_ :: _]}] as l -> l
+  | l -> l |> List.concat_map (extend1 loc cg)
+  ]) in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum && p1.tokpath=p2.tokpath) l in
+  let l = ll |> List.map (fun l ->
+    let p0 = List.hd l in
+    {(p0) with cfgs = List.concat_map TP.cfgs l}) in
+  separate_paths l
+;
+
+
+value rec compute_firstk_depth loc cg ename ~{depth} (ambig_l, ok_l) = do {
+  Fmt.(pf stderr "compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+         (Name.print ename) depth (List.length ambig_l) (List.length ok_l)) ;
+  if depth = 0 then
+    raise_failwithf (CG.adjust_loc cg loc) "compute_firstk_depth(%s): exceeded depth and still ambiguous" (Name.print ename)
+  else
+    let (ambig_l', ok_l') = extend_branches loc cg ambig_l in
+    if ambig_l'=[] then ok_l' @ ok_l
+    else compute_firstk_depth loc cg ename ~{depth=depth-1} (ambig_l', ok_l' @ ok_l)
+}
+;
+
+value is_regexp_prediction_entry e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
+;
+
+value compute_firstk ~{depth} cg e = do {
+  Fmt.(pf stderr "START compute_first(%s)\n%!" (Name.print e.ae_name)) ;
+  if S9SeparateSyntactic.is_syntactic_predicate_entry e then
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" (Name.print e.ae_name)
+  else if is_regexp_prediction_entry e then
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
+  else () ;
+  let open TP in
+  let atn = CG.gram_atn' cg in
+  let l =
+    (List.hd e.ae_levels).al_rules.au_rules
+    |> List.mapi (fun i r ->
+           let node = Raw.entry_branch atn e.ae_name i in
+           let priority = match r.ar_psymbols with [
+             [{ap_symb=ASpriority _ n} :: _] -> Some n
+           | _ -> None
+           ] in
+           {branchnum=i; priority=priority; tokpath=[]; cfgs=[(node,[])]}) in
+  let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} (l, []) in
+  let l =
+    l
+    |> Std.nway_partition (fun p1 p2 -> TP.tokpath p1 = TP.tokpath p2)
+    |> List.map (fun [
+         [] -> assert False
+       | [x] -> x
+       | l -> do {
+           assert (Std.distinct (List.map TP.priority l)) ;
+           List.fold_left (fun p1 p2 ->
+               match (p1.priority, p2.priority) with [
+                   (None, Some _) -> p2
+                 | (Some _, None) -> p1
+                 | (Some n, Some m) when n < m -> p1
+                 | (Some n, Some m) when n > m -> p1
+                 | _ -> assert False
+                 ]
+             ) (List.hd l) (List.tl l)
+         }
+       ]) in
+  l
+  |> Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum)
+  |> List.map (fun l ->
+         let p0 = List.hd l in
+         (p0.branchnum, List.map TP.tokpath l))
+}
+;
+
+value store_firstk cg e =
+  let lopt = match compute_firstk ~{depth=4} cg e with [
+        x -> Some x
+      | exception exn ->
+         let msg = Printexc.to_string exn in do {
+          Fmt.(pf stderr "%s\n%!" msg) ;
+          None
+        }
+      ] in
+  CG.set_atn'_firstk cg e.ae_name lopt
+;
 
 end ;
 
@@ -3241,8 +3460,6 @@ value exec cg = do {
   let eclosure = ATN.epsilon_closure(CG.gram_atn cg) in
   (snd cg).atn_eclosure := eclosure ;
   ATN'.Build.grammar (CG.gram_atn' cg) cg ;
-  let eclosure' = ATN'.epsilon_closure(CG.gram_atn' cg) in
-  (snd cg).atn'_eclosure := eclosure ;
   cg
 }
 ;
