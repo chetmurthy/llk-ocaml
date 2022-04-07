@@ -3263,7 +3263,7 @@ value exceeds_recursion_depth cfg =
           [x ; y :: t] ->
           if Node.equal x y then
             countrec (n+1) [y :: t]
-          else countrec 0 [y :: t]
+          else countrec 1 [y :: t]
         | [_] | [] -> False
       ] in
   countrec 0 l
@@ -3272,6 +3272,7 @@ value exceeds_recursion_depth cfg =
 value watch_clrec1 (x : CFG.t) = () ;
 value closure loc (cg : CG.t) cfgs =
   let acc = ref cfgs in
+  let bad = ref [] in
   let rec clrec0 = fun [
         (Node.EXIT _, [h::t]) -> clrec1 (h,t)
       | (Node.EXIT nt, []) ->
@@ -3293,11 +3294,14 @@ value closure loc (cg : CG.t) cfgs =
       ]
   and clrec1 cfg = do { watch_clrec1 cfg ; clrec1' cfg }
   and clrec1' cfg =
-    if exceeds_recursion_depth cfg then
+    if List.mem cfg bad.val then ()
+    else if exceeds_recursion_depth cfg then do {
       let loc = CG.adjust_loc cg loc in
       Fmt.(pf stderr "%s: ATN'.closure: configuration exceeds recursion: %a\n%!"
              (Ploc.string_of_location loc)
-             CFG.pp_hum cfg)
+             CFG.pp_hum cfg) ;
+      Std.push bad cfg
+    }
     else if not (List.mem cfg acc.val) then do {
       Std.push acc cfg;
       clrec0 cfg

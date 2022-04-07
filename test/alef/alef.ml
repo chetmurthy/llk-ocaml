@@ -20,7 +20,7 @@ value loc_strip_comment loc = Ploc.with_comment loc "" ;
 {foo|
 GRAMMAR Alef:
   EXTEND g ;
-    EXPORT: program program_eoi decllist decl zargs ztname adtfunc typespec ztag zpolytype polytype setlist
+    EXPORT: program decllist decl zargs ztname adtfunc typespec ztag zpolytype polytype setlist
       sname name memberlist vardecllist ivardecl zinit zelist vardecl arrayspec indsp arglist
       arglistp arg tuplearg autolist autodecl block slist tbody ctlist tcase cbody clist case_ rbody
       zlab stmnt info nlstmnt zconst zexpr expr_ castexpr typecast monexpr ztelist telist tcomp
@@ -31,8 +31,6 @@ REGEXPS:
   check_lparen_indsp = "(" "*"+ ;
   check_vardecl = IDENTIFIER | check_indsp IDENTIFIER | check_lparen_indsp IDENTIFIER | check_indsp_lparen check_indsp IDENTIFIER ;
 END;
-    
-    program_eoi: [ [ x = program ; EOI -> x ] ] ;
     
     program:
       
@@ -156,11 +154,11 @@ END;
     arg:
       
       [ [ xtname
-        | xtname; check_indsp; indsp; GREEDY OPT arrayspec
-        | xtname; check_lparen_indsp; "("; indsp; ")"; "("; GREEDY OPT arglist; ")"
-        | xtname; check_indsp_lparen; indsp; "("; indsp; ")"; "("; GREEDY OPT arglist; ")"
+        | xtname; indsp; GREEDY OPT arrayspec
+        | xtname; "("; indsp; ")"; "("; GREEDY OPT arglist; ")"
+        | xtname; indsp; "("; indsp; ")"; "("; GREEDY OPT arglist; ")"
         | "tuple"; tuplearg
-        | xtname; check_vardecl ; vardecl
+        | xtname; vardecl
         | "."; "."; "." ] ]
     ;
     tuplearg:
