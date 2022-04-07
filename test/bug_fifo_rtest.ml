@@ -21,7 +21,7 @@ GRAMMAR Revised:
       [ e1 = SELF ; "[@" ; "]" ->
         <:module_type< $e1$ [@foo (); ] >>
       ]
-    | [ mt = SELF; "with"; wc = with_constr →
+    | LEFTA [ mt = SELF; "with"; wc = with_constr →
           <:module_type< $mt$ with $list:[wc]$ >> ]
     | [ "sig"; sg = signature; "end" →
           <:module_type< sig $_list:sg$ end >> ]
@@ -52,7 +52,7 @@ GRAMMAR Revised:
       ]
     | "below_alg_attribute" [ t = NEXT -> t ]
     | "arrow" NONA
-      [ t1 = NEXT ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
+      [ t1 = NEXT ; PRIORITY 1 ; "->"; t2 = SELF → <:ctyp< $t1$ → $t2$ >>
       | t1 = NEXT -> t1
       ]
     | "simple"

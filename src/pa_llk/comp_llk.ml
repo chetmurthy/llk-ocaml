@@ -173,10 +173,12 @@ module MSM = MutSetMap ;
 module type NODESIG = sig
   type t = 'a [@@deriving (show,eq,ord) ;];
   value print : t -> string ;
+  value pp_hum : Fmt.t t ;
 end ;
 module type LABELSIG = sig
   type t = 'a [@@deriving (show,eq,ord) ;];
   value print : t -> string ;
+  value pp_hum : Fmt.t t ;
 end;
 
 module type GRAPHSIG = sig
@@ -302,6 +304,7 @@ module Node = struct
   | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
   | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
   ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
 
 module Label = struct
@@ -310,6 +313,7 @@ module Label = struct
     None -> "eps"
   | Some t -> Token.print t
   ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end;
 
 module G = Graph(Node)(Label) ;
@@ -419,6 +423,7 @@ module Node = struct
   | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
   | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
   ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
 
 module Label = struct
@@ -434,6 +439,7 @@ module Label = struct
     | TOKEN tok -> Token.print tok
     | NTERM n -> Name.print n
   ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
 
 module G = Graph(Node)(Label) ;
@@ -549,7 +555,6 @@ module CompilingGrammar = struct
     ; atn_follow: MHM.t Name.t (list Token.t)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; atn' : mutable ATN0'.Raw.t
-    ; atn'_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -568,7 +573,6 @@ module CompilingGrammar = struct
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
                 ; atn' = ATN0'.Raw.mk ()
-                ; atn'_firstk = MHM.mk 23
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -644,9 +648,6 @@ module CompilingGrammar = struct
 
   value set_atn_firstk cg ename l = MHM.add (snd cg).atn_firstk (ename, l) ;
   value atn_firstk cg ename = MHM.map (snd cg).atn_firstk ename ;
-
-  value set_atn'_firstk cg ename l = MHM.add (snd cg).atn'_firstk (ename, l) ;
-  value atn'_firstk cg ename = MHM.map (snd cg).atn'_firstk ename ;
 
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
@@ -3212,6 +3213,20 @@ end ;
 
  *)
 
+module CFG = struct
+type t = (Node.t * list Node.t) [@@deriving (show,eq,ord) ;] ;
+value pp_hum pps (h,t) = Fmt.(pf pps "[%a]" (list ~{sep=const string " "} Node.pp_hum) [h::t]) ;
+value print x = Fmt.(str "%a" pp_hum x) ;
+end ;
+module TokPath = struct
+type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; cfgs : list CFG.t }
+           [@@deriving (show,eq,ord) ;] ;
+value branchnum p = p.branchnum ;
+value priority p = p.priority ;
+value tokpath p = p.tokpath ;
+value cfgs p = p.cfgs ;
+end ;
+module TP = TokPath ;
 
 (** closure cg [cfgs]
 
@@ -3237,7 +3252,25 @@ end ;
         ATN.  next configurations are to enter that ATN, stacking each dst-state.
  *)
 
-value closure cg cfgs =
+value max_recursion_depth = ref 2 ;
+
+value exceeds_recursion_depth cfg =
+  let l = [fst cfg :: snd cfg] in
+  let l = List.stable_sort Node.compare l in
+  let rec countrec n l =
+    n > max_recursion_depth.val ||
+      match l with [
+          [x ; y :: t] ->
+          if Node.equal x y then
+            countrec (n+1) [y :: t]
+          else countrec 0 [y :: t]
+        | [_] | [] -> False
+      ] in
+  countrec 0 l
+;
+
+value watch_clrec1 (x : CFG.t) = () ;
+value closure loc (cg : CG.t) cfgs =
   let acc = ref cfgs in
   let rec clrec0 = fun [
         (Node.EXIT _, [h::t]) -> clrec1 (h,t)
@@ -3258,8 +3291,14 @@ value closure cg cfgs =
               dsts |> List.iter (fun dst -> clrec1 (snode, [dst :: stk]))
            ])
       ]
-  and clrec1 cfg =
-    if not (List.mem cfg acc.val) then do {
+  and clrec1 cfg = do { watch_clrec1 cfg ; clrec1' cfg }
+  and clrec1' cfg =
+    if exceeds_recursion_depth cfg then
+      let loc = CG.adjust_loc cg loc in
+      Fmt.(pf stderr "%s: ATN'.closure: configuration exceeds recursion: %a\n%!"
+             (Ploc.string_of_location loc)
+             CFG.pp_hum cfg)
+    else if not (List.mem cfg acc.val) then do {
       Std.push acc cfg;
       clrec0 cfg
     }
@@ -3294,17 +3333,6 @@ value step1 loc (cg : CG.t) (st : Node.t) = do {
 }
 ;
 
-module TokPath = struct
-type cfg_t = (Node.t * list Node.t) ;
-type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; cfgs : list cfg_t } ;
-value branchnum p = p.branchnum ;
-value priority p = p.priority ;
-value tokpath p = p.tokpath ;
-value cfgs p = p.cfgs ;
-end ;
-module TP = TokPath ;
-
-
 (** extend1 loc cg [t]
 
     [t] is a TokPath: extend it by one token.
@@ -3315,7 +3343,7 @@ module TP = TokPath ;
  *)
 value extend1 loc cg t =
   let open TP in
-  let cfgs = closure cg t.cfgs in
+  let cfgs = closure loc cg t.cfgs in
   cfgs
   |> List.concat_map (fun ((st, stk) as cfg) ->
          let token_state_list = step1 loc cg st in
@@ -3448,7 +3476,7 @@ value store_firstk cg e =
           None
         }
       ] in
-  CG.set_atn'_firstk cg e.ae_name lopt
+  CG.set_atn_firstk cg e.ae_name lopt
 ;
 
 end ;
@@ -3556,7 +3584,7 @@ value store_firstk cg e =
 
 value exec cg = do {
     (CG.gram_entries cg)
-    |> List.iter (store_firstk cg) ;
+    |> List.iter (ATN'.store_firstk cg) ;
     (CG.gram_entries cg)
     |> List.iter (store_entry_branch_first cg) ;
     (CG.gram_entries cg)
