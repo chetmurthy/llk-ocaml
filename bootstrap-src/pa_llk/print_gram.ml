@@ -125,7 +125,7 @@ value rec rule ~{pctxt} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
             (fun () ->
               let s =
                 let pc = {(pc) with aft = ""} in
-                pprintf pc "%p →" (hlistl (semi_after (psymbol ~{pctxt=pctxt})) (psymbol ~{pctxt=pctxt})) sl
+                pprintf pc "%p" (hlistl (semi_after (psymbol ~{pctxt=pctxt})) (psymbol ~{pctxt=pctxt})) sl
               in
               Some s)
             (fun () -> None)

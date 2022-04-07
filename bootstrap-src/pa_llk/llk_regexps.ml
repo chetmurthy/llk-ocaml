@@ -13,7 +13,7 @@ module PatternBaseToken = struct
   value lident_re = Str.regexp "^[a-z_][a-zA-Z0-9_]*$" ;
   value is_lident s = Str.string_match lident_re s 0 ;
 
-  type t = [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ] ;
+  type t = [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ] [@@deriving (show,eq,ord) ;] ;
   value hash = Hashtbl.hash;
   value print = fun [
       SPCL s -> Printf.sprintf "\"%s\"" (String.escaped s)

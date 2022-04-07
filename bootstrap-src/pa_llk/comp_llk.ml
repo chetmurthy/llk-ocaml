@@ -26,23 +26,28 @@ value entry_labels e =
 value entry_position e = e.ae_pos ;
 value entry_location e = e.ae_loc ;
 
-type token = Llk_regexps.PatternBaseToken.t == [ CLS of string and option string | SPCL of string | ANTI of string | OUTPUT of int ]
-;
+module Token = Llk_regexps.PatternBaseToken ;
 
 value print_token_option = fun [
     None -> "eps"
-|   Some t -> PatternBaseToken.print t
+|   Some t -> Token.print t
 ]
 ;
 
 module Ctr = struct
+  type t = ref int ;
+  value mk ?{initv=0} () = ref initv ;
+  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+end ;
+
+module StringCtr = struct
   type t = { it : Hashtbl.t string (ref int) } ;
   value mk () = { it = Hashtbl.create 23 } ;
   value find {it=it} s =
     match Hashtbl.find it s with [
         x -> x
       | exception Not_found -> do {
-          let v = ref 1 in
+          let v = Ctr.mk ~{initv=1} () in
           Hashtbl.add it s v ;
           v
         }
@@ -51,7 +56,7 @@ module Ctr = struct
   value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
   value fresh_name root it =
     let r = find it (fst root) in
-    let n = next r in
+    let n = Ctr.next r in
     Name.fresh root n
   ;
 end ;
@@ -164,50 +169,46 @@ module MutSetMap : (MUTSETMAP with type set_t 'a = TS.t 'a) = struct
 end ;
 module MSM = MutSetMap ;
 
-module ATN0 = struct
 
-module Node = struct
-  type t = [
-      ENTER of Name.t
-    | EXIT of Name.t
-    | BRANCH of Name.t and int
-    | IN_BRANCH of Name.t and int and int
-    | BHOLE of Name.t and int
-  ] ;
-  value print = fun [
-    ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
-  | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
-  | BRANCH n i -> Fmt.(str "BRANCH %s %d" (Name.print n) i)
-  | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
-  | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
-  ] ;
+module type NODESIG = sig
+  type t = 'a [@@deriving (show,eq,ord) ;];
+  value print : t -> string ;
+  value pp_hum : Fmt.t t ;
+end ;
+module type LABELSIG = sig
+  type t = 'a [@@deriving (show,eq,ord) ;];
+  value print : t -> string ;
+  value pp_hum : Fmt.t t ;
+end;
+
+module type GRAPHSIG = sig
+  module Node : NODESIG ;
+  module Label : LABELSIG ;
+  type t = 'a ;
+  type edge_t = (Node.t * Label.t * Node.t) ;
+  value mk : unit -> t ;
+  value add_node : t -> Node.t -> Node.t ;
+  value nodes : t -> list Node.t ;
+  value add_edge : t -> edge_t -> unit ;
+  value edge_labels : t -> Node.t -> list Label.t ;
+  value traverse : t -> Node.t -> Label.t -> list Node.t ;
+  value dump : out_channel -> t -> unit ;
 end ;
 
-module Raw = struct
-type edge_t = (Node.t * option token * Node.t) ;
+module Graph(Node: NODESIG)(Label:LABELSIG)
+  : (GRAPHSIG with module Node = Node and module Label = Label) = struct
+module Node = Node ;
+module Label = Label ;
 
+type edge_t = (Node.t * Label.t * Node.t) ;
 type t = {
   nodes : ref (list Node.t)
-; node_labels : MHM.t Node.t string
-; entry_map : MHM.t Name.t (Node.t * Node.t)
-; entry_branch_map : MHM.t (Name.t * int) Node.t
-; final_nodes : mutable list Node.t
-; initial_nodes : mutable list Node.t
-; bhole_nodes : MHS.t Node.t
 ; edges: mutable list edge_t
-; edges_ht: MHM.t Node.t (MHM.t (option token) (ref (list Node.t)))
-; tokens : MHS.t (option token)
+; edges_ht: MHM.t Node.t (MHM.t Label.t (ref (list Node.t)))
 } ;
 
 value mk () =
   { nodes = ref []
-  ; node_labels = MHM.mk 23
-  ; tokens = MHS.mk 23
-  ; entry_map = MHM.mk 23
-  ; entry_branch_map = MHM.mk 23
-  ; final_nodes = []
-  ; bhole_nodes = MHS.mk 23
-  ; initial_nodes = []
   ; edges = []
   ; edges_ht = MHM.mk 23
   }
@@ -215,47 +216,8 @@ value mk () =
 
 value add_node it n = do { Std.push it.nodes n ; n } ;
 value nodes it = it.nodes.val ;
-value tokens it = MHS.toList it.tokens ;
-
-value add_node_label it n s = MHM.add it.node_labels (n, s) ;
-value node_label it n =
-  match MHM.map it.node_labels n with [
-      x -> Some x
-    | exception Not_found -> None
-]
-;
-
-value new_entry it ename = do {
-  assert (not (MHM.in_dom it.entry_map ename)) ;
-  let snode = add_node it (Node.ENTER ename) in
-  let enode = add_node it (Node.EXIT ename) in
-  MHM.add it.entry_map (ename, (snode, enode)) ;
-  add_node_label it snode Fmt.(str "ENTER %s" (Name.print ename)) ;
-  add_node_label it enode Fmt.(str "EXIT %s" (Name.print ename)) ;
-  (snode, enode)
-}
-;
-
-value entry_nodes it ename =
- match MHM.map it.entry_map ename with [
-   x -> x
- | exception Not_found -> new_entry it ename
- ]
-;
-
-value mark_final it n =
-  it.final_nodes := [n :: it.final_nodes]
-;
-
-value mark_initial it n =
-  it.initial_nodes := [n :: it.initial_nodes]
-;
-
-value mark_bhole it n = MHS.add n it.bhole_nodes ;
-value is_bhole it n = MHS.mem n it.bhole_nodes ;
 
 value add_edge it ((src, lab, dst) as e) = do {
-    MHS.add lab it.tokens ;
     it.edges := [e :: it.edges] ;
     let src_ht = match MHM.map it.edges_ht src with [
           x -> x
@@ -295,6 +257,132 @@ value traverse it src lab =
     ]
 ;
 
+value dump f it = do {
+  let open Printf in
+  let node2string n = Node.print n in
+  let node2label n = Node.print n in
+  let state_label q = node2label q in
+  (* Header. *)
+  fprintf f "digraph G {\n";
+  fprintf f "rankdir = LR;\n";
+  fprintf f "ratio = auto;\n";
+  (* Vertices. *)
+  (nodes it)
+  |> List.iter (fun q ->
+         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
+           (node2string q)
+           (state_label q)
+           "circle"
+       );
+  (* Edges. *)
+    it.edges
+    |> List.iter (fun (src,lab,dst) ->
+           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
+             (node2string src)
+             (node2string dst)
+             (String.escaped (Label.print lab))
+         ) ;
+    fprintf f "}\n%!"
+}
+;
+end ;
+
+module ATN0 = struct
+
+module Node = struct
+  type t = [
+      ENTER of Name.t
+    | EXIT of Name.t
+    | BRANCH of Name.t and int
+    | IN_BRANCH of Name.t and int and int
+    | BHOLE of Name.t and int
+  ] [@@deriving (show,eq,ord) ;] ;
+  value print = fun [
+    ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
+  | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
+  | BRANCH n i -> Fmt.(str "BRANCH %s %d" (Name.print n) i)
+  | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
+  | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
+  ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
+end ;
+
+module Label = struct
+  type t = option Token.t [@@deriving (show,eq,ord) ;] ;
+  value print = fun [
+    None -> "eps"
+  | Some t -> Token.print t
+  ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
+end;
+
+module G = Graph(Node)(Label) ;
+
+module Raw = struct
+type edge_t = (Node.t * Label.t * Node.t) ;
+
+type t = {
+  g : G.t
+; entry_map : MHM.t Name.t (Node.t * Node.t)
+; entry_branch_map : MHM.t (Name.t * int) Node.t
+; final_nodes : mutable list Node.t
+; initial_nodes : mutable list Node.t
+; bhole_nodes : MHS.t Node.t
+; tokens : MHS.t (Label.t)
+} ;
+
+value mk () =
+  { g = G.mk ()
+  ; tokens = MHS.mk 23
+  ; entry_map = MHM.mk 23
+  ; entry_branch_map = MHM.mk 23
+  ; final_nodes = []
+  ; bhole_nodes = MHS.mk 23
+  ; initial_nodes = []
+  }
+;
+
+value add_node it n = G.add_node it.g n ;
+value nodes it = G.nodes it.g ;
+value tokens it = MHS.toList it.tokens ;
+
+value new_entry it ename = do {
+  assert (not (MHM.in_dom it.entry_map ename)) ;
+  let snode = add_node it (Node.ENTER ename) in
+  let enode = add_node it (Node.EXIT ename) in
+  MHM.add it.entry_map (ename, (snode, enode)) ;
+  (snode, enode)
+}
+;
+
+value entry_nodes it ename =
+ match MHM.map it.entry_map ename with [
+   x -> x
+ | exception Not_found -> new_entry it ename
+ ]
+;
+
+value mark_final it n =
+  it.final_nodes := [n :: it.final_nodes]
+;
+
+value mark_initial it n =
+  it.initial_nodes := [n :: it.initial_nodes]
+;
+
+value mark_bhole it n = MHS.add n it.bhole_nodes ;
+value is_bhole it n = MHS.mem n it.bhole_nodes ;
+
+value add_edge it ((src, lab, dst) as e) = do {
+    MHS.add lab it.tokens ;
+    G.add_edge it.g e
+}
+;
+
+value edge_labels it src = G.edge_labels it.g src ;
+
+value traverse it src lab = G.traverse it.g src lab ;
+
 value entry_branch it ename i =
   MHM.map it.entry_branch_map (ename, i)
 ;
@@ -311,85 +399,180 @@ value start_entry_branch it ename i = do {
   let edge = (snode, None, n') in
   add_edge it edge ;
   add_entry_branch it ename i n' ;
-  add_node_label it n' Fmt.(str "%s:%d" (Name.print ename) i) ;
   n'
 }
 ;
 
-value dump f it = do {
-  let open Printf in
-  let node2string n = Node.print n in
-  let node2label n =
-    let s = Node.print n in
-    match node_label it n with [
-        None -> s
-      | Some l -> Fmt.(str "%s/%s" s l)
-      ] in
-  let final q = List.mem q it.final_nodes in
-  let initial q = List.mem q it.initial_nodes in
-  let state_label q =
-    let s = node2label q in
-    if initial q then 
-      Fmt.(str "INIT %s" s)
-    else
-      s
-  in
-  (* Header. *)
-  fprintf f "digraph G {\n";
-  fprintf f "rankdir = LR;\n";
-  fprintf f "ratio = auto;\n";
-  (* Vertices. *)
-  (nodes it)
-  |> List.iter (fun q ->
-         fprintf f "%s [ label=\"%s\", style = solid, shape = %s ] ;\n"
-           (node2string q)
-           (state_label q)
-           (if final q then "doublecircle" else "circle")
-       );
-  (* Edges. *)
-    it.edges
-    |> List.iter (fun (src,lab,dst) ->
-           fprintf f "%s -> %s [ label=\"%s\" ] ;\n"
-             (node2string src)
-             (node2string dst)
-             (String.escaped (match lab with [ None -> "eps" | Some t -> PatternBaseToken.print t ]))
-         ) ;
-    fprintf f "}\n%!"
+value dump f it = G.dump f it.g ;
+end ;
+end ;
+
+module ATN0' = struct
+module Node = struct
+  type t = [
+      ENTER of Name.t
+    | EXIT of Name.t
+    | BRANCH of Name.t and int
+    | IN_BRANCH of Name.t and int and int
+    | BHOLE of Name.t and int
+  ] [@@deriving (show,eq,ord) ;] ;
+  value print = fun [
+    ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
+  | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
+  | BRANCH n i -> Fmt.(str "BRANCH %s %d" (Name.print n) i)
+  | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
+  | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
+  ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
+end ;
+
+module Label = struct
+  type t = [
+      EPS
+    | TOKEN of Token.t
+    | NTERM of Name.t
+    ] [@@deriving (show,eq,ord) ;]
+  ;
+
+  value print = fun [
+      EPS -> "eps"
+    | TOKEN tok -> Token.print tok
+    | NTERM n -> Name.print n
+  ] ;
+  value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
+end ;
+
+module G = Graph(Node)(Label) ;
+
+module Raw = struct
+type t = {
+  g : G.t
+; entry_map : MHM.t Name.t (Node.t * Node.t)
+; entry_branch_map : MHM.t (Name.t * int) Node.t
+; bhole_nodes : MHS.t Node.t
+; nonterm_edges_ht: MHM.t Name.t (ref (list G.edge_t))
+; tokens : MHS.t Token.t
+} ;
+
+value mk () =
+  { g = G.mk()
+  ; tokens = MHS.mk 23
+  ; entry_map = MHM.mk 23
+  ; entry_branch_map = MHM.mk 23
+  ; bhole_nodes = MHS.mk 23
+  ; nonterm_edges_ht = MHM.mk 23
+  }
+;
+
+value _add_node it n = G.add_node it.g n ;
+value nodes it = G.nodes it.g ;
+value tokens it = MHS.toList it.tokens ;
+
+value new_entry it ename = do {
+  assert (not (MHM.in_dom it.entry_map ename)) ;
+  let snode = _add_node it (Node.ENTER ename) in
+  let enode = _add_node it (Node.EXIT ename) in
+  MHM.add it.entry_map (ename, (snode, enode)) ;
+  (snode, enode)
 }
 ;
+
+value entry_nodes it ename =
+ match MHM.map it.entry_map ename with [
+   x -> x
+ | exception Not_found -> new_entry it ename
+ ]
+;
+
+value mark_bhole it n = MHS.add n it.bhole_nodes ;
+value is_bhole it n = MHS.mem n it.bhole_nodes ;
+
+value add_edge it ((src, lab, dst) as e) = do {
+    (match lab with [ Label.TOKEN t -> MHS.add t it.tokens | _ -> ()]) ;
+    G.add_edge it.g e ;
+    (match lab with [
+         Label.NTERM nt ->
+         let nt_ref = match MHM.map it.nonterm_edges_ht nt with [
+               x -> x
+             | exception Not_found -> do {
+                 let x = ref [] in 
+                 MHM.add it.nonterm_edges_ht (nt, x) ;
+                 x
+               }
+             ] in
+         Std.push nt_ref e
+       | _ -> ()
+       ])
+}
+;
+value edge_labels it src = G.edge_labels it.g src ;
+
+value traverse it src lab = G.traverse it.g src lab ;
+
+value nonterm_edges it nt =
+  match MHM.map it.nonterm_edges_ht nt with [
+      x -> x.val
+    | exception Not_found -> []
+    ]
+;
+
+value entry_branch it ename i =
+  MHM.map it.entry_branch_map (ename, i)
+;
+
+value add_entry_branch it ename i n = do {
+  assert (not (MHM.in_dom it.entry_branch_map (ename, i))) ;
+  MHM.add it.entry_branch_map ((ename, i), n)
+}
+;
+
+value start_entry_branch it ename i = do {
+  let (snode, _) = entry_nodes it ename in
+  let n' = _add_node it (BRANCH ename i) in
+  let edge = (snode, Label.EPS, n') in
+  add_edge it edge ;
+  add_entry_branch it ename i n' ;
+  n'
+}
+;
+
+value dump f it = G.dump f it.g ;
 end ;
+
 end ;
 
 module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
-      ctr : Ctr.t
-    ; gram_alphabet : mutable list token
+      ctr : StringCtr.t
+    ; gram_alphabet : mutable list Token.t
     ; gram_regexps: mutable list (Name.t * regexp)
     ; gram_externals: mutable list (Name.t * regexp)
     ; errors : mutable list error_t
     ; atn : mutable ATN0.Raw.t
-    ; eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
-    ; atn_first: MHM.t Name.t (list (int * list token))
-    ; atn_follow: MHM.t Name.t (list token)
-    ; atn_firstk: MHM.t Name.t (option (list (int * list (list token))))
+    ; atn_eclosure : mutable MHM.t ATN0.Node.t (list ATN0.Node.t)
+    ; atn_first: MHM.t Name.t (list (int * list Token.t))
+    ; atn_follow: MHM.t Name.t (list Token.t)
+    ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
+    ; atn' : mutable ATN0'.Raw.t
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
 
- value fresh_name cg x = Ctr.fresh_name x (snd cg).ctr ;
+ value fresh_name cg x = StringCtr.fresh_name x (snd cg).ctr ;
 
   value mk t = (t, {
-                  ctr = Ctr.mk()
+                  ctr = StringCtr.mk()
                 ; gram_alphabet = []
                 ; gram_regexps = []
                 ; gram_externals = []
                 ; errors = []
                 ; atn = ATN0.Raw.mk ()
-                ; eclosure = MHM.mk 23
+                ; atn_eclosure = MHM.mk 23
                 ; atn_first = MHM.mk 23
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
+                ; atn' = ATN0'.Raw.mk ()
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -419,8 +602,10 @@ module CompilingGrammar = struct
   ;
 
   value gram_atn cg = (snd cg).atn ;
-  value gram_eclosure cg = (snd cg).eclosure ;
-  value gram_atn_ec cg = ((snd cg).atn, (snd cg).eclosure) ;
+  value gram_atn_ec cg = ((snd cg).atn, (snd cg).atn_eclosure) ;
+  value atn_epsilon_closure cg st = MHM.map (snd cg).atn_eclosure st ;
+
+  value gram_atn' cg = (snd cg).atn' ;
 
   value adjust0_loc loc loc' =
     Ploc.(make_loc
@@ -467,8 +652,6 @@ module CompilingGrammar = struct
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
 
-  value epsilon_closure cg st = MHM.map (snd cg).eclosure st ;
-
 end ;
 module CG = CompilingGrammar ;
 
@@ -488,19 +671,19 @@ value dump_gram oc cg msg = do {
     ) ;
     (match CG.atn_first cg e.ae_name with [
        atnfi ->
-       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} PatternBaseToken.pp) l n) in
+       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} Token.pp) l n) in
        Fmt.(pf stderr "ATN First:\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
      | exception Not_found -> ()
      ]) ;
     (match CG.atn_follow cg e.ae_name with [
        fo ->
-       Fmt.(pf stderr "ATN Follow: %a\n" (list ~{sep=const string " "} PatternBaseToken.pp) fo)
+       Fmt.(pf stderr "ATN Follow: %a\n" (list ~{sep=const string " "} Token.pp) fo)
      | exception Not_found -> ()
      ]) ;
     (match CG.atn_firstk cg e.ae_name with [
        Some atnfi ->
        let pp_branch pps (n, ll) =
-         let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} PatternBaseToken.pp) l n) in
+         let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} Token.pp) l n) in
          Fmt.(pf pps "%a" (list ~{sep=const string "\n\t"} pp1) ll) in
        Fmt.(pf stderr "ATN First(k):\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
 
@@ -602,6 +785,7 @@ end
 ;
 
 module S0Alphabet = struct
+  open Token ;
   value alphabet cg =
   let acc = ref [] in
   let dt = Llk_migrate.make_dt () in
@@ -613,7 +797,7 @@ module S0Alphabet = struct
       ] in
   let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in do {
     List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg) ;
-    List.sort_uniq Llk_regexps.PatternBaseToken.compare acc.val
+    List.sort_uniq Token.compare acc.val
   }
 ;
 
@@ -2533,7 +2717,7 @@ end ;
 
  *)
 module Infer = struct
-open PatternBaseToken ;
+open Token ;
 
 value rec infer_symbol cg stk ename = fun [
    ASflag _ _ s | ASopt _ _ s ->
@@ -2678,7 +2862,7 @@ end ;
 (** Build the ATN NFA for this grammar
 *)
 module ATN = struct
-
+open Token ;
 include ATN0 ;
 
 module Build = struct
@@ -2812,7 +2996,7 @@ value step1 loc (cg : CG.t) (it, ec) (st : Node.t) = do {
     raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
   else () ;
   let acc = ref [] in
-  CG.epsilon_closure cg st
+  CG.atn_epsilon_closure cg st
   |> List.iter (fun st ->
          let labs = Raw.edge_labels it st in
          labs
@@ -2829,7 +3013,7 @@ value step1 loc (cg : CG.t) (it, ec) (st : Node.t) = do {
 
 value node_first loc cg ((atn : Raw.t),ec) node =
   let l = step1 loc cg (atn, ec) node in
-  List.map fst l |> List.sort_uniq PatternBaseToken.compare
+  List.map fst l |> List.sort_uniq Token.compare
 ;
 
 value entry_first cg e =
@@ -2854,7 +3038,7 @@ value branch_first (cg : CG.t) e =
 ;
 
 module TokPath = struct
-type t = { branchnum : int ; priority : option int ; tokpath : list token ; states : list Node.t } ;
+type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; states : list Node.t } ;
 value branchnum p = p.branchnum ;
 value priority p = p.priority ;
 value tokpath p = p.tokpath ;
@@ -2929,12 +3113,381 @@ value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_
 
 end ;
 
+
+module ATN' = struct
+open Token ;
+include ATN0' ;
+
+module Build = struct
+value symbol it (snode, enode) = fun [
+  ASflag _ _ _ | ASopt _ _ _
+  | ASlist _ _ _ _ _
+  | ASnext _ _
+  | ASnterm _ _ _ (Some _)
+  | ASrules _ _
+  | ASself _ _
+  | ASvala _ _ _
+  | ASleft_assoc _ _ _ _ _
+
+  -> assert False
+
+  | ASkeyw _ tok -> Raw.add_edge it (snode, Label.TOKEN (SPCL tok), enode)
+  | ASnterm _ nt _ None -> Raw.add_edge it (snode, Label.NTERM nt, enode)
+
+  | ASregexp _ _
+  | ASpriority _ _
+  | ASsyntactic _ _
+
+    -> Raw.add_edge it (snode, Label.EPS, enode)
+
+  | AStok _ cls tokopt ->
+    Raw.add_edge it (snode, Label.TOKEN (CLS cls tokopt), enode)
+
+  | ASanti _ anti_kinds ->
+    let l = anti_kinds |> List.concat_map (fun s -> [(ANTI s); (ANTI ("_"^s))]) in
+    l |> List.iter (fun tok ->
+        Raw.add_edge it (snode, Label.TOKEN tok, enode))
+  ]
+;
+
+value rec psymbols it (e, bnum) i (snode, enode) = fun [
+  [] -> Raw.add_edge it (snode, Label.EPS, enode)
+| [h] -> symbol it (snode, enode) h.ap_symb
+| [h :: t] -> do {
+    let mid = Raw._add_node it (Node.IN_BRANCH e.ae_name bnum i) in
+    symbol it (snode, mid) h.ap_symb ;
+    psymbols it (e, bnum) (i+1) (mid, enode) t
+  }
+]
+;
+
+value rule it e (snode, enode) bnum r =
+  psymbols it (e, bnum) 1 (snode, enode) r.ar_psymbols ;
+
+value entry it e =
+  let (e_snode, e_enode) = Raw.entry_nodes it e.ae_name in
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.iteri (fun i r ->
+         let r_snode = Raw.start_entry_branch it e.ae_name i in
+         rule it e (r_snode, e_enode) i r
+       )
+;
+
+value external_entry cg it (ename, rex) =
+  let (snode, enode) = Raw.entry_nodes it ename in
+  let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
+  let is_nullable = C.BEval.nullable rex in
+  let nulls = if is_nullable then [None] else [] in
+  let toks = List.map (fun x -> Some x) (C.BEval.OutputDfa.first_tokens rex) in
+  (toks@nulls)
+  |> List.iteri (fun i -> fun [
+    Some tok ->
+    let n' = Raw._add_node it (Node.BHOLE ename i) in do {
+      Raw.add_edge it (snode, Label.TOKEN tok, n') ;
+      Raw.mark_bhole it n'
+    }
+  | None -> Raw.mark_bhole it snode
+  ])
+;
+
+value grammar it cg = do {
+  (CG.gram_entries cg) |> List.iter (entry it) ;
+  (CG.g cg).gram_exports
+  |> List.iter (fun ename -> 
+         let (snode, enode) = Raw.entry_nodes it ename in do {
+                  Raw.add_edge it (enode, Label.TOKEN (CLS "EOI" None), enode)
+                }
+       ) ;
+  (CG.gram_externals cg) |> List.iter (external_entry cg it)
+}
+;
+end ;
+
+(** NOTES ON TYPES
+
+    A state of the ATN is always a "node" of the graph.  But a
+    "configuration" is a state plus a possibly-empty stack of states,
+    and it is with these configurations that we work from here down
+    unless otherwise specified.
+
+ *)
+
+module CFG = struct
+type t = (Node.t * list Node.t) [@@deriving (show,eq,ord) ;] ;
+value pp_hum pps (h,t) = Fmt.(pf pps "[%a]" (list ~{sep=const string " "} Node.pp_hum) [h::t]) ;
+value print x = Fmt.(str "%a" pp_hum x) ;
+end ;
+module TokPath = struct
+type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; cfgs : list CFG.t }
+           [@@deriving (show,eq,ord) ;] ;
+value branchnum p = p.branchnum ;
+value priority p = p.priority ;
+value tokpath p = p.tokpath ;
+value cfgs p = p.cfgs ;
+end ;
+module TP = TokPath ;
+
+(** closure cg [cfgs]
+
+    computes the set of configurations reachable from the argument set of
+    configurations by only epsilon-transitions, but also by entering subsidiary
+    nonterminals or by exiting to surrounding/subsequent nonterminals.
+
+    closure is always given a set of configurations and returns a set (b/c
+    this way we minimize excess work.  the result always includes the argument.
+
+    Algorithm:
+
+    For each cfg in the work-list:
+
+      If the cfg.state is an EXIT-state and the cfg.stack is nonempty, then pop a state
+      -- this is the next configuration
+
+      get all edge-labels outbound from cfg.state:
+
+        for an EPS edge-label, all dst states are added to worklist
+
+        for a NONTERM edge-label, get all dst-states; get the start-state of the nonterm's
+        ATN.  next configurations are to enter that ATN, stacking each dst-state.
+ *)
+
+value max_recursion_depth = ref 2 ;
+
+value exceeds_recursion_depth cfg =
+  let l = [fst cfg :: snd cfg] in
+  let l = List.stable_sort Node.compare l in
+  let rec countrec n l =
+    n > max_recursion_depth.val ||
+      match l with [
+          [x ; y :: t] ->
+          if Node.equal x y then
+            countrec (n+1) [y :: t]
+          else countrec 0 [y :: t]
+        | [_] | [] -> False
+      ] in
+  countrec 0 l
+;
+
+value watch_clrec1 (x : CFG.t) = () ;
+value closure loc (cg : CG.t) cfgs =
+  let acc = ref cfgs in
+  let rec clrec0 = fun [
+        (Node.EXIT _, [h::t]) -> clrec1 (h,t)
+      | (Node.EXIT nt, []) ->
+         let l = Raw.nonterm_edges (CG.gram_atn' cg) nt in
+         l |> List.iter (fun (_, _, dst) ->
+                  clrec1 (dst, []))
+      | (n, stk) ->
+         let labs = Raw.edge_labels (CG.gram_atn' cg) n in
+         labs |> List.iter (fun [
+             Label.EPS as lab ->
+             let dsts = Raw.traverse (CG.gram_atn' cg) n lab in
+             dsts |> List.iter (fun dst -> clrec1 (dst,stk))
+           | TOKEN _ -> ()
+           | NTERM nt as lab ->
+              let (snode, _) = Raw.entry_nodes (CG.gram_atn' cg) nt in
+              let dsts = Raw.traverse (CG.gram_atn' cg) n lab in
+              dsts |> List.iter (fun dst -> clrec1 (snode, [dst :: stk]))
+           ])
+      ]
+  and clrec1 cfg = do { watch_clrec1 cfg ; clrec1' cfg }
+  and clrec1' cfg =
+    if exceeds_recursion_depth cfg then
+      let loc = CG.adjust_loc cg loc in
+      Fmt.(pf stderr "%s: ATN'.closure: configuration exceeds recursion: %a\n%!"
+             (Ploc.string_of_location loc)
+             CFG.pp_hum cfg)
+    else if not (List.mem cfg acc.val) then do {
+      Std.push acc cfg;
+      clrec0 cfg
+    }
+    else ()
+  in do {
+    List.iter clrec0 cfgs ;
+    acc.val
+  }
+;
+(** step1 [it,ec] [st]:
+
+    From state [st], take one non-epsilon step in the ATN
+    returning the list of (tok * st) that are reached.
+
+    NOTE WELL: this assumes that (epsilon-)[closure] will
+    be performed prior to [step1]
+ *)
+
+value step1 loc (cg : CG.t) (st : Node.t) = do {
+  let it = CG.gram_atn' cg in
+  if Raw.is_bhole it st then
+    raise_failwithf loc "ATN'.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
+  else () ;
+  let labs = Raw.edge_labels it st in
+  labs
+  |> List.concat_map (fun [
+       Label.EPS|NTERM _ -> []
+    | (TOKEN tok) as lab ->
+       let dsts = Raw.traverse it st lab in
+       dsts |> List.map (fun dst -> (tok, dst))
+       ])
+}
+;
+
+(** extend1 loc cg [t]
+
+    [t] is a TokPath: extend it by one token.
+
+    To do this, we first apply [closure]: this produces more cfgs, but still only one TP.
+    Then for each cfg, we apply step1, producing pairs of (token * state), which we apply
+    to the current TP, producing a a list of new TP.
+ *)
+value extend1 loc cg t =
+  let open TP in
+  let cfgs = closure loc cg t.cfgs in
+  cfgs
+  |> List.concat_map (fun ((st, stk) as cfg) ->
+         let token_state_list = step1 loc cg st in
+         let token_cfg_list = token_state_list |> List.map (fun (tok, n) -> (tok,(n,stk))) in
+         token_cfg_list |> List.map (fun (tok, cfg) ->
+                               {(t) with tokpath = t.tokpath@[tok]; cfgs= [cfg]})
+       )
+;
+
+
+(** a partition-set is ambiguous if:
+
+    (1) a partition has empty token-list
+    (2) any partition has length>1 and priorities are not distinct
+ *)
+
+value ambiguous_partition (l : list TP.t) =
+  match l with [
+      [{TP.tokpath=[]} :: _] -> True
+    | l -> not (Std.distinct (List.map TP.priority l))
+    ]
+;
+
+value ambiguous (ll : list (list TP.t)) =
+  List.exists ambiguous_partition ll
+;
+
+value separate_paths l =
+  let open TP in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let (ambig_ll, ok_ll) = Ppxutil.filter_split ambiguous_partition ll in
+  (List.sort_uniq Stdlib.compare (List.concat ambig_ll),
+   List.sort_uniq Stdlib.compare (List.concat ok_ll))
+;
+
+(** extend_branches:
+
+  (1) partition by token-list
+  (2) the current set is ambiguous if any partition has length>1 or token-list=[]
+  (3) if not ambiguous
+  (4) for each length>1 partition, use [extend1] to extend each element
+  (5) partition by (branch-num, token-list) and union the state-sets
+ *)
+type branches_toks_list = list TP.t ;
+value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_list * branches_toks_list) =
+  let open TP in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let l = ll |> List.concat_map (fun [
+    [{tokpath=[_ :: _]}] as l -> l
+  | l -> l |> List.concat_map (extend1 loc cg)
+  ]) in
+  let ll = Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum && p1.tokpath=p2.tokpath) l in
+  let l = ll |> List.map (fun l ->
+    let p0 = List.hd l in
+    {(p0) with cfgs = List.concat_map TP.cfgs l}) in
+  separate_paths l
+;
+
+
+value rec compute_firstk_depth loc cg ename ~{depth} (ambig_l, ok_l) = do {
+  Fmt.(pf stderr "compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+         (Name.print ename) depth (List.length ambig_l) (List.length ok_l)) ;
+  if depth = 0 then
+    raise_failwithf (CG.adjust_loc cg loc) "compute_firstk_depth(%s): exceeded depth and still ambiguous" (Name.print ename)
+  else
+    let (ambig_l', ok_l') = extend_branches loc cg ambig_l in
+    if ambig_l'=[] then ok_l' @ ok_l
+    else compute_firstk_depth loc cg ename ~{depth=depth-1} (ambig_l', ok_l' @ ok_l)
+}
+;
+
+value is_regexp_prediction_entry e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  rl
+  |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
+;
+
+value compute_firstk ~{depth} cg e = do {
+  Fmt.(pf stderr "START compute_first(%s)\n%!" (Name.print e.ae_name)) ;
+  if S9SeparateSyntactic.is_syntactic_predicate_entry e then
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" (Name.print e.ae_name)
+  else if is_regexp_prediction_entry e then
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
+  else () ;
+  let open TP in
+  let atn = CG.gram_atn' cg in
+  let l =
+    (List.hd e.ae_levels).al_rules.au_rules
+    |> List.mapi (fun i r ->
+           let node = Raw.entry_branch atn e.ae_name i in
+           let priority = match r.ar_psymbols with [
+             [{ap_symb=ASpriority _ n} :: _] -> Some n
+           | _ -> None
+           ] in
+           {branchnum=i; priority=priority; tokpath=[]; cfgs=[(node,[])]}) in
+  let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} (l, []) in
+  let l =
+    l
+    |> Std.nway_partition (fun p1 p2 -> TP.tokpath p1 = TP.tokpath p2)
+    |> List.map (fun [
+         [] -> assert False
+       | [x] -> x
+       | l -> do {
+           assert (Std.distinct (List.map TP.priority l)) ;
+           List.fold_left (fun p1 p2 ->
+               match (p1.priority, p2.priority) with [
+                   (None, Some _) -> p2
+                 | (Some _, None) -> p1
+                 | (Some n, Some m) when n < m -> p1
+                 | (Some n, Some m) when n > m -> p1
+                 | _ -> assert False
+                 ]
+             ) (List.hd l) (List.tl l)
+         }
+       ]) in
+  l
+  |> Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum)
+  |> List.map (fun l ->
+         let p0 = List.hd l in
+         (p0.branchnum, List.map TP.tokpath l))
+}
+;
+
+value store_firstk cg e =
+  let lopt = match compute_firstk ~{depth=4} cg e with [
+        x -> Some x
+      | exception exn ->
+         let msg = Printexc.to_string exn in do {
+          Fmt.(pf stderr "%s\n%!" msg) ;
+          None
+        }
+      ] in
+  CG.set_atn_firstk cg e.ae_name lopt
+;
+
+end ;
+
 module BuildATN = struct
 
 value exec cg = do {
   ATN.Build.grammar (CG.gram_atn cg) cg ;
   let eclosure = ATN.epsilon_closure(CG.gram_atn cg) in
-  (snd cg).eclosure := eclosure ;
+  (snd cg).atn_eclosure := eclosure ;
+  ATN'.Build.grammar (CG.gram_atn' cg) cg ;
   cg
 }
 ;
@@ -3031,7 +3584,7 @@ value store_firstk cg e =
 
 value exec cg = do {
     (CG.gram_entries cg)
-    |> List.iter (store_firstk cg) ;
+    |> List.iter (ATN'.store_firstk cg) ;
     (CG.gram_entries cg)
     |> List.iter (store_entry_branch_first cg) ;
     (CG.gram_entries cg)
@@ -3168,7 +3721,7 @@ end ;
 
 module Codegen = struct
 open Llk_regexps ;
-open PatternBaseToken ;
+open Token ;
 
 
 value all_tokens el =
@@ -3550,7 +4103,7 @@ value edges_to_branches loc states edges =
 ;
 
 value letrec_nest (init, initre, states) =
-  let open PatternBaseToken in
+  let open Token in
   let loc = Ploc.dummy in
   let find_state st =
     try
@@ -3587,7 +4140,7 @@ value letrec_nest (init, initre, states) =
   let bindl = List.map export_state states in
   <:expr< fun strm ->
     let open Llk_regexps in
-    let open PatternBaseToken in
+    let open Token in
     let rec $list:bindl$ in $lid:(statename init)$ None 0 >>
 ;
 
@@ -3775,7 +4328,7 @@ value exec (({gram_loc=loc; gram_exports=expl; gram_entries=el; gram_id=gid}, _)
       |> List.concat_map PatternRegexp.tokens
     )
     |> List.filter (fun [ CLS _ _ | SPCL _ -> True | ANTI _ -> False])
-    |> List.sort_uniq PatternBaseToken.compare
+    |> List.sort_uniq Token.compare
   in
   let token_actions =
     token_patterns
