@@ -3219,19 +3219,28 @@ value priority p = p.priority ;
 value cfgs p = p.cfgs ;
 end ;
 
-module TokensCFG = struct
-type t = (list Token.t * NFACFG.t)
+module type DFA_STATE_SIG = sig
+  type t = 'a [@@deriving (show,eq,ord) ;] ;
+  value initial : t ;
+  value is_initial: t -> bool ;
+  value extend_state : t -> Token.t -> t ;
+end ;
+
+module BuildDFA(S : DFA_STATE_SIG) = struct
+module S = S ;
+module StateCFG = struct
+type t = (S.t * NFACFG.t)
            [@@deriving (show,eq,ord) ;] ;
 open NFACFG ;
 value branchnum p = (snd p).branchnum ;
 value priority p = (snd p).priority ;
-value tokpath p = (fst p) ;
+value dfastate p = (fst p) ;
 value cfgs p = (snd p).cfgs ;
 
-value replace_tokpath x p = (x, snd p) ;
+value replace_dfastate x p = (x, snd p) ;
 value replace_cfgs x p = (fst p, {(snd p) with cfgs = x}) ;
 end ;
-module TCFG = TokensCFG ;
+module SCFG = StateCFG ;
 
 (** closure cg [cfgs]
 
@@ -3347,22 +3356,22 @@ value step1 loc (cg : CG.t) (st : Node.t) = do {
 
 (** extend1 loc cg [t]
 
-    [t] is a TokPath: extend it by one token.
+    [t] is a Dfastate: extend it by one token.
 
-    To do this, we first apply [closure]: this produces more cfgs, but still only one TCFG.
+    To do this, we first apply [closure]: this produces more cfgs, but still only one SCFG.
     Then for each cfg, we apply step1, producing pairs of (token * state), which we apply
-    to the current TCFG, producing a a list of new TCFG.
+    to the current SCFG, producing a a list of new SCFG.
  *)
-value extend1 loc cg t =
-  let open TCFG in
-  let cfgs = closure loc cg (TCFG.cfgs t) in
+value extend1 loc cg (t : SCFG.t) =
+  let open SCFG in
+  let cfgs = closure loc cg (SCFG.cfgs t) in
   cfgs
   |> List.concat_map (fun ((st, stk) as cfg) ->
          let token_state_list = step1 loc cg st in
          let token_cfg_list = token_state_list |> List.map (fun (tok, n) -> (tok,(n,stk))) in
          token_cfg_list |> List.map (fun (tok, cfg) ->
                                t
-                               |> replace_tokpath ((TCFG.tokpath t)@[tok])
+                               |> replace_dfastate (S.extend_state (SCFG.dfastate t) tok)
                                |> replace_cfgs [cfg])
        )
 ;
@@ -3374,20 +3383,20 @@ value extend1 loc cg t =
     (2) any partition has length>1 and priorities are not distinct
  *)
 
-value ambiguous_partition (l : list TCFG.t) =
+value ambiguous_partition (l : list SCFG.t) =
   match l with [
-      [([],_) :: _] -> True
-    | l -> not (Std.distinct (List.map TCFG.priority l))
+      [(dfast,_) :: _] when S.is_initial dfast -> True
+    | l -> not (Std.distinct (List.map SCFG.priority l))
     ]
 ;
 
-value ambiguous (ll : list (list TCFG.t)) =
+value ambiguous (ll : list (list SCFG.t)) =
   List.exists ambiguous_partition ll
 ;
 
 value separate_paths l =
-  let open TCFG in
-  let ll = Std.nway_partition (fun p1 p2 -> (tokpath p1) = (tokpath p2)) l in
+  let open SCFG in
+  let ll = Std.nway_partition (fun p1 p2 -> (dfastate p1) = (dfastate p2)) l in
   let (ambig_ll, ok_ll) = Ppxutil.filter_split ambiguous_partition ll in
   (List.sort_uniq Stdlib.compare (List.concat ambig_ll),
    List.sort_uniq Stdlib.compare (List.concat ok_ll))
@@ -3401,18 +3410,18 @@ value separate_paths l =
   (4) for each length>1 partition, use [extend1] to extend each element
   (5) partition by (branch-num, token-list) and union the state-sets
  *)
-type branches_toks_list = list TCFG.t ;
+type branches_toks_list = list SCFG.t ;
 value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_list * branches_toks_list) =
-  let open TCFG in
-  let ll = Std.nway_partition (fun p1 p2 -> (tokpath p1) = (tokpath p2)) l in
+  let open SCFG in
+  let ll = Std.nway_partition (fun p1 p2 -> (dfastate p1) = (dfastate p2)) l in
   let l = ll |> List.concat_map (fun [
-    [([_ :: _],_)] as l -> l
+    [(dfast,_)] as l when not (S.is_initial dfast) -> l
   | l -> l |> List.concat_map (extend1 loc cg)
   ]) in
-  let ll = Std.nway_partition (fun p1 p2 -> (branchnum p1)=(branchnum p2) && (tokpath p1)=(tokpath p2)) l in
+  let ll = Std.nway_partition (fun p1 p2 -> (branchnum p1)=(branchnum p2) && (dfastate p1)=(dfastate p2)) l in
   let l = ll |> List.map (fun l ->
     let p0 = List.hd l in
-    p0 |> replace_cfgs (List.concat_map TCFG.cfgs l)) in
+    p0 |> replace_cfgs (List.concat_map SCFG.cfgs l)) in
   separate_paths l
 ;
 
@@ -3441,7 +3450,7 @@ value compute_firstk ~{depth} cg e = do {
   else if is_regexp_prediction_entry e then
     raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
   else () ;
-  let open TCFG in
+  let open SCFG in
   let atn = CG.gram_atn cg in
   let l =
     (List.hd e.ae_levels).al_rules.au_rules
@@ -3451,16 +3460,16 @@ value compute_firstk ~{depth} cg e = do {
              [{ap_symb=ASpriority _ n} :: _] -> Some n
            | _ -> None
            ] in
-           ([], NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]})) in
+           (S.initial, NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]})) in
   let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} (l, []) in
   let l =
     l
-    |> Std.nway_partition (fun p1 p2 -> TCFG.tokpath p1 = TCFG.tokpath p2)
+    |> Std.nway_partition (fun p1 p2 -> SCFG.dfastate p1 = SCFG.dfastate p2)
     |> List.map (fun [
          [] -> assert False
        | [x] -> x
        | l -> do {
-           assert (Std.distinct (List.map TCFG.priority l)) ;
+           assert (Std.distinct (List.map SCFG.priority l)) ;
            List.fold_left (fun p1 p2 ->
                match ((priority p1), (priority p2)) with [
                    (None, Some _) -> p2
@@ -3476,9 +3485,20 @@ value compute_firstk ~{depth} cg e = do {
   |> Std.nway_partition (fun p1 p2 -> branchnum p1=branchnum p2)
   |> List.map (fun l ->
          let p0 = List.hd l in
-         (branchnum p0, List.map TCFG.tokpath l))
+         (branchnum p0, List.map SCFG.dfastate l))
 }
 ;
+end ;
+
+module ListDFAState = struct
+  type t = list Token.t [@@deriving (show,eq,ord) ;] ;
+  value initial = [] ;
+  value is_initial x = x = [] ;
+  value extend_state l t = l@[t] ;
+end ;
+module ListDFA = BuildDFA(ListDFAState) ;
+
+open ListDFA ;
 
 value store_firstk cg e =
   let lopt = match compute_firstk ~{depth=4} cg e with [
