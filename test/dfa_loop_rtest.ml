@@ -11,13 +11,6 @@ REGEXPS:
   check_vardecl = IDENTIFIER | check_indsp IDENTIFIER | check_lparen_indsp IDENTIFIER | check_indsp_lparen check_indsp IDENTIFIER ;
 END;
 
-    vardecl:
-      [ [ IDENTIFIER; arrayspec
-        | indsp; IDENTIFIER; arrayspec
-        | "("; indsp; IDENTIFIER; arrayspec; ")"; "("; ")"
-        | indsp; "("; indsp; IDENTIFIER; arrayspec; ")"; "("; ")" ] ]
-    ;
-    arrayspec: [ [ "[" ; "]" ] ] ;
     indsp: [ [ GREEDY LIST1 "*" ] ] ;
     arglist: [ [ GREEDY LIST0 arglistp; ","; arg1 ] ]  ;
     arglistp:
@@ -29,10 +22,9 @@ END;
 
       [ [ 
           -> ()
-        | indsp; arrayspec
         | "("; indsp; ")"; "("; arglist; ")"
         | indsp; "("; indsp; ")"; "("; arglist; ")"
-        | vardecl ] ]
+        ] ]
     ;
 END;
 

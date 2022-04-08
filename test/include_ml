@@ -8,23 +8,23 @@
 #require "bos";;
 #require "str";;
 
-
+(*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
-
-(*
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
  *)
 
-#require "camlp5.pr_o";;
-module Pr = Pr_o ;;
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
 
 (*
+#require "camlp5.pr_o";;
+module Pr = Pr_o ;;
+ *)
+
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
- *)
+
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -183,8 +183,6 @@ open Original_rtest ;;
 open Llko2official_test ;;
 #trace Original.F.str_item ;;
 #trace Original.F.sig_item ;;
-#trace Original.F.sig_item__0007 ;;
-#trace Original.F.sig_item__0012 ;;
 
 
 
@@ -220,12 +218,12 @@ open External_test ;;
 #load "antlr.cmo";;
 open Antlr ;;
  *)
-
+(*
 #directory "acme" ;;
 #load "acmelexer.cmo";;
 #load "acme.cmo";;
 open Acme ;;
-
+ *)
 (*
 ;;; Local Variables: ***
 ;;; mode:tuareg ***
@@ -284,19 +282,32 @@ ATN.Raw.dump stdout atn ;;
 #trace CG.watch_follow ;;
 "revised_rtest.ml" |> RT.read_file |> PAPR.Implem.pa1 |> PAPR.Implem.pr |> print_string ;;
  *)
-(*
+
 Pp_MLast.Ploc.pp_loc_verbose := false ;;
 
 #trace ATN.extend_branches ;;
-#trace ATNFirst.compute_firstk ;;
+(*
+#trace ATN.closure ;;
+#trace ATN.step1 ;;
+#trace ATN.watch_clrec1 ;;
+#trace ATN.Raw.nonterm_edges ;;
+#trace ATN.extend1 ;;
+#trace ATN.compute_firstk ;;
 #trace ATN.branch_first ;;
+ *)
 
+open ATN0 ;;
 open ATN ;;
-open TP ;;
+open CFG ;;
+open NFACFG ;;
+open TCFG ;;
 open Node ;;
-#trace ATNFirstFollow.compute_firstk ;;
-#trace ATNFirstFollow.compute_firstk_depth ;;
-let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
-let e = CG.gram_entry cg (Name.mk0 "sig_item" 7) ;;
+#trace ATN.compute_firstk ;;
+#trace ATN.compute_firstk_depth ;;
 
+let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
+let e = CG.gram_entry cg (Name.mk0 "arg1" (-1)) ;;
+ATN.compute_firstk ~depth:2 cg e ;;
+(*
+"xx.ml" |> RT.read_file |> Top.codegen Ploc.dummy ~bootstrap:true ;;
  *)

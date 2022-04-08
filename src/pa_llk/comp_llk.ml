@@ -1794,7 +1794,7 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 end ;
 
 
-module S7LiftLists = struct
+module S7LiftListsFully = struct
   (** in each entry, replace all LIST symbols with a new entry;
 
    LIST0 sym ->
@@ -4033,8 +4033,8 @@ value lambda_lift loc ?{bootstrap=False} s =
 value lift_lists loc ?{bootstrap=False} s =
   s
   |> lambda_lift loc ~{bootstrap=bootstrap}
-  |> S7LiftLists.exec
-  |> Dump.exec "After S7LiftLists"
+  |> S7LiftListsFully.exec
+  |> Dump.exec "After S7LiftListsFully"
 ;
 
 value lift_left_assoc loc ?{bootstrap=False} s =
