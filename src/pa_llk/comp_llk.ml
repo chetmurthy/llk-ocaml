@@ -2731,7 +2731,7 @@ value length_regexp_of_rule cg ename r length =
 
 end ;
 
-(** Build the ATN NFA for this grammar
+(** Build the ATN First/Follow/First(k) sets this grammar
 *)
 
 module ATN = struct
