@@ -12,6 +12,12 @@ value parse_opt pfun = parser [
 ]
 ;
 
+value parse_optv nullv pfun = parser [
+  [: x = pfun :] -> x
+| [: :] -> nullv
+]
+;
+
 (*
 value parse_left_assoc lhs restrhs combiner = parser [
   [: x = lhs ; rv = parser [ [: y = restrhs :] -> combiner x y | [: :] -> x ] :] -> rv 

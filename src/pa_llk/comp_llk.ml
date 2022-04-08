@@ -295,13 +295,17 @@ module Node = struct
     | BRANCH of Name.t and int
     | IN_BRANCH of Name.t and int and int
     | BHOLE of Name.t and int
+    | THEN_OPT of t
+    | THEN_LIST0 of t
   ] [@@deriving (show,eq,ord) ;] ;
-  value print = fun [
+  value rec print = fun [
     ENTER n -> Fmt.(str "ENTER %s" (Name.print n))
   | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
   | BRANCH n i -> Fmt.(str "BRANCH %s %d" (Name.print n) i)
   | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
   | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
+  | THEN_OPT n -> Fmt.(str "%s THEN_OPT" (print n))
+  | THEN_LIST0 n -> Fmt.(str "%s THEN_LIST0" (print n))
   ] ;
   value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
@@ -635,6 +639,7 @@ value infer_kinds cg loc s kinds =
         ASflag _ _ _ -> ["flag"]
       | ASlist _ _ _ _ _ -> ["list"]
       | ASopt _ _ _ -> ["opt"]
+      | ASoptv _ _ _ _ -> ["opt"]
       | AStok loc "CHAR" _ -> ["chr"]
       | AStok loc "FLOAT" _ -> ["flo"]
       | AStok loc "INT" _ -> ["int"]
@@ -872,6 +877,7 @@ value rec check_symbol cg env = fun [
   | ASregexp _ _ -> ()
   | ASpriority _ _ -> ()
   | ASopt _ _ s -> check_symbol cg env s
+  | ASoptv _ _ _ s -> check_symbol cg env s
   | ASleft_assoc _ _ s1 s2 _ ->  do { check_symbol cg env s1 ; check_symbol cg env s2 }
   | ASrules _ rs -> check_rules cg env rs
   | ASself _ _ -> ()
@@ -1734,6 +1740,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASregexp _ _ as s -> s
   | ASpriority _ _ as s -> s
   | ASopt loc g s -> ASopt loc g (lift_symbol cg acc e0 [] revpats s)
+  | ASoptv loc g e s -> ASoptv loc g e (lift_symbol cg acc e0 [] revpats s)
 
   | ASleft_assoc loc g s1 s2 e ->
      ASleft_assoc loc g (lift_symbol cg acc e0 [] revpats s1) (lift_symbol cg acc e0 [] revpats s2) e
@@ -1953,7 +1960,6 @@ value list1sep_e (cg : CG.t) (formals, actuals) e = fun [
 value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
   ASlist loc g LML_0 sym (Some (sep, False)) as s ->
   let ename = CG.fresh_name cg e.ae_name in
-  let y = Name.print (CG.fresh_name cg (Name.mk "x")) in
   let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
   let prio_psl = if g then [{ap_loc=loc; ap_patt=None; ap_symb=ASpriority loc 1}] else [] in
   { ae_loc = loc
@@ -2160,6 +2166,274 @@ value lift_lists1 (cg : CG.t) acc e =
         let actuals = formals2actuals cg formals in
 
         let new_e = list0sep_opt_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+
+  let fallback_migrate_a_psymbols = dt.migrate_a_psymbols in
+  let migrate_a_psymbols dt psl = match psl with [
+        [] -> []
+      | [h :: t] ->
+         let dt' = match h.ap_patt with [
+               None -> dt
+             | Some p -> {(dt) with aux = dt.aux@[p]}
+             ] in
+         [ dt.migrate_a_psymbol dt h :: dt'.migrate_a_psymbols dt' t]
+      ] in
+  let dt = {(dt) with
+             migrate_a_entry = migrate_a_entry
+           ; migrate_a_psymbols = migrate_a_psymbols
+           ; migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value lift_lists cg e =
+  let acc = ref [] in
+  let e = lift_lists1 cg acc e in
+  (e, acc.val)
+;
+
+value rec exec1_entry (cg : CG.t) e =
+  let (e, newel) = lift_lists cg e in
+  [e :: List.concat_map (exec1_entry cg) newel]
+; 
+
+value exec0 cg el =
+  List.concat_map (exec1_entry cg) el
+;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S7ExpandListsPartially = struct
+  (** Expand all but OPT_SEP lists into simpler forms that only
+      use LIST0 and OPT
+
+   LIST0 sym -> [UNCHANGED]
+
+================================================================
+
+   LIST0 sym SEP sym2 ->
+
+   OPT [ y = LIST1 sym SEP sym2 -> y ]
+
+================================================================
+
+   LIST1 sym ->
+
+   [ x = sym ; y = LIST0 sym -> [x :: y] ]
+
+================================================================
+
+   LIST1 sym SEP sym2 ->
+
+   [ x = sym ; y = LIST0 [ sym2 ; y = sym -> y ] -> [x :: y] ]
+
+================================================================
+
+   LIST0 sym SEP sym2 OPT_SEP ->
+
+   LIST1 sym SEP sym2 OPT_SEP ->
+
+   use same code as S7LiftListsFully
+
+================================================================
+
+   *)
+
+open FreeLids ;
+
+(** lift_lists
+
+    This will lift out *outermost* LIST symbols, replacing them
+    with ASnterm symbols.
+
+    As we recurse down, we build up an env of freevars, and at the point
+    we find a LIST symbol, we intersect with free-lids of the symbol, to
+    get the formals of the new entry.
+ *)
+
+(**
+================================================================
+
+   LIST1 sym ->
+
+   [ x = sym ; y = LIST0 sym -> [x :: y] ]
+
+================================================================
+ *)
+value list1_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 s0 None as s ->
+  let new_x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let new_y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let s' = ASlist loc g LML_0 s0 None in
+  let rule0 = {ar_loc = loc ; ar_action = Some <:expr< [$lid:new_x$ :: $lid:new_y$] >> ;
+               ar_psymbols = [{ap_loc=loc;ap_patt= Some <:patt< $lid:new_x$ >>; ap_symb=s0}
+                             ;{ap_loc=loc;ap_patt= Some <:patt< $lid:new_y$ >>
+                               ;ap_symb=s'}]} in
+  let rl = {au_loc=loc; au_rules=[rule0]} in
+  ASrules loc rl
+]
+;
+
+(**
+================================================================
+
+   LIST1 sym SEP sym2 ->
+
+   [ x = sym ; y = LIST0 [ sym2 ; y' = sym -> y' ] -> [x :: y] ]
+
+================================================================
+ *)
+value list1sep_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_1 sym (Some (sep, False)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let y' = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let rl =
+    { au_loc = loc
+    ; au_rules = [
+        { ar_loc = loc
+        ; ar_psymbols = [
+            { ap_loc = loc
+            ; ap_patt = Some <:patt< $lid:x$ >>
+            ; ap_symb = sym
+            }
+          ; { ap_loc = loc
+            ; ap_patt = Some <:patt< $lid:y$ >>
+            ; ap_symb = ASlist loc g LML_0
+                          (ASrules loc { au_loc = loc
+                                       ; au_rules = [{ ar_loc = loc
+                                                     ; ar_psymbols = [
+                                                         { ap_loc = loc
+                                                         ; ap_patt = None
+                                                         ; ap_symb = sep
+                                                         }
+                                                       ; { ap_loc = loc
+                                                         ; ap_patt = Some <:patt< $lid:y'$ >>
+                                                         ; ap_symb = sym
+                                                       }]
+                                                     ; ar_action = Some <:expr< $lid:y'$ >>}]})
+                          None
+          }]
+        ; ar_action = Some <:expr< [$lid:x$ :: $lid:y$] >>
+        }
+    ]} in
+  ASrules loc rl
+]
+;
+
+(**
+================================================================
+
+   LIST0 sym SEP sym2 ->
+
+   OPTV [] [ y = LIST1 sym SEP sym2 -> y ]
+
+================================================================
+ *)
+value list0sep_e (cg : CG.t) (formals, actuals) e = fun [
+  ASlist loc g LML_0 sym (Some (sep, False)) as s ->
+  let ename = CG.fresh_name cg e.ae_name in
+  let y = Name.print (CG.fresh_name cg (Name.mk "y")) in
+  let prio_psl = if g then [{ap_loc=loc; ap_patt=None; ap_symb=ASpriority loc 1}] else [] in
+  let rl = {
+      au_loc = loc
+    ; au_rules =
+        [{ ar_loc = loc
+         ; ar_psymbols = [
+             { ap_loc = loc
+             ; ap_patt = Some <:patt< $lid:y$ >>
+             ; ap_symb = ASlist loc g LML_1 sym (Some (sep, False))
+           }]
+         ; ar_action = Some <:expr< $lid:y$ >>
+         }
+        ; { ar_loc = loc
+          ; ar_psymbols = []
+          ; ar_action = Some <:expr< [] >>
+        }]
+    } in
+  ASoptv loc g <:expr< [] >> (ASrules loc rl)
+]
+;
+
+value lift_lists1 (cg : CG.t) acc e =
+  let open Llk_migrate in
+  let dt = make_dt [] in
+  let fallback_migrate_a_entry = dt.migrate_a_entry in
+  let migrate_a_entry dt e =
+    let dt = {(dt) with aux = e.ae_formals} in
+    {(e) with ae_levels = List.map (dt.migrate_a_level dt) e.ae_levels} in
+
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASlist loc g LML_0 s0 None as s -> fallback_migrate_a_symbol dt s
+
+      | ASlist loc g LML_1 s0 None as s ->
+        let formals = dt.aux in
+        let freevars = free_lids_of_a_symbol s0 in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_s = list1_e cg (formals, actuals) e s in
+        migrate_a_symbol dt new_s
+
+      | ASlist loc g LML_1 s0 (Some (s1, False)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_s = list1sep_e cg (formals, actuals) e s in
+        migrate_a_symbol dt new_s
+
+      | ASlist loc g LML_0 s0 (Some (s1, False)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_s = list0sep_e cg (formals, actuals) e s in
+        migrate_a_symbol dt new_s
+
+
+      | ASlist loc g LML_1 s0 (Some (s1, True)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = S7LiftListsFully.list1sep_opt_e cg (formals, actuals) e s in
+
+        do {
+          acc.val := [new_e :: acc.val] ;
+          ASnterm loc new_e.ae_name actuals None
+        }
+
+      | ASlist loc g LML_0 s0 (Some (s1, True)) as s ->
+        let formals = dt.aux in
+        let freevars = Std.union (free_lids_of_a_symbol s0) (free_lids_of_a_symbol s1) in
+        let formals =
+          formals
+          |> List.filter (fun p -> [] <> Std.intersect (free_lids_of_patt p) freevars) in
+        let actuals = formals2actuals cg formals in
+
+        let new_e = S7LiftListsFully.list0sep_opt_e cg (formals, actuals) e s in
 
         do {
           acc.val := [new_e :: acc.val] ;
@@ -2417,6 +2691,23 @@ value expand_macros (cg : CG.t) e =
                     {ar_loc = loc; ar_psymbols = [];
                      ar_action = Some <:expr< None >>}]}
 
+      | ASoptv loc g nulle sym ->
+         let sym = dt.migrate_a_symbol dt sym in
+         let prio_ps = {ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1} in
+         let prio_psl = if g then [prio_ps] else [] in
+         let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+
+         ASrules loc
+                 {au_loc = loc;
+                  au_rules =
+                   [{ar_loc = loc;
+                     ar_psymbols =
+                       prio_psl@[{ap_loc = loc; ap_patt = Some <:patt< $lid:x$ >>;
+                        ap_symb = sym}];
+                     ar_action = Some <:expr< $lid:x$ >>};
+                    {ar_loc = loc; ar_psymbols = [];
+                     ar_action = Some nulle}]}
+
       | s -> fallback_migrate_a_symbol dt s
       ] in
   let dt = {(dt) with
@@ -2426,6 +2717,71 @@ value expand_macros (cg : CG.t) e =
 ;
 
 value exec0 cg el = List.map (expand_macros cg) el ;
+
+value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S9ExpandFlagVala = struct
+
+open FreeLids ;
+
+(** expand_flag_vala
+
+    expand FLAG and V (leave OPT alone)
+ *)
+
+value expand_flag_vala (cg : CG.t) e =
+  let open Llk_migrate in
+  let dt = make_dt [] in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASvala loc sym anti_kinds ->
+        let sym = dt.migrate_a_symbol dt sym in
+        let x = Name.print (CG.fresh_name cg (Name.mk "x")) in
+        ASrules loc
+          {au_loc = loc;
+           au_rules =
+             [{ar_loc = loc;
+               ar_psymbols =
+                 [{ ap_loc = loc
+                  ; ap_patt = Some <:patt< $lid:x$ >>
+                  ; ap_symb = sym}];
+               ar_action = Some <:expr< Ploc.VaVal $lid:x$ >>};
+               {ar_loc = loc;
+                ar_psymbols =
+                  [{ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1}
+                  ;{ ap_loc = loc
+                   ; ap_patt = Some <:patt< $lid:x$ >>
+                   ; ap_symb = ASanti loc anti_kinds}];
+                ar_action = Some <:expr< $lid:x$ >>}]}
+
+      | ASflag loc g sym ->
+         let sym = dt.migrate_a_symbol dt sym in
+         let prio_ps = {ap_loc=loc; ap_patt=None; ap_symb = ASpriority loc 1} in
+         let prio_psl = if g then [prio_ps] else [] in
+         ASrules loc
+           {au_loc = loc;
+            au_rules =
+              [{ ar_loc = loc
+               ; ar_psymbols =
+                   prio_psl@[{ ap_loc = loc; ap_patt = None
+                      ; ap_symb = sym
+                   }]
+               ; ar_action = Some <:expr< True >>}
+               ;{ ar_loc = loc
+                ; ar_psymbols = []
+                ; ar_action = Some <:expr< False >>}]}
+
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = {(dt) with
+             migrate_a_symbol = migrate_a_symbol
+           } in
+  dt.migrate_a_entry dt e
+;
+
+value exec0 cg el = List.map (expand_flag_vala cg) el ;
 
 value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
 
@@ -2592,7 +2948,7 @@ module Infer = struct
 open Token ;
 
 value rec infer_symbol cg stk ename = fun [
-   ASflag _ _ s | ASopt _ _ s ->
+   ASflag _ _ s | ASopt _ _ s | ASoptv _ _ _ s ->
    (match infer_symbol cg stk ename s with [
         (re, False) ->
             if PSyn.empty re then (PSyn.epsilon, False)
@@ -2739,8 +3095,41 @@ open Token ;
 include ATN0 ;
 
 module Build = struct
-value symbol it (snode, enode) = fun [
-  ASflag _ _ _ | ASopt _ _ _
+value rec symbol it (snode, enode) = fun [
+
+    ASkeyw _ tok -> Raw.add_edge it (snode, Label.TOKEN (SPCL tok), enode)
+  | ASnterm _ nt _ None -> Raw.add_edge it (snode, Label.NTERM nt, enode)
+
+  | ASregexp _ _
+  | ASpriority _ _
+  | ASsyntactic _ _
+
+    -> Raw.add_edge it (snode, Label.EPS, enode)
+
+  | ASopt _ _ s
+  | ASoptv _ _ _ s -> do {
+     let optnode = Node.THEN_OPT snode in
+     Raw.add_edge it (snode, Label.EPS, optnode) ;
+     Raw.add_edge it (optnode, Label.EPS, enode) ;
+     symbol it (optnode, enode) s
+  }
+
+  | ASlist _ _ LML_0 s None -> do {
+     let listnode = Node.THEN_LIST0 snode in
+     Raw.add_edge it (snode, Label.EPS, listnode) ;
+     Raw.add_edge it (listnode, Label.EPS, enode) ;
+     symbol it (listnode, listnode) s
+    }
+
+  | AStok _ cls tokopt ->
+    Raw.add_edge it (snode, Label.TOKEN (CLS cls tokopt), enode)
+
+  | ASanti _ anti_kinds ->
+    let l = anti_kinds |> List.concat_map (fun s -> [(ANTI s); (ANTI ("_"^s))]) in
+    l |> List.iter (fun tok ->
+        Raw.add_edge it (snode, Label.TOKEN tok, enode))
+
+  | ASflag _ _ _
   | ASlist _ _ _ _ _
   | ASnext _ _
   | ASnterm _ _ _ (Some _)
@@ -2751,22 +3140,6 @@ value symbol it (snode, enode) = fun [
 
   -> assert False
 
-  | ASkeyw _ tok -> Raw.add_edge it (snode, Label.TOKEN (SPCL tok), enode)
-  | ASnterm _ nt _ None -> Raw.add_edge it (snode, Label.NTERM nt, enode)
-
-  | ASregexp _ _
-  | ASpriority _ _
-  | ASsyntactic _ _
-
-    -> Raw.add_edge it (snode, Label.EPS, enode)
-
-  | AStok _ cls tokopt ->
-    Raw.add_edge it (snode, Label.TOKEN (CLS cls tokopt), enode)
-
-  | ASanti _ anti_kinds ->
-    let l = anti_kinds |> List.concat_map (fun s -> [(ANTI s); (ANTI ("_"^s))]) in
-    l |> List.iter (fun tok ->
-        Raw.add_edge it (snode, Label.TOKEN tok, enode))
   ]
 ;
 
@@ -2921,7 +3294,10 @@ value closure loc (cg : CG.t) cfgs =
            | NTERM nt as lab ->
               let (snode, _) = Raw.entry_nodes (CG.gram_atn cg) nt in
               let dsts = Raw.traverse (CG.gram_atn cg) n lab in
-              dsts |> List.iter (fun dst -> clrec1 (snode, [dst :: stk]))
+              dsts |> List.iter (fun [
+                  Node.EXIT _ -> clrec1 (snode, stk)
+                | dst -> clrec1 (snode, [dst :: stk])
+                ])
            ])
       ]
   and clrec1 cfg = do { watch_clrec1 cfg ; clrec1' cfg }
@@ -3368,6 +3744,11 @@ value rec compile1_symbol cg loc e s =
         <:expr< parse_opt $s_body$ >>
        }
 
+    | ASoptv loc g e0 s -> do {
+        let s_body = compile1_symbol cg loc e s in
+        <:expr< parse_optv $e0$ $s_body$ >>
+       }
+
     | ASkeyw  loc kws ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
        Exparser.(cparser loc (None,
@@ -3447,6 +3828,10 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
     | ASopt loc _ s -> do {
         let s_body = compile1_symbol cg loc e s in
         (SpNtr loc patt (must <:expr< parse_opt $s_body$ >>), SpoNoth)
+       }
+    | ASoptv loc _ e0 s -> do {
+        let s_body = compile1_symbol cg loc e s in
+        (SpNtr loc patt (must <:expr< parse_optv $e0$ $s_body$ >>), SpoNoth)
        }
     | ASkeyw  loc kws when ps.ap_patt = None ->
        (* <:expr< parser [ [: `("", $str:kws$) :] -> () ] >> *)
@@ -4037,6 +4422,13 @@ value lift_lists loc ?{bootstrap=False} s =
   |> Dump.exec "After S7LiftListsFully"
 ;
 
+value expand_lists loc ?{bootstrap=False} s =
+  s
+  |> lambda_lift loc ~{bootstrap=bootstrap}
+  |> S7ExpandListsPartially.exec
+  |> Dump.exec "After S7ExpandListsPartially"
+;
+
 value lift_left_assoc loc ?{bootstrap=False} s =
   s
   |> lift_lists loc ~{bootstrap=bootstrap}
@@ -4049,6 +4441,13 @@ value expand_macros loc ?{bootstrap=False} s =
   |> lift_left_assoc loc ~{bootstrap=bootstrap}
   |> S9ExpandMacros.exec
   |> Dump.exec "After S9ExpandMacros"
+;
+
+value expand_flag_vala loc ?{bootstrap=False} s =
+  s
+  |> lift_left_assoc loc ~{bootstrap=bootstrap}
+  |> S9ExpandFlagVala.exec
+  |> Dump.exec "After S9ExpandFlagVala"
 ;
 
 value left_factorize2 loc ?{bootstrap=False} s =

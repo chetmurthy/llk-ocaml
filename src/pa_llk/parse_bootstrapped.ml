@@ -131,6 +131,8 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
          ASlist (loc, g, LML_1, s, sep)
       | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"OPT"; s = NEXT ->
          ASopt (loc, g, s)
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"OPTV"; e = expr; s = NEXT ->
+         ASoptv (loc, g, e, s)
       | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc (loc, g, s1, s2, e)
       | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"FLAG"; s = NEXT ->

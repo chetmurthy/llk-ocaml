@@ -179,6 +179,11 @@ and symbol~{pctxt} pc =
          (if g then "GREEDY " else "NONGREEDY ")
          (simple_symbol ~{pctxt=pctxt}) sym
 
+    | ASoptv _ g e sym -> pprintf pc "%sOPTV@;%p@;%p" 
+         (if g then "GREEDY " else "NONGREEDY ")
+         expr e
+         (simple_symbol ~{pctxt=pctxt}) sym
+
     | ASleft_assoc _ g sym1 sym2 e ->
        pprintf pc "%sLEFT_ASSOC@;%p@;ACCUMULATE %p WITH %p"
          (if g then "GREEDY " else "NONGREEDY ")
@@ -238,7 +243,7 @@ and simple_symbol~{pctxt} pc sy =
   | ASanti _ sl ->
      pprintf pc "ANTI @[<2>%p@]" (string_list pctxt) sl
 
-  | ASlist _ _ _ _ _ | ASopt _ _ _ | ASleft_assoc _ _ _ _ _ | ASflag _ _ _ | ASvala _ _ _ as sy ->
+  | ASlist _ _ _ _ _ | ASopt _ _ _ | ASoptv _ _ _ _ | ASleft_assoc _ _ _ _ _ | ASflag _ _ _ | ASvala _ _ _ as sy ->
       pprintf pc "@[<1>(%p)@]" (symbol ~{pctxt=pctxt}) sy
   ]
 
