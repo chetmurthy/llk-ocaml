@@ -287,7 +287,7 @@ value dump f it = do {
 ;
 end ;
 
-module ATN0' = struct
+module ATN0 = struct
 module Node = struct
   type t = [
       ENTER of Name.t
@@ -432,7 +432,7 @@ module CompilingGrammar = struct
     ; atn_first: MHM.t Name.t (list (int * list Token.t))
     ; atn_follow: MHM.t Name.t (list Token.t)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
-    ; atn' : mutable ATN0'.Raw.t
+    ; atn : mutable ATN0.Raw.t
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -448,7 +448,7 @@ module CompilingGrammar = struct
                 ; atn_first = MHM.mk 23
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
-                ; atn' = ATN0'.Raw.mk ()
+                ; atn = ATN0.Raw.mk ()
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -477,7 +477,7 @@ module CompilingGrammar = struct
       ]
   ;
 
-  value gram_atn' cg = (snd cg).atn' ;
+  value gram_atn cg = (snd cg).atn ;
 
   value adjust0_loc loc loc' =
     Ploc.(make_loc
@@ -2734,9 +2734,9 @@ end ;
 (** Build the ATN NFA for this grammar
 *)
 
-module ATN' = struct
+module ATN = struct
 open Token ;
-include ATN0' ;
+include ATN0 ;
 
 module Build = struct
 value symbol it (snode, enode) = fun [
@@ -2908,19 +2908,19 @@ value closure loc (cg : CG.t) cfgs =
   let rec clrec0 = fun [
         (Node.EXIT _, [h::t]) -> clrec1 (h,t)
       | (Node.EXIT nt, []) ->
-         let l = Raw.nonterm_edges (CG.gram_atn' cg) nt in
+         let l = Raw.nonterm_edges (CG.gram_atn cg) nt in
          l |> List.iter (fun (_, _, dst) ->
                   clrec1 (dst, []))
       | (n, stk) ->
-         let labs = Raw.edge_labels (CG.gram_atn' cg) n in
+         let labs = Raw.edge_labels (CG.gram_atn cg) n in
          labs |> List.iter (fun [
              Label.EPS as lab ->
-             let dsts = Raw.traverse (CG.gram_atn' cg) n lab in
+             let dsts = Raw.traverse (CG.gram_atn cg) n lab in
              dsts |> List.iter (fun dst -> clrec1 (dst,stk))
            | TOKEN _ -> ()
            | NTERM nt as lab ->
-              let (snode, _) = Raw.entry_nodes (CG.gram_atn' cg) nt in
-              let dsts = Raw.traverse (CG.gram_atn' cg) n lab in
+              let (snode, _) = Raw.entry_nodes (CG.gram_atn cg) nt in
+              let dsts = Raw.traverse (CG.gram_atn cg) n lab in
               dsts |> List.iter (fun dst -> clrec1 (snode, [dst :: stk]))
            ])
       ]
@@ -2929,7 +2929,7 @@ value closure loc (cg : CG.t) cfgs =
     if List.mem cfg bad.val then ()
     else if exceeds_recursion_depth cfg then do {
       let loc = CG.adjust_loc cg loc in
-      Fmt.(pf stderr "%s: ATN'.closure: configuration exceeds recursion: %a\n%!"
+      Fmt.(pf stderr "%s: ATN.closure: configuration exceeds recursion: %a\n%!"
              (Ploc.string_of_location loc)
              CFG.pp_hum cfg) ;
       Std.push bad cfg
@@ -2954,9 +2954,9 @@ value closure loc (cg : CG.t) cfgs =
  *)
 
 value step1 loc (cg : CG.t) (st : Node.t) = do {
-  let it = CG.gram_atn' cg in
+  let it = CG.gram_atn cg in
   if Raw.is_bhole it st then
-    raise_failwithf loc "ATN'.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
+    raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
   else () ;
   let labs = Raw.edge_labels it st in
   labs
@@ -3066,7 +3066,7 @@ value compute_firstk ~{depth} cg e = do {
     raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
   else () ;
   let open TCFG in
-  let atn = CG.gram_atn' cg in
+  let atn = CG.gram_atn cg in
   let l =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.mapi (fun i r ->
@@ -3125,19 +3125,19 @@ value node_first loc cg node =
 
 
 value entry_first cg e =
-  let atn = CG.gram_atn' cg in
+  let atn = CG.gram_atn cg in
   let (snode, _) = Raw.entry_nodes atn e.ae_name in
   node_first e.ae_loc cg snode
 ;
 
 value entry_follow cg e =
-  let atn = CG.gram_atn' cg in
+  let atn = CG.gram_atn cg in
   let (_, enode) = Raw.entry_nodes atn e.ae_name in
   node_first e.ae_loc cg enode
 ;
 
 value branch_first (cg : CG.t) e =
-  let atn = CG.gram_atn' cg in
+  let atn = CG.gram_atn cg in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
   rl
   |> List.mapi (fun i _ ->
@@ -3150,27 +3150,27 @@ end ;
 module BuildATN = struct
 
 value exec cg = do {
-  ATN'.Build.grammar (CG.gram_atn' cg) cg ;
+  ATN.Build.grammar (CG.gram_atn cg) cg ;
   cg
 }
 ;
 end ;
 
-module ATN'FirstFollow = struct
+module ATNFirstFollow = struct
 
 value store_entry_branch_first cg e =
-  let l = ATN'.branch_first cg e in
+  let l = ATN.branch_first cg e in
   CG.set_atn_first cg e.ae_name l
 ;
 
 value store_entry_follow cg e =
-  let l = ATN'.entry_follow cg e in
+  let l = ATN.entry_follow cg e in
   CG.set_atn_follow cg e.ae_name l
 ;
 
 value exec cg = do {
     (CG.gram_entries cg)
-    |> List.iter (ATN'.store_firstk cg) ;
+    |> List.iter (ATN.store_firstk cg) ;
     (CG.gram_entries cg)
     |> List.iter (store_entry_branch_first cg) ;
     (CG.gram_entries cg)
@@ -4083,7 +4083,7 @@ value atn loc ?{bootstrap=False} s =
 value firstk loc ?{bootstrap=False} s =
   s
   |> atn loc ~{bootstrap=bootstrap}
-  |> ATN'FirstFollow.exec
+  |> ATNFirstFollow.exec
 ;
 
 value entry_regexps loc ?{bootstrap=False} s =
