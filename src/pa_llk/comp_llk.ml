@@ -2838,15 +2838,27 @@ type t = (Node.t * list Node.t) [@@deriving (show,eq,ord) ;] ;
 value pp_hum pps (h,t) = Fmt.(pf pps "[%a]" (list ~{sep=const string " "} Node.pp_hum) [h::t]) ;
 value print x = Fmt.(str "%a" pp_hum x) ;
 end ;
-module TokPath = struct
-type t = { branchnum : int ; priority : option int ; tokpath : list Token.t ; cfgs : list CFG.t }
+module NFACFG = struct
+type t = { branchnum : int ; priority : option int ; cfgs : list CFG.t }
            [@@deriving (show,eq,ord) ;] ;
 value branchnum p = p.branchnum ;
 value priority p = p.priority ;
-value tokpath p = p.tokpath ;
 value cfgs p = p.cfgs ;
 end ;
-module TP = TokPath ;
+
+module TokensCFG = struct
+type t = (list Token.t * NFACFG.t)
+           [@@deriving (show,eq,ord) ;] ;
+open NFACFG ;
+value branchnum p = (snd p).branchnum ;
+value priority p = (snd p).priority ;
+value tokpath p = (fst p) ;
+value cfgs p = (snd p).cfgs ;
+
+value replace_tokpath x p = (x, snd p) ;
+value replace_cfgs x p = (fst p, {(snd p) with cfgs = x}) ;
+end ;
+module TCFG = TokensCFG ;
 
 (** closure cg [cfgs]
 
@@ -2961,19 +2973,21 @@ value step1 loc (cg : CG.t) (st : Node.t) = do {
 
     [t] is a TokPath: extend it by one token.
 
-    To do this, we first apply [closure]: this produces more cfgs, but still only one TP.
+    To do this, we first apply [closure]: this produces more cfgs, but still only one TCFG.
     Then for each cfg, we apply step1, producing pairs of (token * state), which we apply
-    to the current TP, producing a a list of new TP.
+    to the current TCFG, producing a a list of new TCFG.
  *)
 value extend1 loc cg t =
-  let open TP in
-  let cfgs = closure loc cg t.cfgs in
+  let open TCFG in
+  let cfgs = closure loc cg (TCFG.cfgs t) in
   cfgs
   |> List.concat_map (fun ((st, stk) as cfg) ->
          let token_state_list = step1 loc cg st in
          let token_cfg_list = token_state_list |> List.map (fun (tok, n) -> (tok,(n,stk))) in
          token_cfg_list |> List.map (fun (tok, cfg) ->
-                               {(t) with tokpath = t.tokpath@[tok]; cfgs= [cfg]})
+                               t
+                               |> replace_tokpath ((TCFG.tokpath t)@[tok])
+                               |> replace_cfgs [cfg])
        )
 ;
 
@@ -2984,20 +2998,20 @@ value extend1 loc cg t =
     (2) any partition has length>1 and priorities are not distinct
  *)
 
-value ambiguous_partition (l : list TP.t) =
+value ambiguous_partition (l : list TCFG.t) =
   match l with [
-      [{TP.tokpath=[]} :: _] -> True
-    | l -> not (Std.distinct (List.map TP.priority l))
+      [([],_) :: _] -> True
+    | l -> not (Std.distinct (List.map TCFG.priority l))
     ]
 ;
 
-value ambiguous (ll : list (list TP.t)) =
+value ambiguous (ll : list (list TCFG.t)) =
   List.exists ambiguous_partition ll
 ;
 
 value separate_paths l =
-  let open TP in
-  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let open TCFG in
+  let ll = Std.nway_partition (fun p1 p2 -> (tokpath p1) = (tokpath p2)) l in
   let (ambig_ll, ok_ll) = Ppxutil.filter_split ambiguous_partition ll in
   (List.sort_uniq Stdlib.compare (List.concat ambig_ll),
    List.sort_uniq Stdlib.compare (List.concat ok_ll))
@@ -3011,18 +3025,18 @@ value separate_paths l =
   (4) for each length>1 partition, use [extend1] to extend each element
   (5) partition by (branch-num, token-list) and union the state-sets
  *)
-type branches_toks_list = list TP.t ;
+type branches_toks_list = list TCFG.t ;
 value extend_branches loc (cg : CG.t) (l : branches_toks_list) : (branches_toks_list * branches_toks_list) =
-  let open TP in
-  let ll = Std.nway_partition (fun p1 p2 -> p1.tokpath = p2.tokpath) l in
+  let open TCFG in
+  let ll = Std.nway_partition (fun p1 p2 -> (tokpath p1) = (tokpath p2)) l in
   let l = ll |> List.concat_map (fun [
-    [{tokpath=[_ :: _]}] as l -> l
+    [([_ :: _],_)] as l -> l
   | l -> l |> List.concat_map (extend1 loc cg)
   ]) in
-  let ll = Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum && p1.tokpath=p2.tokpath) l in
+  let ll = Std.nway_partition (fun p1 p2 -> (branchnum p1)=(branchnum p2) && (tokpath p1)=(tokpath p2)) l in
   let l = ll |> List.map (fun l ->
     let p0 = List.hd l in
-    {(p0) with cfgs = List.concat_map TP.cfgs l}) in
+    p0 |> replace_cfgs (List.concat_map TCFG.cfgs l)) in
   separate_paths l
 ;
 
@@ -3051,28 +3065,28 @@ value compute_firstk ~{depth} cg e = do {
   else if is_regexp_prediction_entry e then
     raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
   else () ;
-  let open TP in
+  let open TCFG in
   let atn = CG.gram_atn' cg in
   let l =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.mapi (fun i r ->
            let node = Raw.entry_branch atn e.ae_name i in
-           let priority = match r.ar_psymbols with [
+           let pri = match r.ar_psymbols with [
              [{ap_symb=ASpriority _ n} :: _] -> Some n
            | _ -> None
            ] in
-           {branchnum=i; priority=priority; tokpath=[]; cfgs=[(node,[])]}) in
+           ([], NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]})) in
   let l = compute_firstk_depth e.ae_loc cg e.ae_name ~{depth=depth} (l, []) in
   let l =
     l
-    |> Std.nway_partition (fun p1 p2 -> TP.tokpath p1 = TP.tokpath p2)
+    |> Std.nway_partition (fun p1 p2 -> TCFG.tokpath p1 = TCFG.tokpath p2)
     |> List.map (fun [
          [] -> assert False
        | [x] -> x
        | l -> do {
-           assert (Std.distinct (List.map TP.priority l)) ;
+           assert (Std.distinct (List.map TCFG.priority l)) ;
            List.fold_left (fun p1 p2 ->
-               match (p1.priority, p2.priority) with [
+               match ((priority p1), (priority p2)) with [
                    (None, Some _) -> p2
                  | (Some _, None) -> p1
                  | (Some n, Some m) when n < m -> p1
@@ -3083,10 +3097,10 @@ value compute_firstk ~{depth} cg e = do {
          }
        ]) in
   l
-  |> Std.nway_partition (fun p1 p2 -> p1.branchnum=p2.branchnum)
+  |> Std.nway_partition (fun p1 p2 -> branchnum p1=branchnum p2)
   |> List.map (fun l ->
          let p0 = List.hd l in
-         (p0.branchnum, List.map TP.tokpath l))
+         (branchnum p0, List.map TCFG.tokpath l))
 }
 ;
 
