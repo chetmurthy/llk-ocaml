@@ -8,23 +8,23 @@
 #require "bos";;
 #require "str";;
 
-(*
+
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
-
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
 
 (*
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
+*)
+
 #require "camlp5.pr_o";;
 module Pr = Pr_o ;;
- *)
 
+(*
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
-
+*)
 #require "camlp5.quotations" ;;
 
 #require "pa_ppx.utils";;
@@ -285,8 +285,8 @@ ATN.Raw.dump stdout atn ;;
 
 Pp_MLast.Ploc.pp_loc_verbose := false ;;
 
-#trace ATN.extend_branches ;;
 (*
+#trace ATN.extend_branches ;;
 #trace ATN.closure ;;
 #trace ATN.step1 ;;
 #trace ATN.watch_clrec1 ;;
@@ -295,7 +295,7 @@ Pp_MLast.Ploc.pp_loc_verbose := false ;;
 #trace ATN.compute_firstk ;;
 #trace ATN.branch_first ;;
  *)
-
+(*
 open ATN0 ;;
 open ATN ;;
 open CFG ;;
@@ -311,3 +311,4 @@ ATN.compute_firstk ~depth:2 cg e ;;
 (*
 "xx.ml" |> RT.read_file |> Top.codegen Ploc.dummy ~bootstrap:true ;;
  *)
+*)
