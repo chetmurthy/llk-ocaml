@@ -3561,6 +3561,7 @@ module ListDFAState = struct
 end ;
 module ListDFA = BuildDFA(ListDFAState) ;
 
+module ListFirstk = struct
 open ListDFA ;
 
 value store_firstk cg e =
@@ -3605,6 +3606,18 @@ value branch_first (cg : CG.t) e =
          (i, node_first e.ae_loc cg node))
 ;
 
+value store_entry_branch_first cg e =
+  let l = branch_first cg e in
+  CG.set_atn_first cg e.ae_name l
+;
+
+value store_entry_follow cg e =
+  let l = entry_follow cg e in
+  CG.set_atn_follow cg e.ae_name l
+;
+
+end ;
+
 end ;
 
 module BuildATN = struct
@@ -3617,20 +3630,11 @@ value exec cg = do {
 end ;
 
 module ATNFirstFollow = struct
-
-value store_entry_branch_first cg e =
-  let l = ATN.branch_first cg e in
-  CG.set_atn_first cg e.ae_name l
-;
-
-value store_entry_follow cg e =
-  let l = ATN.entry_follow cg e in
-  CG.set_atn_follow cg e.ae_name l
-;
+open ATN.ListFirstk ;
 
 value exec cg = do {
     (CG.gram_entries cg)
-    |> List.iter (ATN.store_firstk cg) ;
+    |> List.iter (store_firstk cg) ;
     (CG.gram_entries cg)
     |> List.iter (store_entry_branch_first cg) ;
     (CG.gram_entries cg)
