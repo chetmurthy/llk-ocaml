@@ -29,7 +29,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and assoc_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "GREEDY") -> q0002 lastf (ofs + 1)
@@ -53,7 +53,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and assoc__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
@@ -81,7 +81,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and bootstrapped_top_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "GRAMMAR") -> q0001 lastf (ofs + 1)
@@ -143,7 +143,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e0_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0006 lastf (ofs + 1)
@@ -181,7 +181,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e0__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -220,7 +220,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e1_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -256,7 +256,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e1__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -301,7 +301,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e2_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0002 lastf (ofs + 1)
@@ -335,7 +335,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e2'_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -365,7 +365,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e2'__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -402,7 +402,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e3_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -435,7 +435,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e3__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -478,7 +478,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e4_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -511,7 +511,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e4__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -555,7 +555,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e4__0003_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "&") -> q0001 lastf (ofs + 1)
@@ -575,7 +575,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e5_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -608,7 +608,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e5__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -652,7 +652,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e5__0003_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "|") -> q0001 lastf (ofs + 1)
@@ -682,7 +682,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and e6_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -727,7 +727,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and entry_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -752,7 +752,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and entry__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ":") -> q0002 lastf (ofs + 1)
@@ -777,7 +777,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and entry__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -821,7 +821,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and entry__0005_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ",") -> q0001 lastf (ofs + 1)
@@ -845,7 +845,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and exports_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "EXPORT") -> q0001 lastf (ofs + 1)
@@ -866,7 +866,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and exports__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -904,7 +904,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and external_entry_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
@@ -917,7 +917,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and externals_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
@@ -940,7 +940,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and externals__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
@@ -993,7 +993,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", _) -> q0001 lastf (ofs + 1)
@@ -1017,7 +1017,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "EXTEND") -> q0001 lastf (ofs + 1)
@@ -1033,7 +1033,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
@@ -1053,7 +1053,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__0003_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
@@ -1072,7 +1072,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__0004_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
@@ -1089,7 +1089,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__0005_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -1112,7 +1112,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and grammar_body__0006_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -1161,7 +1161,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and level_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
@@ -1199,7 +1199,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and level_list_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
@@ -1227,7 +1227,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and level_list__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
@@ -1267,7 +1267,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and level_list__0004_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "|") -> q0001 lastf (ofs + 1)
@@ -1290,7 +1290,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and paren_pattern_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -1313,7 +1313,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and paren_pattern__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -1351,7 +1351,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and paren_pattern__0003_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ",") -> q0001 lastf (ofs + 1)
@@ -1378,7 +1378,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and pattern_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0002 lastf (ofs + 1)
@@ -1412,7 +1412,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and position_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "AFTER") -> q0006 lastf (ofs + 1)
@@ -1431,7 +1431,7 @@ module LLKGram =
           q0000 None 0
         and psymbol __strm__ =
           match
-            psymbol_regexp __strm__[@llk.regexp "\"_\" #0 | LIDENT \"=\" #1 | LIDENT \"[\" #2 | \"(\" (LIDENT | \"(\" | \"_\" | \",\" | \")\")* \"=\" #3 | (LIDENT | \"[\" | \"(\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #4"]
+            psymbol_regexp __strm__[@llk.regexp "\"_\" #0 | LIDENT \"=\" #1 | LIDENT \"[\" #2 | \"(\" (LIDENT | \"(\" | \"_\" | \",\" | \")\")* \"=\" #3 | (LIDENT | \"[\" | \"(\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #4"]
           with
             Some (_, 0) ->
               (parser bp
@@ -1490,7 +1490,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0003 lastf (ofs + 1)
@@ -1513,6 +1513,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 2) in q0002 lastf (ofs + 1)
@@ -1575,7 +1577,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "->") -> q0001 lastf (ofs + 1)
@@ -1597,7 +1599,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "LEVEL") -> q0001 lastf (ofs + 1)
@@ -1620,7 +1622,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol__0003_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -1665,7 +1667,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and psymbol__0006_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ",") -> q0001 lastf (ofs + 1)
@@ -1680,7 +1682,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and regexp_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -1713,7 +1715,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and regexp_entry_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -1737,7 +1739,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and regexps_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "REGEXPS") -> q0001 lastf (ofs + 1)
@@ -1758,7 +1760,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and regexps__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -1780,7 +1782,7 @@ module LLKGram =
               Stream.Failure -> raise Stream.Failure
         and rule __strm__ =
           match
-            rule_regexp __strm__[@llk.regexp "\"->\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #1"]
+            rule_regexp __strm__[@llk.regexp "\"->\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -1804,7 +1806,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -1828,6 +1830,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
@@ -1867,7 +1871,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "->") -> q0002 lastf (ofs + 1)
@@ -1879,7 +1883,7 @@ module LLKGram =
           q0000 None 0
         and rule__0002 __strm__ =
           match
-            rule__0002_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #0"]
+            rule__0002_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -1893,7 +1897,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -1916,6 +1920,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
@@ -1958,7 +1964,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule__0004_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ";") -> q0001 lastf (ofs + 1)
@@ -1979,7 +1985,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_list_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
@@ -1988,7 +1994,7 @@ module LLKGram =
           q0000 None 0
         and rule_list__0001 __strm__ =
           match
-            rule_list__0001_regexp __strm__[@llk.regexp "\"]\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #1"]
+            rule_list__0001_regexp __strm__[@llk.regexp "\"]\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -2005,7 +2011,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_list__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2031,6 +2037,8 @@ module LLKGram =
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PRIORITY") ->
@@ -2048,7 +2056,7 @@ module LLKGram =
           q0000 None 0
         and rule_list__0002 __strm__ =
           match
-            rule_list__0002_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #0"]
+            rule_list__0002_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -2062,7 +2070,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_list__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2086,6 +2094,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
@@ -2128,7 +2138,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and rule_list__0004_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "|") -> q0001 lastf (ofs + 1)
@@ -2155,7 +2165,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and sep_opt_sep_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "SEP") -> q0001 lastf (ofs + 1)
@@ -2170,7 +2180,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and sep_opt_sep__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "OPT_SEP") -> q0001 lastf (ofs + 1)
@@ -2184,13 +2194,13 @@ module LLKGram =
                 Stream.Failure -> raise Stream.Failure
         and symbol __strm__ =
           match
-            symbol_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #0"]
+            symbol_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #0"]
           with
             Some (_, 0) -> (parser [< a = symbol__0002 >] -> a) __strm__
           | _ -> raise Stream.Failure
         and symbol_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2212,6 +2222,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
@@ -2229,7 +2241,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0002 __strm__ =
           match
-            symbol__0002_regexp __strm__[@llk.regexp "(UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"OPT\") #0 | (LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"NEXT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #1"]
+            symbol__0002_regexp __strm__[@llk.regexp "(UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"OPT\" | UIDENT \"OPTV\") #0 | (LIDENT | \"[\" | \"(\" | UIDENT | STRING | UIDENT \"ANTI\" | UIDENT \"NEXT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\") #1"]
           with
             Some (_, 0) ->
               (parser
@@ -2244,7 +2256,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2266,6 +2278,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 1) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 1) in q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 1) in q0002 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
@@ -2304,7 +2318,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0003_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2431,7 +2445,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0004_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0002 lastf (ofs + 1)
@@ -2463,7 +2477,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0006 __strm__ =
           match
-            symbol__0006_regexp __strm__[@llk.regexp "UIDENT \"GREEDY\" #0 | UIDENT \"NONGREEDY\" #1 | (UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"OPT\") #2"]
+            symbol__0006_regexp __strm__[@llk.regexp "UIDENT \"GREEDY\" #0 | UIDENT \"NONGREEDY\" #1 | (UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"OPT\" | UIDENT \"OPTV\") #2"]
           with
             Some (_, 0) -> (parser [< '"UIDENT", "GREEDY" >] -> true) __strm__
           | Some (_, 1) ->
@@ -2472,7 +2486,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0006_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "FLAG") -> q0001 lastf (ofs + 1)
@@ -2482,6 +2496,7 @@ module LLKGram =
             | Some ("UIDENT", "LIST1") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "NONGREEDY") -> q0002 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") -> q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") -> q0001 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 2) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
@@ -2489,7 +2504,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0007 g __strm__ =
           match
-            symbol__0007_regexp __strm__[@llk.regexp "UIDENT \"LEFT_ASSOC\" #1 | UIDENT \"OPT\" #4 | UIDENT \"LIST1\" #3 | UIDENT \"FLAG\" #0 | UIDENT \"LIST0\" #2"]
+            symbol__0007_regexp __strm__[@llk.regexp "UIDENT \"LIST0\" #2 | UIDENT \"OPTV\" #5 | UIDENT \"FLAG\" #0 | UIDENT \"OPT\" #4 | UIDENT \"LIST1\" #3 | UIDENT \"LEFT_ASSOC\" #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -2560,23 +2575,39 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASopt (loc, g, s))
                 __strm__
+          | Some (_, 5) ->
+              (parser bp
+                 [< '"UIDENT", "OPTV";
+                    e =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[e = expr] expected after [g = symbol__0006; UIDENT 'OPTV'] (in [symbol])"
+                        (Grammar.Entry.parse_token_stream expr);
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = symbol__0006; UIDENT 'OPTV'; e = expr] (in [symbol])"
+                        symbol__0003 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASoptv (loc, g, e, s))
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0007_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", "FLAG") -> q0005 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFT_ASSOC") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "LIST0") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "LIST1") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT") -> q0001 lastf (ofs + 1)
+              Some ("UIDENT", "FLAG") -> q0006 lastf (ofs + 1)
+            | Some ("UIDENT", "LEFT_ASSOC") -> q0005 lastf (ofs + 1)
+            | Some ("UIDENT", "LIST0") -> q0004 lastf (ofs + 1)
+            | Some ("UIDENT", "LIST1") -> q0003 lastf (ofs + 1)
+            | Some ("UIDENT", "OPT") -> q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") -> q0001 lastf (ofs + 1)
             | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 4) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 3) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 2) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          and q0001 lastf ofs = let lastf = Some (ofs, 5) in lastf
+          and q0002 lastf ofs = let lastf = Some (ofs, 4) in lastf
+          and q0003 lastf ofs = let lastf = Some (ofs, 3) in lastf
+          and q0004 lastf ofs = let lastf = Some (ofs, 2) in lastf
+          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0008 s_t __strm__ =
           match
@@ -2592,7 +2623,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0008_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
@@ -2628,7 +2659,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0009_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
@@ -2664,7 +2695,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0010_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
@@ -2700,7 +2731,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0011_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
@@ -2728,7 +2759,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0012_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "LEVEL") -> q0001 lastf (ofs + 1)
@@ -2754,7 +2785,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0013_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
@@ -2804,7 +2835,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0016_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("STRING", _) -> q0001 lastf (ofs + 1)
@@ -2826,7 +2857,7 @@ module LLKGram =
               Stream.Failure -> raise Stream.Failure
         and symbol__0018 __strm__ =
           match
-            symbol__0018_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #0"]
+            symbol__0018_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | STRING | UIDENT \"ANTI\" | UIDENT \"FLAG\" | UIDENT \"LEFT_ASSOC\" | UIDENT \"LIST0\" | UIDENT \"LIST1\" | UIDENT \"NEXT\" | UIDENT \"OPT\" | UIDENT \"OPTV\" | UIDENT \"PREDICT\" | UIDENT \"PRIORITY\" | UIDENT \"SELF\" | UIDENT \"V\" | \"->\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -2840,7 +2871,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0018_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2864,6 +2895,8 @@ module LLKGram =
             | Some ("UIDENT", "NONGREEDY") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "OPT") ->
+                let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "OPTV") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
             | Some ("UIDENT", "PREDICT") ->
                 let lastf = Some (ofs, 1) in q0001 lastf (ofs + 1)
@@ -2908,7 +2941,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0020_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2949,7 +2982,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0022_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -2990,7 +3023,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0024_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
@@ -3035,7 +3068,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0027_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "|") -> q0001 lastf (ofs + 1)
@@ -3068,7 +3101,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0030_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ",") -> q0001 lastf (ofs + 1)
@@ -3089,7 +3122,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0031_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ",") -> q0001 lastf (ofs + 1)
@@ -3110,7 +3143,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and symbol__0032_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ",") -> q0001 lastf (ofs + 1)
@@ -3146,7 +3179,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and token_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0002 lastf (ofs + 1)
@@ -3169,7 +3202,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and token__0001_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
@@ -3189,7 +3222,7 @@ module LLKGram =
           | _ -> raise Stream.Failure
         and token__0002_regexp strm =
           let open Llk_regexps in
-          let open PatternBaseToken in
+          let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0001 lastf (ofs + 1)
@@ -3231,6 +3264,7 @@ module LLKGram =
       lexer.tok_using ("INT", "");
       lexer.tok_using ("LIDENT", "");
       lexer.tok_using ("STRING", "");
+      lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");
       lexer.tok_using ("UIDENT", "");

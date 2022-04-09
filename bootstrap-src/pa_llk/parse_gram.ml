@@ -145,6 +145,8 @@ EXTEND
          ASlist loc g LML_1 s sep
       | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "OPT"; s = SELF ->
          ASopt loc g s
+      | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "OPTV"; e = expr ; s = SELF ->
+         ASoptv loc g e s
       | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "FLAG"; s = SELF ->
           ASflag loc g s
       | g = [ UIDENT "GREEDY" -> True | UIDENT "NONGREEDY" -> False | -> True ] ; UIDENT "LEFT_ASSOC"; s1 = SELF ; UIDENT "ACCUMULATE" ; s2 = SELF ; UIDENT "WITH" ; e=expr LEVEL "simple" ->
