@@ -3422,16 +3422,18 @@ value extend1 loc cg (t : NFACFG.t) =
 ;
 
 
-(** a [SCFG.next_t] is ambiguous if its [NFACFG.t]s do not have distinct priorities.
+(** a [SCFG._t] is ambiguous if its [NFACFG.t]s do not have distinct priorities.
  *)
-
-value ambiguous_scfg (t : SCFG._t 'a) =
+value ambiguous_scfg__t (t : SCFG._t 'a) =
   let l = t.SCFG.nfacfgs in
   not (Std.distinct (List.map NFACFG.priority l))
 ;
 
-value separate_configurations (l : list SCFG.next_t) =
-  Ppxutil.filter_split ambiguous_scfg l
+(** a [SCFG.t] is ambiguous if it is ambiguous as an [SCFG._t], or its
+    dfastate [is_initial]
+ *)
+value ambiguous_scfg dfa (t : SCFG.t) =
+  ambiguous_scfg__t t || S.is_initial dfa t.SCFG.dfastate
 ;
 
 (** extend_branches1:
@@ -3447,7 +3449,7 @@ value separate_configurations (l : list SCFG.next_t) =
 value extend_branches1 loc (cg : CG.t) dfa (t : SCFG.t) : (list SCFG.t * list SCFG.t) = do {
   let open SCFG in
   let open NFACFG in
-  assert (ambiguous_scfg t) ;
+  assert (ambiguous_scfg dfa t) ;
   let next_l : list (Token.t * NFACFG.t) = t.SCFG.nfacfgs |> List.concat_map (extend1 loc cg) in
   let token_partitions : list (list (Token.t * NFACFG.t)) =
     Std.nway_partition (fun (tok1,_) (tok2,_) -> tok1=tok2) next_l in
@@ -3461,7 +3463,7 @@ value extend_branches1 loc (cg : CG.t) dfa (t : SCFG.t) : (list SCFG.t * list SC
   let scfgs =
     token_nfacfgs_list
     |> List.map (fun (tok,nfacfgs) -> SCFG.mk (t.dfastate, tok) nfacfgs) in
-  let (ambig, ok) = Ppxutil.filter_split ambiguous_scfg scfgs in
+  let (ambig, ok) = Ppxutil.filter_split ambiguous_scfg__t scfgs in
   let to_scfg_t t =
     let (dfast, tok) = t.dfastate in
     let nfacfgs = t.nfacfgs in
@@ -3483,8 +3485,8 @@ value extend_branches loc (cg : CG.t) dfa (l : list SCFG.t) : (list SCFG.t * lis
   let open SCFG in
   let open NFACFG in
 
-  assert (List.for_all ambiguous_scfg l) ;
-  assert (Std.distinct (List.map SCFG.dfastate l)) ;
+  assert (List.for_all (ambiguous_scfg dfa) l) ;
+  assert (Std.distinct (List.map SCFG.dfastate l) || List.for_all (S.is_initial dfa) (List.map SCFG.dfastate l)) ;
   let ambig_ok_l =
     l
     |> List.map (extend_branches1 loc cg dfa) in
@@ -3520,7 +3522,7 @@ value compute_firstk ~{depth} cg dfa e = do {
   else () ;
   let open SCFG in
   let atn = CG.gram_atn cg in
-  let l =
+  let nfacfgs =
     (List.hd e.ae_levels).al_rules.au_rules
     |> List.mapi (fun i r ->
            let node = Raw.entry_branch atn e.ae_name i in
@@ -3528,13 +3530,19 @@ value compute_firstk ~{depth} cg dfa e = do {
              [{ap_symb=ASpriority _ n} :: _] -> n
            | _ -> -1
            ] in
-           SCFG.mk (S.initial dfa)  [NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}]) in
-  let l = compute_firstk_depth e.ae_loc cg dfa e.ae_name ~{depth=depth} (l, []) in
-  assert (not (List.exists ambiguous_scfg l)) ;
+           NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
+  let scfg = SCFG.mk (S.initial dfa) nfacfgs in
+  let l = compute_firstk_depth e.ae_loc cg dfa e.ae_name ~{depth=depth} ([scfg], []) in
+  assert (not (List.exists (ambiguous_scfg dfa) l)) ;
   l
   |> List.map (fun (t : SCFG.t) ->
-         let p0 = List.hd t.SCFG.nfacfgs in
-         (p0.NFACFG.branchnum, t.SCFG.dfastate))
+         let p0 = match t.SCFG.nfacfgs with [
+             [p0] -> p0
+           | l ->
+             List.hd (l |> List.stable_sort (fun p1 p2 -> -(Int.compare p1.NFACFG.priority p2.NFACFG.priority)))
+           ] in
+         (p0.NFACFG.branchnum, t.SCFG.dfastate)
+       )
   |> Std.nway_partition (fun (n1,_) (n2,_) -> n1=n2)
   |> List.map (fun l ->
       let n = fst (List.hd l) in

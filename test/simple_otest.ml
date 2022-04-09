@@ -292,6 +292,26 @@ END;
 |foo}
 ] ;;
 
+
+[@@@llk
+{foo|
+GRAMMAR Priority:
+EXPORT: e;
+  e: [ [ PRIORITY 1 ; "let" ; s = STRING -> ("e: let "^s)
+       |  e = e1 -> e ] ] ;
+
+  e1:
+    [
+      [ "let" ; s = STRING  -> ("e1: let "^s)
+      | n = INT -> ("e1: "^n)
+      ]
+    ]
+  ;
+END;
+
+|foo}
+] ;;
+
 [@@@llk
 {foo|
 GRAMMAR Empty:
@@ -518,6 +538,10 @@ let tests = "simple" >::: [
     ; "Neg" >:: (fun _ ->
         assert_equal (Right "let a") (pa Neg.e {|let "a"|})
       ; assert_equal (Left "0") (pa Neg.e {|0|})
+    )
+    ; "Priority" >:: (fun _ ->
+        assert_equal ~printer:(fun x -> x) "e: let a" (pa Priority.e {|let "a"|})
+      ; assert_equal ~printer:(fun x -> x) "e1: 0" (pa Priority.e {|0|})
     )
     ; "Empty" >:: (fun _ ->
         assert_equal (Right "let a") (pa Empty.e {|let "a"|})
