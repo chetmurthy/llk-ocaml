@@ -41,7 +41,7 @@ module Ctr = struct
 end ;
 
 module StringCtr = struct
-  type t = { it : Hashtbl.t string (ref int) } ;
+  type t = { it : Hashtbl.t string Ctr.t } ;
   value mk () = { it = Hashtbl.create 23 } ;
   value find {it=it} s =
     match Hashtbl.find it s with [
@@ -53,7 +53,7 @@ module StringCtr = struct
         }
       ]
   ;
-  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+  value next ctr = Ctr.next ctr ;
   value fresh_name root it =
     let r = find it (fst root) in
     let n = Ctr.next r in
