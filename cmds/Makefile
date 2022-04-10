@@ -18,6 +18,20 @@ OML = standalone.ml
 all: standalone-o.opt standalone-r.opt \
 	standalone-o.exe standalone-r.exe \
 
+#RECORD=perf record --call-graph dwarf -- 
+RECORD=perf record --call-graph dwarf,32768 -i -e cycles:u -- 
+
+perf: standalone-r.opt
+	$(RECORD) ./standalone-r.opt firstk xx.ml alg_attributes_no_anti
+
+FGDIR=$(HOME)/Hack/Github/brendangregg/FlameGraph
+
+flamegraph::
+	perf script | $(FGDIR)/stackcollapse-perf.pl | $(FGDIR)/flamegraph.pl > perf-flamegraph.svg
+
+report::
+	perf report --children
+
 R_PACKAGES=bos,fmt,cmdliner,unix,compiler-libs.common,camlp5,camlp5.pr_r.link,camlp5.pa_r.link,camlp5.extfun,camlp5.extend,camlp5.pprintf,camlp5.quotations.link,ounit2,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,camlp5.extend,pa_llk_compiler.link,camlp5,pa_llk_runtime
 
 O_PACKAGES=bos,fmt,cmdliner,unix,compiler-libs.common,camlp5,camlp5.pr_o.link,camlp5.pa_o.link,camlp5.extfun,camlp5.extend,camlp5.pprintf,camlp5.quotations.link,ounit2,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,camlp5.extend,pa_llk_compiler.link,camlp5,pa_llk_runtime
