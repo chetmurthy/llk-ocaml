@@ -3548,9 +3548,8 @@ value is_regexp_prediction_entry e =
   |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
 ;
 
-value compute_firstk ~{depth} cg e = do {
+value _compute_firstk ~{depth} cg e = do {
   let loc = e.ae_loc in
-  Fmt.(pf stderr "START %s.compute_firstk(%s)\n%!" S.prefix (Name.print e.ae_name)) ;
   if S9SeparateSyntactic.is_syntactic_predicate_entry e then
     raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" S.prefix (Name.print e.ae_name)
   else if is_regexp_prediction_entry e then
@@ -3586,6 +3585,25 @@ value compute_firstk ~{depth} cg e = do {
       let n = fst (List.hd l) in
       (n, List.map snd l)) in
   (l, dfa)
+}
+;
+
+value duration stime etime =
+  Int64.of_float (1000.0 *. 1000.0 *. 1000.0 *. (etime -. stime))
+;
+
+value compute_firstk ~{depth} cg e = do {
+  let loc = e.ae_loc in
+  Fmt.(pf stderr "ENTER %s.compute_firstk(%s)\n%!" S.prefix (Name.print e.ae_name)) ;
+  let stime = Unix.gettimeofday() in
+  let rv = _compute_firstk ~{depth} cg e in
+  let etime = Unix.gettimeofday() in
+  let dur = duration stime etime in
+  Fmt.(pf stderr "EXIT %s.compute_firstk(%s): %a\n%!"
+         S.prefix (Name.print e.ae_name)
+         uint64_ns_span dur
+  ) ;
+  rv
 }
 ;
 end ;
