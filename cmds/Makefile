@@ -18,9 +18,9 @@ OML =
 all: standalone-o.opt standalone-r.opt \
 	standalone-o.exe standalone-r.exe \
 
-R_PACKAGES=bos,fmt,unix,compiler-libs.common,camlp5,camlp5.pr_r.link,camlp5.pa_r.link,camlp5.extfun,camlp5.extend,camlp5.pprintf,camlp5.quotations,ounit2,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,camlp5.extend,pa_llk_compiler.link,camlp5,pa_llk_runtime
+R_PACKAGES=bos,fmt,unix,compiler-libs.common,camlp5,camlp5.pr_r.link,camlp5.pa_r.link,camlp5.extfun,camlp5.extend,camlp5.pprintf,camlp5.quotations.link,ounit2,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,camlp5.extend,pa_llk_compiler.link,camlp5,pa_llk_runtime
 
-O_PACKAGES=bos,fmt,unix,compiler-libs.common,camlp5,camlp5.pr_o.link,camlp5.pa_o.link,camlp5.extfun,camlp5.extend,camlp5.pprintf,camlp5.quotations,ounit2,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,camlp5.extend,pa_llk_compiler.link,camlp5,pa_llk_runtime
+O_PACKAGES=bos,fmt,unix,compiler-libs.common,camlp5,camlp5.pr_o.link,camlp5.pa_o.link,camlp5.extfun,camlp5.extend,camlp5.pprintf,camlp5.quotations.link,ounit2,pa_ppx.runtime_fat,pa_ppx.testutils,str,pa_ppx.deriving_plugins.std,camlp5.extend,pa_llk_compiler.link,camlp5,pa_llk_runtime
 
 standalone-o.opt: standalone.cmx
 	$(OCAMLFIND) ocamlopt $(DEBUG) $(OCAMLCFLAGS) -package $(O_PACKAGES) -syntax camlp5r -linkpkg -linkall -o $@ $<
