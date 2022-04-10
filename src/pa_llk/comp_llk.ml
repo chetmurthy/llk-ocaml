@@ -191,6 +191,7 @@ module type GRAPHSIG = sig
   value nodes : t -> list Node.t ;
   value add_edge : t -> edge_t -> unit ;
   value edge_labels : t -> Node.t -> list Label.t ;
+  value edges : t -> Node.t -> list edge_t ;
   value traverse : t -> Node.t -> Label.t -> list Node.t ;
   value dump : out_channel -> t -> unit ;
 end ;
@@ -255,6 +256,12 @@ value traverse it src lab =
       ])
     | exception Not_found -> []
     ]
+;
+value edges it src =
+  edge_labels it src
+  |> List.concat_map (fun lab ->
+         traverse it src lab
+         |> List.map (fun dst -> (src, lab, dst)))
 ;
 
 value dump f it = do {
@@ -425,6 +432,8 @@ end ;
 
 end ;
 
+type exported_dfa_t = (int * list (int * option Token.t * list (Token.t * int))) ;
+
 module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
@@ -437,6 +446,7 @@ module CompilingGrammar = struct
     ; atn_follow: MHM.t Name.t (list Token.t)
     ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
     ; atn : mutable ATN0.Raw.t
+    ; atn_dfa : MHM.t Name.t (option exported_dfa_t)
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -453,6 +463,7 @@ module CompilingGrammar = struct
                 ; atn_follow = MHM.mk 23
                 ; atn_firstk = MHM.mk 23
                 ; atn = ATN0.Raw.mk ()
+                ; atn_dfa = MHM.mk 23
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -524,6 +535,9 @@ module CompilingGrammar = struct
 
   value set_atn_firstk cg ename l = MHM.add (snd cg).atn_firstk (ename, l) ;
   value atn_firstk cg ename = MHM.map (snd cg).atn_firstk ename ;
+
+  value set_atn_dfa cg ename l = MHM.add (snd cg).atn_dfa (ename, l) ;
+  value atn_dfa cg ename = MHM.map (snd cg).atn_dfa ename ;
 
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
@@ -3253,7 +3267,7 @@ end ;
 
 module type DFA_STATE_SIG = sig
   type t = 'b ;
-  value mk_dfa : unit -> t ;
+  value mk_dfa : list NFACFG.t -> t ;
   type state_t = 'a [@@deriving (show,eq,ord) ;] ;
   value initial : t -> state_t ;
   value is_initial: t -> state_t -> bool ;
@@ -3534,7 +3548,7 @@ value is_regexp_prediction_entry e =
   |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
 ;
 
-value compute_firstk ~{depth} cg dfa e = do {
+value compute_firstk ~{depth} cg e = do {
   let loc = e.ae_loc in
   Fmt.(pf stderr "START %s.compute_firstk(%s)\n%!" S.prefix (Name.print e.ae_name)) ;
   if S9SeparateSyntactic.is_syntactic_predicate_entry e then
@@ -3553,11 +3567,12 @@ value compute_firstk ~{depth} cg dfa e = do {
            | _ -> -1
            ] in
            NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
+  let dfa = S.mk_dfa nfacfgs in
   let scfg = SCFG.mk (S.initial dfa) nfacfgs in
   let scfg = scfg_closure loc cg scfg in
   let l = compute_firstk_depth e.ae_loc cg dfa e.ae_name ~{depth=depth} ([scfg], []) in
   assert (not (List.exists (ambiguous_scfg dfa) l)) ;
-  l
+  let l = l
   |> List.map (fun (t : SCFG.t) ->
          let p0 = match t.SCFG.nfacfgs with [
              [p0] -> p0
@@ -3569,14 +3584,15 @@ value compute_firstk ~{depth} cg dfa e = do {
   |> Std.nway_partition (fun (n1,_) (n2,_) -> n1=n2)
   |> List.map (fun l ->
       let n = fst (List.hd l) in
-      (n, List.map snd l))
+      (n, List.map snd l)) in
+  (l, dfa)
 }
 ;
 end ;
 
 module ListDFAState = struct
   type t = unit ;
-  value mk_dfa () = () ;
+  value mk_dfa _ = () ;
   type state_t = list Token.t [@@deriving (show,eq,ord) ;] ;
   value initial () = [] ;
   value is_initial () x = x = [] ;
@@ -3589,9 +3605,8 @@ module ListFirstk = struct
 open ListDFA ;
 
 value store_firstk cg e =
-  let dfa = S.mk_dfa () in
-  let lopt = match compute_firstk ~{depth=4} cg dfa e with [
-        x -> Some x
+  let lopt = match compute_firstk ~{depth=4} cg e with [
+        (x,_) -> Some x
       | exception exn ->
          let msg = Printexc.to_string exn in do {
           Fmt.(pf stderr "%s\n%!" msg) ;
@@ -3660,12 +3675,13 @@ module GraphDFAState = struct
     ; cfg2node : MHBIJ.t (list NFACFG.t) Node.t
     ; initial : Node.t
     } ;
-  value mk_dfa () =
+  value mk_dfa init_nfacfgs =
     let g = G.mk() in
     let nodectr = Ctr.mk() in
     let cfg2node = MHBIJ.mk (23, 23) in
     let initial = (Ctr.next nodectr, []) in
     let initial = G.add_node g initial in
+    let _ = MHBIJ.add cfg2node (NFACFG.canon_list init_nfacfgs, initial) in
     {
       g = g
     ; nodectr = nodectr
@@ -3676,15 +3692,29 @@ module GraphDFAState = struct
   value initial dfa = dfa.initial ;
   value is_initial dfa x = x = dfa.initial ;
 
+  value associate_nfacfgs_to_state dfa nfacfgs st =
+    MHBIJ.add dfa.cfg2node (nfacfgs, st)
+  ;
+  value state_to_nfacfgs dfa st =
+    match MHBIJ.inv dfa.cfg2node st with [
+          [x] -> x
+        | _ -> assert False
+        ]
+  ;
+  value add_edge dfa (st, t, st') =
+    G.add_edge  dfa.g (st, t, st') ;
   value extend_dfa dfa ((_, sttoks) as st) (t,nfacfgs) =
     let nfacfgs = NFACFG.canon_list nfacfgs in
     match MHBIJ.map dfa.cfg2node nfacfgs with [
-        x -> (False, x, nfacfgs)
+        st' -> do {
+          add_edge dfa (st, t, st') ;
+          (False, st', nfacfgs)
+        }
       | exception Not_found ->
          let st' = (Ctr.next dfa.nodectr, sttoks@[t]) in
          let st' = G.add_node dfa.g st' in
-         let _ = MHBIJ.add dfa.cfg2node (nfacfgs, st') in
-         let _ = G.add_edge  dfa.g (st, t, st') in
+         let _ = associate_nfacfgs_to_state dfa nfacfgs st' in
+         let _ = add_edge dfa (st, t, st') in
          (True, st', nfacfgs)
       ] ;
   value prefix = "graph";
@@ -3693,21 +3723,37 @@ module GraphDFA = BuildDFA(GraphDFAState) ;
 
 module GraphFirstk = struct
 open GraphDFA ;
+open GraphDFAState ;
 
-value store_firstk cg e =
-  let dfa = S.mk_dfa () in
-  let lopt = match compute_firstk ~{depth=4} cg dfa e with [
-        x -> Some x
-      | exception exn ->
-         let msg = Printexc.to_string exn in do {
-          Fmt.(pf stderr "%s\n%!" msg) ;
-          None
-        }
-      ] in
-(*
-  CG.set_atn_firstk cg e.ae_name lopt
- *)
-()
+value export_dfa dfa =
+  let nodes = G.nodes dfa.g in
+  let initial = fst dfa.initial in
+  let convert_state ((n, _) as st) =
+    let nfacfgs = state_to_nfacfgs dfa st in
+    let final = match nfacfgs with [
+          [x] -> Some (Token.OUTPUT x.NFACFG.branchnum)
+        | _ -> None
+        ] in
+    let edges = G.edges dfa.g st in
+    let trans = List.map (fun (_, tok, (d, _)) -> (tok, d)) edges in
+    (n, final, trans) in
+  (initial, List.map convert_state nodes)
+;
+
+value compute_dfa cg e =
+  match compute_firstk ~{depth=4} cg e with [
+      (_, dfa) -> Some (export_dfa dfa)
+    | exception exn ->
+       let msg = Printexc.to_string exn in do {
+        Fmt.(pf stderr "%s\n%!" msg) ;
+        None
+      }
+    ]
+;
+
+value store_dfa cg e =
+  let dfa_opt = compute_dfa cg e in
+  CG.set_atn_dfa cg e.ae_name dfa_opt
 ;
 end ;
 
@@ -3729,7 +3775,7 @@ value exec cg = do {
     (CG.gram_entries cg)
     |> List.iter (store_firstk cg) ;
     (CG.gram_entries cg)
-    |> List.iter (ATN.GraphFirstk.store_firstk cg) ;
+    |> List.iter (ATN.GraphFirstk.store_dfa cg) ;
     (CG.gram_entries cg)
     |> List.iter (store_entry_branch_first cg) ;
     (CG.gram_entries cg)
@@ -4256,7 +4302,7 @@ value edges_to_branches loc states edges =
   spcl_branches @ tokspecific_branches @ tokgeneric_branches @ anti_branches
 ;
 
-value strip_exported_dfa (init, initre, states) =
+value strip_exported_dfa (init, initre, states) : exported_dfa_t =
   let strip_state (i, rex, final, trans) = (i, final, trans) in
   (init, List.map strip_state states)
 ;
@@ -4316,19 +4362,54 @@ value compute_full_regexp cg e =
   |> PSyn.disjunction
 ;
 
+value compute_predictor0 cg e =
+  let loc = e.ae_loc in
+  let (exported_dfa_opt, retxt) =
+    let fullre = compute_full_regexp cg e in
+    let retxt = String.escaped (PSyn.print fullre) in
+    if PSyn.(equal zero fullre) then
+      (None,retxt)
+    else
+      let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
+      let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
+      (Some (strip_exported_dfa exported_dfa), retxt) in
+
+  let predictor = match exported_dfa_opt with [
+        None -> <:expr< fun __strm__ -> raise Stream.Failure >>
+      | Some dfa -> letrec_nest dfa
+      ] in
+  (predictor, retxt)
+;
+
+value compute_predictor cg e =
+  match CG.atn_dfa cg e.ae_name with [
+      Some dfa -> (letrec_nest dfa, "<text not available>")
+    | None -> compute_predictor0 cg e
+    | exception Not_found -> compute_predictor0 cg e
+    ]
+;
+
 value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let fullre = compute_full_regexp cg e in
-  let predictor =
+(*
+  let (exported_dfa_opt, retxt) =
+    let fullre = compute_full_regexp cg e in
+    let retxt = String.escaped (PSyn.print fullre) in
     if PSyn.(equal zero fullre) then
-      <:expr< fun __strm__ -> raise Stream.Failure >>
+      (None,retxt)
     else
       let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
       let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
-      letrec_nest (strip_exported_dfa exported_dfa) in
-  let retxt = String.escaped (PSyn.print fullre) in
+      (Some (strip_exported_dfa exported_dfa), retxt) in
+
+  let predictor = match exported_dfa_opt with [
+        None -> <:expr< fun __strm__ -> raise Stream.Failure >>
+      | Some dfa -> letrec_nest dfa
+      ] in
+ *)
+  let (predictor, retxt) = compute_predictor cg e in
   let predictor_name = (Name.print ename)^"_regexp" in
   let branches = 
     rl
