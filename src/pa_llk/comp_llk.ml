@@ -3772,8 +3772,10 @@ module ATNFirstFollow = struct
 open ATN.ListFirstk ;
 
 value exec cg = do {
+(*
     (CG.gram_entries cg)
     |> List.iter (store_firstk cg) ;
+ *)
     (CG.gram_entries cg)
     |> List.iter (ATN.GraphFirstk.store_dfa cg) ;
     (CG.gram_entries cg)
@@ -3846,6 +3848,7 @@ value infer_branch_regexps cg e =
 value firstk_branch_regexps cg e =
   match CG.atn_firstk cg e.ae_name with [
       None -> None
+    | exception Not_found -> None
     | Some fk ->
        let l =
          fk
@@ -4356,7 +4359,7 @@ value compile1b_branch cg ename branchnum r =
 ;
 
 value compute_full_regexp cg e =
-  let l = CG.entry_branch_regexps cg e.ae_name in
+  let l = EntryRegexps.infer_branch_regexps cg e in
   l
   |> List.map (fun (bn, rex) -> PSyn.(rex @@ token (OUTPUT bn)))
   |> PSyn.disjunction
@@ -4753,16 +4756,16 @@ value firstk loc ?{bootstrap=False} s =
   |> atn loc ~{bootstrap=bootstrap}
   |> ATNFirstFollow.exec
 ;
-
+(*
 value entry_regexps loc ?{bootstrap=False} s =
   s
   |> firstk loc ~{bootstrap=bootstrap}
   |> EntryRegexps.exec
 ;
-
+ *)
 value codegen loc ?{bootstrap=False} s =
   s
-  |> entry_regexps loc ~{bootstrap=bootstrap}
+  |> firstk loc ~{bootstrap=bootstrap}
   |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
