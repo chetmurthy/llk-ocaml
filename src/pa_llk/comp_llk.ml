@@ -3258,6 +3258,7 @@ module type DFA_STATE_SIG = sig
   value initial : t -> state_t ;
   value is_initial: t -> state_t -> bool ;
   value extend_dfa : t -> state_t -> (Token.t * list NFACFG.t) -> (bool * state_t * list NFACFG.t);
+  value prefix : string ;
 end ;
 
 module BuildDFA(S : DFA_STATE_SIG) = struct
@@ -3318,7 +3319,7 @@ value exceeds_recursion_depth cfg =
   countrec 0 l
 ;
 
-value has_token_edge cg n =
+value has_token_edge (cg : CG.t) n =
   n
   |> Raw.edge_labels (CG.gram_atn cg)
   |> List.exists (fun [ Label.TOKEN _ -> True | _ -> False ])
@@ -3355,8 +3356,9 @@ value closure loc (cg : CG.t) cfgs =
     if List.mem cfg bad.val then ()
     else if exceeds_recursion_depth cfg then do {
       let loc = CG.adjust_loc cg loc in
-      Fmt.(pf stderr "%s: ATN.closure: configuration exceeds recursion: %a\n%!"
+      Fmt.(pf stderr "%s: %s.ATN.closure: configuration exceeds recursion: %a\n%!"
              (Ploc.string_of_location loc)
+             S.prefix
              CFG.pp_hum cfg) ;
       Std.push bad cfg
     }
@@ -3367,7 +3369,7 @@ value closure loc (cg : CG.t) cfgs =
     else ()
   in do {
     List.iter clrec0 cfgs ;
-    acc.val
+    acc.val |> List.filter (fun (st, _) -> has_token_edge cg st)
   }
 ;
 (** step1 [it,ec] [st]:
@@ -3425,8 +3427,7 @@ value scfg_closure loc cg t =
  *)
 value extend1 loc cg (t : NFACFG.t) =
   let open NFACFG in
-  let cfgs = closure loc cg t.cfgs in
-  cfgs
+  t.cfgs
   |> List.concat_map (fun cfg ->
          let token_cfg_list = step1_cfg loc cg cfg in
          token_cfg_list |> List.map (fun (tok, cfg) ->
@@ -3515,7 +3516,8 @@ value extend_branches loc (cg : CG.t) dfa (l : list SCFG.t) : (list SCFG.t * lis
 ;
 
 value rec compute_firstk_depth loc cg dfa ename ~{depth} (ambig_l, ok_l) : list SCFG.t = do {
-  Fmt.(pf stderr "compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+  Fmt.(pf stderr "%s.compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+         S.prefix
          (Name.print ename) depth (List.length ambig_l) (List.length ok_l)) ;
   if depth = 0 then
     raise_failwithf (CG.adjust_loc cg loc) "compute_firstk_depth(%s): exceeded depth and still ambiguous" (Name.print ename)
@@ -3533,11 +3535,12 @@ value is_regexp_prediction_entry e =
 ;
 
 value compute_firstk ~{depth} cg dfa e = do {
-  Fmt.(pf stderr "START compute_first(%s)\n%!" (Name.print e.ae_name)) ;
+  let loc = e.ae_loc in
+  Fmt.(pf stderr "START %s.compute_firstk(%s)\n%!" S.prefix (Name.print e.ae_name)) ;
   if S9SeparateSyntactic.is_syntactic_predicate_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" (Name.print e.ae_name)
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" S.prefix (Name.print e.ae_name)
   else if is_regexp_prediction_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" S.prefix (Name.print e.ae_name)
   else () ;
   let open SCFG in
   let atn = CG.gram_atn cg in
@@ -3551,6 +3554,7 @@ value compute_firstk ~{depth} cg dfa e = do {
            ] in
            NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
   let scfg = SCFG.mk (S.initial dfa) nfacfgs in
+  let scfg = scfg_closure loc cg scfg in
   let l = compute_firstk_depth e.ae_loc cg dfa e.ae_name ~{depth=depth} ([scfg], []) in
   assert (not (List.exists (ambiguous_scfg dfa) l)) ;
   l
@@ -3577,6 +3581,7 @@ module ListDFAState = struct
   value initial () = [] ;
   value is_initial () x = x = [] ;
   value extend_dfa dfa st (t,l) = (True, st@[t], l) ;
+  value prefix = "list" ;
 end ;
 module ListDFA = BuildDFA(ListDFAState) ;
 
@@ -3682,6 +3687,7 @@ module GraphDFAState = struct
          let _ = G.add_edge  dfa.g (st, t, st') in
          (True, st', nfacfgs)
       ] ;
+  value prefix = "graph";
 end ;
 module GraphDFA = BuildDFA(GraphDFAState) ;
 
