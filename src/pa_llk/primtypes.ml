@@ -3,7 +3,7 @@ open Ppxutil ;
 
 module Name = struct
   open Pcre ;
-  value name_rex = regexp "^(.*?)(__[0-9]{4})?$" ;
+  value name_rex = regexp "^(.*?)(?:__([0-9]{4}))?$" ;
   value decompose s =
     let ss = exec ~{rex=name_rex} s in
     match get_substrings ss with [

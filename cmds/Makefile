@@ -21,6 +21,9 @@ all: standalone-o.opt standalone-r.opt \
 #RECORD=perf record --call-graph dwarf -- 
 RECORD=perf record --call-graph dwarf,32768 -i -e cycles:u -- 
 
+process: standalone-r.opt
+	./standalone-r.opt process xx.ml
+
 perf: standalone-r.opt
 	$(RECORD) ./standalone-r.opt firstk xx.ml alg_attributes_no_anti
 
@@ -76,7 +79,7 @@ camlp5.pa_llk_compiler-o.opt:
 .PRECIOUS: *.opt *.exe *.cmo
 
 clean::
-	rm -rf *.cm* *.ppo* *.exe _build camlp5.pa_llk_* *.opt
+	rm -rf *.cm* *.ppo* *.exe _build camlp5.pa_llk_* *.opt perf.*
 
 depend::
 	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5o $(OML) >> .depend.NEW
