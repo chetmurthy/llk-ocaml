@@ -10,6 +10,7 @@ CP=cp
 
 all: bootstrap-install
 	$(MAKE) -C src all
+	$(MAKE) -C cmds all
 
 world:
 	$(RM) -rf $(WD)/$(TOP)/bootstrap-install

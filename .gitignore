@@ -11,3 +11,4 @@ _build
 *.ppo*
 bootstrap-src.new
 *.opt
+perf.data*
