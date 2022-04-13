@@ -1204,12 +1204,18 @@ value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
        ;(NT ename None, cur)
     ] in
   let (patt_guess,expr_guess) =
+    let r = List.hd rl in
+    if r.ar_action = None then (None, None)
+    else
     match List.hd rl with [
         {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASself _ _} :: _]} ->
         (Some <:patt< $lid:v$ >>,Some <:expr< $lid:v$ >>)
       | {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASnterm _ nt _ None} :: _]} when ename = nt ->
         (Some <:patt< $lid:v$ >>,Some <:expr< $lid:v$ >>)
-      | _ -> (None, None)
+      | _ ->
+         let x = CG.fresh_name cg (Name.mk "x") in
+         let x = Name.print x in
+         (Some <:patt< $lid:x$ >>, Some <:expr< $lid:x$ >>)
       ] in
   let rl =
     rl
