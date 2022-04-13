@@ -22,7 +22,7 @@ GRAMMAR Alef:
   EXTEND g ;
     EXPORT: program decllist decl zargs ztname adtfunc typespec ztag zpolytype polytype setlist
       sname name memberlist vardecllist ivardecl zinit zelist vardecl arrayspec indsp arglist
-      arglistp arg tuplearg autolist autodecl block slist tbody ctlist tcase cbody clist case_ rbody
+      arg tuplearg autolist autodecl block slist tbody ctlist tcase cbody clist case_ rbody
       zlab stmnt info nlstmnt zconst zexpr expr_ castexpr typecast monexpr ztelist telist tcomp
       term_ stag zarlist elist tlist tname variant xtname bufdim sclass typename enum_member;
 REGEXPS:
@@ -75,8 +75,8 @@ END;
     ;
     ztag:
       
-      [ [ name
-        | typename ] ]
+      [ [ name (*
+        | typename *) ] ]
     ;
     zpolytype:
       
@@ -89,8 +89,8 @@ END;
     ;
     setlist:
       
-      [ [ GREEDY OPT sname
-        | setlist; ","; setlist ] ]
+      [ GREEDY LEFTA [ setlist; ","; setlist ]
+        | [ sname ] ]
     ;
     sname:
       
@@ -102,8 +102,8 @@ END;
     ;
     memberlist:
       
-      [ [ decl
-        | memberlist; decl ] ]
+      [ GREEDY LEFTA [ memberlist; decl ]
+        | [ decl ] ]
     ;
     vardecllist:
       
@@ -119,12 +119,14 @@ END;
     ;
     zelist:
       
-      [ [ GREEDY OPT zexpr
+      [ GREEDY LEFTA [ SELF; ","; NEXT ]
+        | [ zexpr
         | "["; expr_; "]"; expr_
+(*
         | "."; stag; expr_
+*)
         | "{"; zelist; "}"
-        | "["; expr_; "]"; "{"; zelist; "}"
-        | zelist; ","; zelist ] ]
+        | "["; expr_; "]"; "{"; zelist; "}" ] ]
     ;
     vardecl:
       
@@ -141,9 +143,18 @@ END;
       
       [ [ GREEDY LIST1 "*" ] ]
     ;
+
+
+    arglist: [ GREEDY LEFTA
+               [ arglist; ","; arg ]
+	       | [
+                 arg
+	       | "*"; xtname
+	       | "."; xtname ] ] ;
+(*
     arglist:
       
-      [ [ GREEDY LIST0 arglistp; ","; arg ] ]
+      [ [ GREEDY LIST1 arglistp; ","; arg ] ]
     ;
     arglistp:
       
@@ -151,6 +162,7 @@ END;
         | "*"; xtname
         | "."; xtname ] ]
     ;
+*)
     arg:
       
       [ [ xtname
@@ -250,7 +262,7 @@ END;
         | "while"; "("; expr_; ")"; stmnt
         | "do"; stmnt; "while"; "("; expr_; ")"
         | "if"; "("; expr_; ")"; stmnt
-        | "if"; "("; expr_; ")"; stmnt; "else"; stmnt
+        | "if"; "("; expr_; ")"; stmnt; PRIORITY 1 ; "else"; stmnt
         | "par"; block
         | "switch"; expr_; cbody
         | "typeof"; expr_; tbody
@@ -267,8 +279,7 @@ END;
     ;
     expr_:
       
-      [ [ castexpr
-        | expr_; "*"; expr_
+      [ LEFTA [ expr_; "*"; expr_
         | expr_; "/"; expr_
         | expr_; "%"; expr_
         | expr_; "+"; expr_
@@ -299,7 +310,8 @@ END;
         | expr_; "&="; expr_
         | expr_; "|="; expr_
         | expr_; "^="; expr_
-        | expr_; "::"; expr_ ] ]
+        | expr_; "::"; expr_ ]
+        | [ castexpr ] ]
     ;
     castexpr:
       
@@ -345,29 +357,33 @@ END;
     ;
     term_:
       
-      [ [ "("; telist; ")"
-        | "sizeof"; "("; typecast; ")"
-        | term_; "("; GREEDY OPT zarlist; ")"
+      [ LEFTA [ term_; "("; GREEDY OPT zarlist; ")"
         | term_; "["; expr_; "]"
         | term_; "."; stag
-        | "."; typename; "."; stag
         | term_; "->"; stag
         | term_; "--"
         | term_; "++"
-        | term_; "?"
+        | term_; "?" ]
+        | [ "("; telist; ")"
+(*
+        | "sizeof"; "("; typecast; ")"
+*)
+        | "."; typename; "."; stag
         | name
         | "."; "."; "."
         | ARITHMETIC_CONST
         | "nil"
         | CONSTANT
+(*
         | enum_member
+*)
         | STRING_CONST
         | "$"; STRING_CONST ] ]
     ;
     stag:
       
-      [ [ IDENTIFIER
-        | typename ] ]
+      [ [ IDENTIFIER (*
+        | typename *) ] ]
     ;
     zarlist:
       
@@ -375,8 +391,8 @@ END;
     ;
     elist:
       
-      [ [ expr_
-        | elist; ","; expr_ ] ]
+      [ LEFTA [ elist; ","; expr_ ]
+        | [ expr_ ] ]
     ;
     tlist:
       

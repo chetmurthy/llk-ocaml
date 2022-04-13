@@ -746,10 +746,10 @@ external p_phony : PREDICTION empty ;
   (* Core expressions *)
   expr:
     [ "top" NONA
-      [ e1 = NEXT; ";"; e2 = SELF ->
+      [ e1 = NEXT ; PRIORITY 1; ";" ; PRIORITY 1 ; e2 = SELF ->
           <:expr< do { $list:[e1 :: get_seq e2]$ } >>
-      | e1 = NEXT; ";" ; check_eps -> e1
-      | e1 = NEXT ; check_eps -> e1
+      | e1 = NEXT ; PRIORITY 1; ";" -> e1
+      | e1 = NEXT -> e1
       | check_phony_list ; el = V e_phony "list" -> <:expr< do { $_list:el$ } >> ]
     | "expr1"
       [ "let" ; "exception" ; id = V UIDENT "uid" ;
@@ -1002,7 +1002,7 @@ external p_phony : PREDICTION empty ;
   ;
   let_binding:
     [ [ alg_attrs = alg_attributes_no_anti ;
-        (val_ident)? ; p = val_ident ; check_and_in ->
+        (val_ident)? ; p = val_ident ; (["and" | "in"])? ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
@@ -1037,7 +1037,7 @@ external p_phony : PREDICTION empty ;
       ] ]
   ;
   first_let_binding:
-    [ [ (val_ident)? ; p = val_ident ; check_and_in ->
+    [ [ (val_ident)? ; p = val_ident ; (["and" | "in"])? ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< [] >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
@@ -1062,7 +1062,7 @@ external p_phony : PREDICTION empty ;
   ;
   and_let_binding:
     [ [ "and"; alg_attrs = alg_attributes_no_anti ;
-        (val_ident)? ; p = val_ident ; check_and_in ->
+        (val_ident)? ; p = val_ident ; (["and" | "in"])? ->
         match p with [
             <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>, <:vala< alg_attrs >>)
           | _ -> failwith "let punning: binder must be a lowercase ident (variable)"
@@ -1912,7 +1912,7 @@ external p_phony : PREDICTION empty ;
       | f = field -> [f] ] ]
   ;
   field:
-    [ [ check_lident_colon; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
+    [ [ ([LIDENT; ":"])? ; lab = LIDENT; ":"; t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (Some lab, t, alg_attrs)
       | t = poly_type_below_alg_attribute; alg_attrs = alg_attributes ->
        (None, t, alg_attrs)

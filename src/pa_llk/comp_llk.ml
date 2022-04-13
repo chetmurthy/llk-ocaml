@@ -1203,11 +1203,13 @@ value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
         (SELF, cur)
        ;(NT ename None, cur)
     ] in
-  let lid_guess =
+  let (patt_guess,expr_guess) =
     match List.hd rl with [
-        {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASself _ _} :: _]} -> v
-      | {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASnterm _ nt _ None} :: _]} when ename = nt -> v
-      | _ -> "x"
+        {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASself _ _} :: _]} ->
+        (Some <:patt< $lid:v$ >>,Some <:expr< $lid:v$ >>)
+      | {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASnterm _ nt _ None} :: _]} when ename = nt ->
+        (Some <:patt< $lid:v$ >>,Some <:expr< $lid:v$ >>)
+      | _ -> (None, None)
       ] in
   let rl =
     rl
@@ -1221,9 +1223,9 @@ value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
          ) in
   let last_rule = {ar_loc = loc;
                    ar_psymbols = [{ap_loc = loc;
-                                   ap_patt = Some <:patt< $lid:lid_guess$ >> ;
+                                   ap_patt = patt_guess ;
                                    ap_symb = ASnterm loc next (formals2actuals cg eformals) None}];
-                   ar_action = Some <:expr< $lid:lid_guess$ >> } in
+                   ar_action = expr_guess } in
   rl @ [last_rule]
 ;
 

@@ -17,6 +17,7 @@ TESTS = simple_otest regexp_otest external_otest infer_otest self_otest bug_fifo
  llko2official_test
 
 ERROR_TESTS = parse_error_test
+SUBDIRS = calc abnf acme abb antlr alef
 
 RML = bug_fifo_rtest.ml  dfa_loop_rtest.ml  original_rtest.ml  revised_rtest.ml \
 	papr_test_matrix.ml \
@@ -32,13 +33,15 @@ OML = external_otest.ml  regexp_otest.ml  simple_otest.ml \
 
 
 test:: $(TESTS)
-	$(MAKE) -C calc all test
-	$(MAKE) -C abnf all test
+	set -e; for i in $(SUBDIRS); do $(MAKE) -C $$i all test; done
 
 all: simple_otest.exe regexp_otest.exe external_otest.exe infer_otest.exe self_otest.exe \
 	bug_fifo_rtest.exe dfa_loop_rtest.exe revised_rtest.exe original_rtest.exe \
 	r2official_test.exe o2official_test.exe llkr2official_test.exe llko2official_test.exe \
 	error_rtest.exe longident_rtest.exe
+
+dfa_loop_rtest.exe: ;
+dfa_loop_rtest: ;
 
 %test: %test.exe
 	mkdir -p _build
@@ -95,14 +98,12 @@ papr_test_matrix.cmi papr_test_matrix.cmo: papr_test_matrix.ml
 
 clean::
 	rm -rf *.cm* *.ppo* *.exe _build
-	$(MAKE) -C calc clean
-	$(MAKE) -C abnf clean
+	set -e; for i in $(SUBDIRS); do $(MAKE) -C $$i clean; done
 
 depend::
 	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5o $(OML) >> .depend.NEW
 	$(OCAMLFIND) ocamldep -package $(PACKAGES),camlp5.macro -syntax camlp5r $(RML) >> .depend.NEW
 	mv .depend.NEW .depend
-	$(MAKE) -C calc depend
-	$(MAKE) -C abnf depend
+	set -e; for i in $(SUBDIRS); do $(MAKE) -C $$i all depend; done
 
 -include .depend
