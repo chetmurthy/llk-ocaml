@@ -18,7 +18,7 @@ module LLKGram =
         open Pa_llk_runtime.Llk_runtime
         let rec assoc __strm__ =
           match
-            assoc_regexp __strm__[@llk.regexp "UIDENT \"RIGHTA\" #1 | (UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | UIDENT \"LEFTA\") #2 | UIDENT \"NONA\" #0"]
+            assoc_regexp __strm__[@llk.regexp "UIDENT \"RIGHTA\" #1 | (UIDENT \"NONGREEDY\" | UIDENT \"LEFTA\" | UIDENT \"GREEDY\") #2 | UIDENT \"NONA\" #0"]
           with
             Some (_, 0) -> (parser [< '"UIDENT", "NONA" >] -> NONA) __strm__
           | Some (_, 1) ->
@@ -90,7 +90,7 @@ module LLKGram =
           q0000 None 0
         and e0 __strm__ =
           match
-            e0_regexp __strm__[@llk.regexp "\"_\" #2 | LIDENT #6 | \"(\" #0 | (UIDENT | \"#\" | STRING | \"$\") #5 | \"eps\" #4 | \"empty\" #3 | \"[\" #1"]
+            e0_regexp __strm__[@llk.regexp "\"_\" #2 | LIDENT #6 | \"(\" #0 | (UIDENT | \"#\" | \"$\" | STRING) #5 | \"eps\" #4 | \"empty\" #3 | \"[\" #1"]
           with
             Some (_, 0) ->
               (parser
@@ -167,7 +167,7 @@ module LLKGram =
           q0000 None 0
         and e0__0001 __strm__ =
           match
-            e0__0001_regexp __strm__[@llk.regexp "(UIDENT | \"#\" | STRING | \"$\") #0"]
+            e0__0001_regexp __strm__[@llk.regexp "(UIDENT | \"#\" | \"$\" | STRING) #0"]
           with
             Some (_, 0) ->
               (parser
@@ -206,7 +206,7 @@ module LLKGram =
               Stream.Failure -> raise Stream.Failure
         and e1 __strm__ =
           match
-            e1_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\") #0"]
+            e1_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -238,7 +238,7 @@ module LLKGram =
           q0000 None 0
         and e1__0001 x __strm__ =
           match
-            e1__0001_regexp __strm__[@llk.regexp "\"*\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | \")\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\" | \"in\" | \";\" | \"&\" | \"?\" | \"|\") #2 | \"+\" #1"]
+            e1__0001_regexp __strm__[@llk.regexp "\"*\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | \")\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"in\" | \"~\" | \"|\" | \";\" | \"?\" | \"&\") #2 | \"+\" #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -285,7 +285,7 @@ module LLKGram =
           q0000 None 0
         and e2 __strm__ =
           match
-            e2_regexp __strm__[@llk.regexp "\"~\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\") #1"]
+            e2_regexp __strm__[@llk.regexp "\"~\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\") #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -321,7 +321,7 @@ module LLKGram =
           q0000 None 0
         and e2' __strm__ =
           match
-            e2'_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\") #0"]
+            e2'_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -353,7 +353,7 @@ module LLKGram =
           q0000 None 0
         and e2'__0001 x __strm__ =
           match
-            e2'__0001_regexp __strm__[@llk.regexp "\"?\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | \")\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\" | \"in\" | \";\" | \"&\" | \"|\") #1"]
+            e2'__0001_regexp __strm__[@llk.regexp "\"?\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | \")\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"in\" | \"~\" | \"|\" | \";\" | \"&\") #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -391,7 +391,7 @@ module LLKGram =
           q0000 None 0
         and e3 __strm__ =
           match
-            e3_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #0"]
+            e3_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #0"]
           with
             Some (_, 0) ->
               (parser bp
@@ -421,7 +421,7 @@ module LLKGram =
           q0000 None 0
         and e3__0001 __strm__ =
           match
-            e3__0001_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #0"]
+            e3__0001_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -467,7 +467,7 @@ module LLKGram =
               Stream.Failure -> raise Stream.Failure
         and e4 __strm__ =
           match
-            e4_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #0"]
+            e4_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #0"]
           with
             Some (_, 0) ->
               (parser bp
@@ -497,7 +497,7 @@ module LLKGram =
           q0000 None 0
         and e4__0001 __strm__ =
           match
-            e4__0001_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #0"]
+            e4__0001_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -564,7 +564,7 @@ module LLKGram =
           q0000 None 0
         and e5 __strm__ =
           match
-            e5_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #0"]
+            e5_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #0"]
           with
             Some (_, 0) ->
               (parser bp
@@ -594,7 +594,7 @@ module LLKGram =
           q0000 None 0
         and e5__0001 __strm__ =
           match
-            e5__0001_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #0"]
+            e5__0001_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #0"]
           with
             Some (_, 0) ->
               (parser
@@ -661,7 +661,7 @@ module LLKGram =
           q0000 None 0
         and e6 __strm__ =
           match
-            e6_regexp __strm__[@llk.regexp "\"let\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\") #1"]
+            e6_regexp __strm__[@llk.regexp "\"let\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\") #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -803,7 +803,7 @@ module LLKGram =
             try (parser [< >] -> []) __strm__ with
               Stream.Failure -> raise Stream.Failure
         and entry__0004 __strm__ =
-          try (parser [< x__0051 = position >] -> Some x__0051) __strm__ with
+          try (parser [< x__0049 = position >] -> Some x__0049) __strm__ with
             Stream.Failure ->
               try (parser [< >] -> None) __strm__ with
                 Stream.Failure -> raise Stream.Failure
@@ -1134,14 +1134,14 @@ module LLKGram =
               Stream.Failure -> raise Stream.Failure
         and grammar_body__0008 __strm__ =
           try
-            (parser [< x__0052 = grammar_body__0001 >] -> Some x__0052)
+            (parser [< x__0050 = grammar_body__0001 >] -> Some x__0050)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> None) __strm__ with
               Stream.Failure -> raise Stream.Failure
         and level __strm__ =
           match
-            level_regexp __strm__[@llk.regexp "(\"[\" | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | UIDENT \"LEFTA\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\" | STRING) #0"]
+            level_regexp __strm__[@llk.regexp "(\"[\" | UIDENT \"NONGREEDY\" | UIDENT \"LEFTA\" | UIDENT \"GREEDY\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\" | STRING) #0"]
           with
             Some (_, 0) ->
               (parser bp
@@ -1175,12 +1175,12 @@ module LLKGram =
           and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and level__0001 __strm__ =
-          try (parser [< '"STRING", x__0056 >] -> Some x__0056) __strm__ with
+          try (parser [< '"STRING", x__0054 >] -> Some x__0054) __strm__ with
             Stream.Failure ->
               try (parser [< >] -> None) __strm__ with
                 Stream.Failure -> raise Stream.Failure
         and level__0002 __strm__ =
-          try (parser [< x__0057 = assoc >] -> Some x__0057) __strm__ with
+          try (parser [< x__0055 = assoc >] -> Some x__0055) __strm__ with
             Stream.Failure ->
               try (parser [< >] -> None) __strm__ with
                 Stream.Failure -> raise Stream.Failure
@@ -1213,16 +1213,16 @@ module LLKGram =
                 Stream.Failure -> raise Stream.Failure
         and level_list__0002 __strm__ =
           match
-            level_list__0002_regexp __strm__[@llk.regexp "(\"[\" | UIDENT \"NONGREEDY\" | UIDENT \"GREEDY\" | UIDENT \"LEFTA\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\" | STRING) #0"]
+            level_list__0002_regexp __strm__[@llk.regexp "(\"[\" | UIDENT \"NONGREEDY\" | UIDENT \"LEFTA\" | UIDENT \"GREEDY\" | UIDENT \"NONA\" | UIDENT \"RIGHTA\" | STRING) #0"]
           with
             Some (_, 0) ->
               (parser
-                 [< x__0027 = level;
+                 [< x__0026 = level;
                     y__0018 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0018 = level_list__0003] expected after [x__0027 = level] (in [level_list])"
+                        ~msg:"[y__0018 = level_list__0003] expected after [x__0026 = level] (in [level_list])"
                         level_list__0003 >] ->
-                   x__0027 :: y__0018)
+                   x__0026 :: y__0018)
                 __strm__
           | _ -> raise Stream.Failure
         and level_list__0002_regexp strm =
@@ -1243,12 +1243,12 @@ module LLKGram =
         and level_list__0003 __strm__ =
           try
             (parser
-               [< x__0028 = level_list__0004;
+               [< x__0027 = level_list__0004;
                   y__0019 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0019 = level_list__0003] expected after [x__0028 = level_list__0004] (in [level_list])"
+                      ~msg:"[y__0019 = level_list__0003] expected after [x__0027 = level_list__0004] (in [level_list])"
                       level_list__0003 >] ->
-                 x__0028 :: y__0019)
+                 x__0027 :: y__0019)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -1303,12 +1303,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0029 = pattern;
+                 [< x__0028 = pattern;
                     y__0020 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0020 = paren_pattern__0002] expected after [x__0029 = pattern] (in [paren_pattern])"
+                        ~msg:"[y__0020 = paren_pattern__0002] expected after [x__0028 = pattern] (in [paren_pattern])"
                         paren_pattern__0002 >] ->
-                   x__0029 :: y__0020)
+                   x__0028 :: y__0020)
                 __strm__
           | _ -> raise Stream.Failure
         and paren_pattern__0001_regexp strm =
@@ -1325,12 +1325,12 @@ module LLKGram =
         and paren_pattern__0002 __strm__ =
           try
             (parser
-               [< x__0030 = paren_pattern__0003;
+               [< x__0029 = paren_pattern__0003;
                   y__0021 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0021 = paren_pattern__0002] expected after [x__0030 = paren_pattern__0003] (in [paren_pattern])"
+                      ~msg:"[y__0021 = paren_pattern__0002] expected after [x__0029 = paren_pattern__0003] (in [paren_pattern])"
                       paren_pattern__0002 >] ->
-                 x__0030 :: y__0021)
+                 x__0029 :: y__0021)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -1561,7 +1561,7 @@ module LLKGram =
           q0000 None 0
         and psymbol__0001 __strm__ =
           match
-            psymbol__0001_regexp __strm__[@llk.regexp "\"[\" #0 | (\"]\" | \";\" | \"|\" | UIDENT \"LEVEL\" | \"->\") #1"]
+            psymbol__0001_regexp __strm__[@llk.regexp "\"[\" #0 | (\"]\" | \"|\" | \";\" | UIDENT \"LEVEL\" | \"->\") #1"]
           with
             Some (_, 0) ->
               (parser
@@ -1612,12 +1612,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0031 = Grammar.Entry.parse_token_stream expr;
+                 [< x__0030 = Grammar.Entry.parse_token_stream expr;
                     y__0022 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0022 = psymbol__0004] expected after [x__0031 = expr] (in [psymbol])"
+                        ~msg:"[y__0022 = psymbol__0004] expected after [x__0030 = expr] (in [psymbol])"
                         psymbol__0004 >] ->
-                   x__0031 :: y__0022)
+                   x__0030 :: y__0022)
                 __strm__
           | _ -> raise Stream.Failure
         and psymbol__0003_regexp strm =
@@ -1637,19 +1637,19 @@ module LLKGram =
         and psymbol__0004 __strm__ =
           try
             (parser
-               [< x__0032 = psymbol__0006;
+               [< x__0031 = psymbol__0006;
                   y__0023 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0023 = psymbol__0004] expected after [x__0032 = psymbol__0006] (in [psymbol])"
+                      ~msg:"[y__0023 = psymbol__0004] expected after [x__0031 = psymbol__0006] (in [psymbol])"
                       psymbol__0004 >] ->
-                 x__0032 :: y__0023)
+                 x__0031 :: y__0023)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
               Stream.Failure -> raise Stream.Failure
         and psymbol__0005 __strm__ =
           try
-            (parser [< x__0058 = psymbol__0002 >] -> Some x__0058) __strm__
+            (parser [< x__0056 = psymbol__0002 >] -> Some x__0056) __strm__
           with Stream.Failure ->
             try (parser [< >] -> None) __strm__ with
               Stream.Failure -> raise Stream.Failure
@@ -1676,7 +1676,7 @@ module LLKGram =
           q0000 None 0
         and regexp __strm__ =
           match
-            regexp_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"~\" | \"let\") #0"]
+            regexp_regexp __strm__[@llk.regexp "(LIDENT | \"[\" | \"(\" | \"_\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"~\" | \"let\") #0"]
           with
             Some (_, 0) -> (parser [< a = e6 >] -> a) __strm__
           | _ -> raise Stream.Failure
@@ -1750,12 +1750,12 @@ module LLKGram =
           match regexps__0001_regexp __strm__[@llk.regexp "LIDENT #0"] with
             Some (_, 0) ->
               (parser
-                 [< x__0033 = regexp_entry;
+                 [< x__0032 = regexp_entry;
                     y__0024 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0024 = regexps__0002] expected after [x__0033 = regexp_entry] (in [regexps])"
+                        ~msg:"[y__0024 = regexps__0002] expected after [x__0032 = regexp_entry] (in [regexps])"
                         regexps__0002 >] ->
-                   x__0033 :: y__0024)
+                   x__0032 :: y__0024)
                 __strm__
           | _ -> raise Stream.Failure
         and regexps__0001_regexp strm =
@@ -1770,12 +1770,12 @@ module LLKGram =
         and regexps__0002 __strm__ =
           try
             (parser
-               [< x__0034 = regexp_entry;
+               [< x__0033 = regexp_entry;
                   y__0025 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0025 = regexps__0002] expected after [x__0034 = regexp_entry] (in [regexps])"
+                      ~msg:"[y__0025 = regexps__0002] expected after [x__0033 = regexp_entry] (in [regexps])"
                       regexps__0002 >] ->
-                 x__0034 :: y__0025)
+                 x__0033 :: y__0025)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -1887,12 +1887,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0035 = psymbol;
+                 [< x__0034 = psymbol;
                     y__0026 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0026 = rule__0003] expected after [x__0035 = psymbol] (in [rule])"
+                        ~msg:"[y__0026 = rule__0003] expected after [x__0034 = psymbol] (in [rule])"
                         rule__0003 >] ->
-                   x__0035 :: y__0026)
+                   x__0034 :: y__0026)
                 __strm__
           | _ -> raise Stream.Failure
         and rule__0002_regexp strm =
@@ -1940,12 +1940,12 @@ module LLKGram =
         and rule__0003 __strm__ =
           try
             (parser
-               [< x__0036 = rule__0004;
+               [< x__0035 = rule__0004;
                   y__0027 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0027 = rule__0003] expected after [x__0036 = rule__0004] (in [rule])"
+                      ~msg:"[y__0027 = rule__0003] expected after [x__0035 = rule__0004] (in [rule])"
                       rule__0003 >] ->
-                 x__0036 :: y__0027)
+                 x__0035 :: y__0027)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -2060,12 +2060,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0037 = rule;
+                 [< x__0036 = rule;
                     y__0028 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0028 = rule_list__0003] expected after [x__0037 = rule] (in [rule_list])"
+                        ~msg:"[y__0028 = rule_list__0003] expected after [x__0036 = rule] (in [rule_list])"
                         rule_list__0003 >] ->
-                   x__0037 :: y__0028)
+                   x__0036 :: y__0028)
                 __strm__
           | _ -> raise Stream.Failure
         and rule_list__0002_regexp strm =
@@ -2114,12 +2114,12 @@ module LLKGram =
         and rule_list__0003 __strm__ =
           try
             (parser
-               [< x__0038 = rule_list__0004;
+               [< x__0037 = rule_list__0004;
                   y__0029 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0029 = rule_list__0003] expected after [x__0038 = rule_list__0004] (in [rule_list])"
+                      ~msg:"[y__0029 = rule_list__0003] expected after [x__0037 = rule_list__0004] (in [rule_list])"
                       rule_list__0003 >] ->
-                 x__0038 :: y__0029)
+                 x__0037 :: y__0029)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -2611,7 +2611,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0008 s_t __strm__ =
           match
-            symbol__0008_regexp __strm__[@llk.regexp "\"?\" #0 | (\")\" | STRING | \"]\" | \";\" | \"|\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
+            symbol__0008_regexp __strm__[@llk.regexp "\"?\" #0 | (\")\" | STRING | \"]\" | \"|\" | \";\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
           with
             Some (_, 0) ->
               (parser bp
@@ -2643,7 +2643,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0009 __strm__ =
           match
-            symbol__0009_regexp __strm__[@llk.regexp "\"[\" #0 | (\")\" | STRING | \"]\" | \";\" | \"|\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
+            symbol__0009_regexp __strm__[@llk.regexp "\"[\" #0 | (\")\" | STRING | \"]\" | \"|\" | \";\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
           with
             Some (_, 0) ->
               (parser
@@ -2679,7 +2679,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0010 __strm__ =
           match
-            symbol__0010_regexp __strm__[@llk.regexp "\"[\" #0 | (\")\" | STRING | \"]\" | \";\" | \"|\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
+            symbol__0010_regexp __strm__[@llk.regexp "\"[\" #0 | (\")\" | STRING | \"]\" | \"|\" | \";\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
           with
             Some (_, 0) ->
               (parser
@@ -2715,7 +2715,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0011 __strm__ =
           match
-            symbol__0011_regexp __strm__[@llk.regexp "\"[\" #0 | (\")\" | STRING | \"]\" | \";\" | \"|\" | UIDENT \"LEVEL\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
+            symbol__0011_regexp __strm__[@llk.regexp "\"[\" #0 | (\")\" | STRING | \"]\" | \"|\" | \";\" | UIDENT \"LEVEL\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1"]
           with
             Some (_, 0) ->
               (parser
@@ -2768,7 +2768,7 @@ module LLKGram =
           q0000 None 0
         and symbol__0013 x __strm__ =
           match
-            symbol__0013_regexp __strm__[@llk.regexp "(\")\" | STRING | \"]\" | \";\" | \"|\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1 | \"/\" #0"]
+            symbol__0013_regexp __strm__[@llk.regexp "(\")\" | STRING | \"]\" | \"|\" | \";\" | \"->\" | UIDENT \"SEP\" | UIDENT \"OPT_SEP\" | UIDENT \"ACCUMULATE\" | UIDENT \"WITH\") #1 | \"/\" #0"]
           with
             Some (_, 0) ->
               (parser bp
@@ -2806,12 +2806,12 @@ module LLKGram =
         and symbol__0014 __strm__ =
           try
             (parser
-               [< '"STRING", x__0039;
+               [< '"STRING", x__0038;
                   y__0030 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0030 = symbol__0014] expected after [x__0039 = STRING] (in [symbol])"
+                      ~msg:"[y__0030 = symbol__0014] expected after [x__0038 = STRING] (in [symbol])"
                       symbol__0014 >] ->
-                 x__0039 :: y__0030)
+                 x__0038 :: y__0030)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -2825,12 +2825,12 @@ module LLKGram =
           match symbol__0016_regexp __strm__[@llk.regexp "STRING #0"] with
             Some (_, 0) ->
               (parser
-                 [< '"STRING", x__0041;
+                 [< '"STRING", x__0039;
                     y__0032 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0032 = symbol__0017] expected after [x__0041 = STRING] (in [symbol])"
+                        ~msg:"[y__0032 = symbol__0017] expected after [x__0039 = STRING] (in [symbol])"
                         symbol__0017 >] ->
-                   x__0041 :: y__0032)
+                   x__0039 :: y__0032)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0016_regexp strm =
@@ -2845,12 +2845,12 @@ module LLKGram =
         and symbol__0017 __strm__ =
           try
             (parser
-               [< '"STRING", x__0042;
+               [< '"STRING", x__0040;
                   y__0033 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0033 = symbol__0017] expected after [x__0042 = STRING] (in [symbol])"
+                      ~msg:"[y__0033 = symbol__0017] expected after [x__0040 = STRING] (in [symbol])"
                       symbol__0017 >] ->
-                 x__0042 :: y__0033)
+                 x__0040 :: y__0033)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -2861,12 +2861,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0043 = rule;
+                 [< x__0041 = rule;
                     y__0034 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0034 = symbol__0019] expected after [x__0043 = rule] (in [symbol])"
+                        ~msg:"[y__0034 = symbol__0019] expected after [x__0041 = rule] (in [symbol])"
                         symbol__0019 >] ->
-                   x__0043 :: y__0034)
+                   x__0041 :: y__0034)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0018_regexp strm =
@@ -2915,12 +2915,12 @@ module LLKGram =
         and symbol__0019 __strm__ =
           try
             (parser
-               [< x__0044 = symbol__0027;
+               [< x__0042 = symbol__0027;
                   y__0035 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0035 = symbol__0019] expected after [x__0044 = symbol__0027] (in [symbol])"
+                      ~msg:"[y__0035 = symbol__0019] expected after [x__0042 = symbol__0027] (in [symbol])"
                       symbol__0019 >] ->
-                 x__0044 :: y__0035)
+                 x__0042 :: y__0035)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -2931,12 +2931,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0045 = Grammar.Entry.parse_token_stream expr;
+                 [< x__0043 = Grammar.Entry.parse_token_stream expr;
                     y__0036 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0036 = symbol__0021] expected after [x__0045 = expr] (in [symbol])"
+                        ~msg:"[y__0036 = symbol__0021] expected after [x__0043 = expr] (in [symbol])"
                         symbol__0021 >] ->
-                   x__0045 :: y__0036)
+                   x__0043 :: y__0036)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0020_regexp strm =
@@ -2956,12 +2956,12 @@ module LLKGram =
         and symbol__0021 __strm__ =
           try
             (parser
-               [< x__0046 = symbol__0030;
+               [< x__0044 = symbol__0030;
                   y__0037 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0037 = symbol__0021] expected after [x__0046 = symbol__0030] (in [symbol])"
+                      ~msg:"[y__0037 = symbol__0021] expected after [x__0044 = symbol__0030] (in [symbol])"
                       symbol__0021 >] ->
-                 x__0046 :: y__0037)
+                 x__0044 :: y__0037)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -2972,12 +2972,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0047 = Grammar.Entry.parse_token_stream expr;
+                 [< x__0045 = Grammar.Entry.parse_token_stream expr;
                     y__0038 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0038 = symbol__0023] expected after [x__0047 = expr] (in [symbol])"
+                        ~msg:"[y__0038 = symbol__0023] expected after [x__0045 = expr] (in [symbol])"
                         symbol__0023 >] ->
-                   x__0047 :: y__0038)
+                   x__0045 :: y__0038)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0022_regexp strm =
@@ -2997,12 +2997,12 @@ module LLKGram =
         and symbol__0023 __strm__ =
           try
             (parser
-               [< x__0048 = symbol__0031;
+               [< x__0046 = symbol__0031;
                   y__0039 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0039 = symbol__0023] expected after [x__0048 = symbol__0031] (in [symbol])"
+                      ~msg:"[y__0039 = symbol__0023] expected after [x__0046 = symbol__0031] (in [symbol])"
                       symbol__0023 >] ->
-                 x__0048 :: y__0039)
+                 x__0046 :: y__0039)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
@@ -3013,12 +3013,12 @@ module LLKGram =
           with
             Some (_, 0) ->
               (parser
-                 [< x__0049 = Grammar.Entry.parse_token_stream expr;
+                 [< x__0047 = Grammar.Entry.parse_token_stream expr;
                     y__0040 =
                       Pa_llk_runtime.Llk_runtime.must_parse
-                        ~msg:"[y__0040 = symbol__0025] expected after [x__0049 = expr] (in [symbol])"
+                        ~msg:"[y__0040 = symbol__0025] expected after [x__0047 = expr] (in [symbol])"
                         symbol__0025 >] ->
-                   x__0049 :: y__0040)
+                   x__0047 :: y__0040)
                 __strm__
           | _ -> raise Stream.Failure
         and symbol__0024_regexp strm =
@@ -3038,19 +3038,19 @@ module LLKGram =
         and symbol__0025 __strm__ =
           try
             (parser
-               [< x__0050 = symbol__0032;
+               [< x__0048 = symbol__0032;
                   y__0041 =
                     Pa_llk_runtime.Llk_runtime.must_parse
-                      ~msg:"[y__0041 = symbol__0025] expected after [x__0050 = symbol__0032] (in [symbol])"
+                      ~msg:"[y__0041 = symbol__0025] expected after [x__0048 = symbol__0032] (in [symbol])"
                       symbol__0025 >] ->
-                 x__0050 :: y__0041)
+                 x__0048 :: y__0041)
               __strm__
           with Stream.Failure ->
             try (parser [< >] -> []) __strm__ with
               Stream.Failure -> raise Stream.Failure
         and symbol__0026 __strm__ =
           try
-            (parser [< x__0059 = symbol__0012 >] -> Some x__0059) __strm__
+            (parser [< x__0057 = symbol__0012 >] -> Some x__0057) __strm__
           with Stream.Failure ->
             try (parser [< >] -> None) __strm__ with
               Stream.Failure -> raise Stream.Failure
@@ -3077,13 +3077,13 @@ module LLKGram =
           q0000 None 0
         and symbol__0028 __strm__ =
           try
-            (parser [< x__0062 = sep_opt_sep >] -> Some x__0062) __strm__
+            (parser [< x__0060 = sep_opt_sep >] -> Some x__0060) __strm__
           with Stream.Failure ->
             try (parser [< >] -> None) __strm__ with
               Stream.Failure -> raise Stream.Failure
         and symbol__0029 __strm__ =
           try
-            (parser [< x__0063 = sep_opt_sep >] -> Some x__0063) __strm__
+            (parser [< x__0061 = sep_opt_sep >] -> Some x__0061) __strm__
           with Stream.Failure ->
             try (parser [< >] -> None) __strm__ with
               Stream.Failure -> raise Stream.Failure
@@ -3213,7 +3213,7 @@ module LLKGram =
           q0000 None 0
         and token__0002 x __strm__ =
           match
-            token__0002_regexp __strm__[@llk.regexp "\"/\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | \")\" | UIDENT | \"#\" | STRING | \"$\" | \"eps\" | \"empty\" | \"]\" | \"~\" | \"in\" | \";\" | \"&\" | \"?\" | \"|\" | \"+\" | \"*\") #1"]
+            token__0002_regexp __strm__[@llk.regexp "\"/\" #0 | (LIDENT | \"[\" | \"(\" | \"_\" | \")\" | UIDENT | \"#\" | \"$\" | STRING | \"eps\" | \"empty\" | \"]\" | \"in\" | \"~\" | \"|\" | \";\" | \"?\" | \"&\" | \"+\" | \"*\") #1"]
           with
             Some (_, 0) ->
               (parser [< '"", "/"; '"STRING", s >] -> Class (x, Some s))

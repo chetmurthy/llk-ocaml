@@ -45,6 +45,10 @@ comp_llk.cmx : \
     llk_regexps.cmx \
     llk_migrate.cmx \
     brzozowski2.cmx
+dfa2re.cmo : \
+    llk_regexps.cmo
+dfa2re.cmx : \
+    llk_regexps.cmx
 llk_regexps.cmo : \
     primtypes.cmo \
     brzozowski2.cmo

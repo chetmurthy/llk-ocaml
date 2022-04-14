@@ -65,7 +65,8 @@ let firstk depth input_file entryname =
   in
   let cg = txt |> Top.atn Ploc.dummy ~bootstrap:true in
   let e = CG.gram_entry cg entryname in
-  ignore (compute_firstk ~depth:6 cg e)
+  let memo = ATN.GraphDFA.Memo.mk() in
+  ignore (compute_firstk ~depth:6 (cg,memo) e)
 
 open Cmdliner
 

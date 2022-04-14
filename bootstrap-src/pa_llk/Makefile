@@ -23,9 +23,9 @@ PACKAGES := $(PACKAGES),bos,fmt,pa_ppx.base.link,pa_ppx.deriving_plugins.std,pa_
 TARGET := pa_llk_compiler.cma
 OML := brzozowski2.ml ord_MLast.ml llk_migrate.ml parse_bootstrapped.ml
 OMLI := ord_MLast.mli
-RML := primtypes.ml llk_regexps.ml llk_types.ml parse_gram.ml print_gram.ml comp_llk.ml pa_llk.ml
+RML := primtypes.ml llk_regexps.ml dfa2re.ml llk_types.ml parse_gram.ml print_gram.ml comp_llk.ml pa_llk.ml
 RMLI := 
-ML := primtypes.ml brzozowski2.ml ord_MLast.ml llk_regexps.ml llk_types.ml llk_migrate.ml parse_gram.ml print_gram.ml parse_bootstrapped.ml comp_llk.ml pa_llk.ml
+ML := primtypes.ml brzozowski2.ml ord_MLast.ml llk_regexps.ml dfa2re.ml llk_types.ml llk_migrate.ml parse_gram.ml print_gram.ml parse_bootstrapped.ml comp_llk.ml pa_llk.ml
 CMO := $(ML:.ml=.cmo)
 CMI := $(ML:.ml=.cmi)
 CMX := $(ML:.ml=.cmx)
@@ -51,7 +51,7 @@ META: META.pl
 install::
 	mkdir -p $(DESTDIR)/lib
 	./META.pl $(DESTDIR)/lib > META
-	$(NOT_OCAMLFIND) reinstall-if-diff pa_llk_compiler -destdir $(DESTDIR)/lib META $(TARGET) $(TARGET:.cma=.cmxa) $(TARGET:.cma=.a) $(CMI) $(wildcard *.cmt*)
+	$(NOT_OCAMLFIND) reinstall-if-diff pa_llk_compiler -destdir $(DESTDIR)/lib META $(TARGET) $(TARGET:.cma=.cmxa) $(TARGET:.cma=.a) $(CMI) $(CMX) $(wildcard *.cmt*)
 	$(RM) -f META
 
 clean::

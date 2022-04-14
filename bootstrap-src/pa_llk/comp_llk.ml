@@ -41,7 +41,7 @@ module Ctr = struct
 end ;
 
 module StringCtr = struct
-  type t = { it : Hashtbl.t string (ref int) } ;
+  type t = { it : Hashtbl.t string Ctr.t } ;
   value mk () = { it = Hashtbl.create 23 } ;
   value find {it=it} s =
     match Hashtbl.find it s with [
@@ -53,7 +53,7 @@ module StringCtr = struct
         }
       ]
   ;
-  value next ctr = let rv = ctr.val in do { incr ctr ; rv } ;
+  value next ctr = Ctr.next ctr ;
   value fresh_name root it =
     let r = find it (fst root) in
     let n = Ctr.next r in
@@ -191,6 +191,7 @@ module type GRAPHSIG = sig
   value nodes : t -> list Node.t ;
   value add_edge : t -> edge_t -> unit ;
   value edge_labels : t -> Node.t -> list Label.t ;
+  value edges : t -> Node.t -> list edge_t ;
   value traverse : t -> Node.t -> Label.t -> list Node.t ;
   value dump : out_channel -> t -> unit ;
 end ;
@@ -255,6 +256,12 @@ value traverse it src lab =
       ])
     | exception Not_found -> []
     ]
+;
+value edges it src =
+  edge_labels it src
+  |> List.concat_map (fun lab ->
+         traverse it src lab
+         |> List.map (fun dst -> (src, lab, dst)))
 ;
 
 value dump f it = do {
@@ -425,6 +432,8 @@ end ;
 
 end ;
 
+type exported_dfa_t = (int * list (int * option Token.t * list (Token.t * int))) ;
+
 module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
   type mut_data_t = {
@@ -433,10 +442,9 @@ module CompilingGrammar = struct
     ; gram_regexps: mutable list (Name.t * regexp)
     ; gram_externals: mutable list (Name.t * regexp)
     ; errors : mutable list error_t
-    ; atn_first: MHM.t Name.t (list (int * list Token.t))
-    ; atn_follow: MHM.t Name.t (list Token.t)
-    ; atn_firstk: MHM.t Name.t (option (list (int * list (list Token.t))))
+    ; atn_first: MHM.t Name.t (list Token.t)
     ; atn : mutable ATN0.Raw.t
+    ; atn_dfa : MHM.t Name.t (option exported_dfa_t)
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
     } ;
   type t = (Llk_types.top * mut_data_t) ;
@@ -450,9 +458,8 @@ module CompilingGrammar = struct
                 ; gram_externals = []
                 ; errors = []
                 ; atn_first = MHM.mk 23
-                ; atn_follow = MHM.mk 23
-                ; atn_firstk = MHM.mk 23
                 ; atn = ATN0.Raw.mk ()
+                ; atn_dfa = MHM.mk 23
                 ; entry_branch_regexps = MHM.mk 23
                }) ;
   value g = fst ;
@@ -474,8 +481,11 @@ module CompilingGrammar = struct
 
   value gram_entries cg = (g cg).gram_entries ;
   value exists_entry cg nt = List.exists (fun e -> nt = e.ae_name) (g cg).gram_entries ;
+  value gram_entry_opt cg nt =
+    List.find_opt (fun e -> nt = e.ae_name) (g cg).gram_entries
+  ;
   value gram_entry cg nt =
-    match List.find_opt (fun e -> nt = e.ae_name) (g cg).gram_entries with [
+    match gram_entry_opt cg nt with [
         None -> assert False
       | Some e -> e
       ]
@@ -519,11 +529,8 @@ module CompilingGrammar = struct
   value set_atn_first cg ename l = MHM.add (snd cg).atn_first (ename, l) ;
   value atn_first cg ename = MHM.map (snd cg).atn_first ename ;
 
-  value set_atn_follow cg ename l = MHM.add (snd cg).atn_follow (ename, l) ;
-  value atn_follow cg ename = MHM.map (snd cg).atn_follow ename ;
-
-  value set_atn_firstk cg ename l = MHM.add (snd cg).atn_firstk (ename, l) ;
-  value atn_firstk cg ename = MHM.map (snd cg).atn_firstk ename ;
+  value set_atn_dfa cg ename l = MHM.add (snd cg).atn_dfa (ename, l) ;
+  value atn_dfa cg ename = MHM.map (snd cg).atn_dfa ename ;
 
   value set_entry_branch_regexps (cg : t) ename l = MHM.add (snd cg).entry_branch_regexps (ename, l) ;
   value entry_branch_regexps (cg : t ) ename = MHM.map (snd cg).entry_branch_regexps ename ;
@@ -546,25 +553,8 @@ value dump_gram oc cg msg = do {
            Pr.(entry ~{pctxt=pctxt} Pprintf.empty_pc e)
     ) ;
     (match CG.atn_first cg e.ae_name with [
-       atnfi ->
-       let pp_branch pps (n, l) = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string ", "} Token.pp) l n) in
-       Fmt.(pf stderr "ATN First:\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
-     | exception Not_found -> ()
-     ]) ;
-    (match CG.atn_follow cg e.ae_name with [
        fo ->
-       Fmt.(pf stderr "ATN Follow: %a\n" (list ~{sep=const string " "} Token.pp) fo)
-     | exception Not_found -> ()
-     ]) ;
-    (match CG.atn_firstk cg e.ae_name with [
-       Some atnfi ->
-       let pp_branch pps (n, ll) =
-         let pp1 pps l = Fmt.(pf pps "[%a] -> %d" (list ~{sep=const string " "} Token.pp) l n) in
-         Fmt.(pf pps "%a" (list ~{sep=const string "\n\t"} pp1) ll) in
-       Fmt.(pf stderr "ATN First(k):\n\t%a\n" (list ~{sep=const string "\n\t"} pp_branch) atnfi)
-
-     | None -> Fmt.(pf stderr "ATN First(k): failed to compute\n")
-
+       Fmt.(pf stderr "ATN First: %a\n" (list ~{sep=const string " "} Token.pp) fo)
      | exception Not_found -> ()
      ]) ;
     (match CG.entry_branch_regexps cg e.ae_name with [
@@ -1216,11 +1206,19 @@ value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
         (SELF, cur)
        ;(NT ename None, cur)
     ] in
-  let lid_guess =
+  let (patt_guess,expr_guess) =
+    let r = List.hd rl in
+    if r.ar_action = None then (None, None)
+    else
     match List.hd rl with [
-        {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASself _ _} :: _]} -> v
-      | {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASnterm _ nt _ None} :: _]} when ename = nt -> v
-      | _ -> "x"
+        {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASself _ _} :: _]} ->
+        (Some <:patt< $lid:v$ >>,Some <:expr< $lid:v$ >>)
+      | {ar_psymbols=[{ap_patt= Some <:patt< $lid:v$ >>; ap_symb=ASnterm _ nt _ None} :: _]} when ename = nt ->
+        (Some <:patt< $lid:v$ >>,Some <:expr< $lid:v$ >>)
+      | _ ->
+         let x = CG.fresh_name cg (Name.mk "x") in
+         let x = Name.print x in
+         (Some <:patt< $lid:x$ >>, Some <:expr< $lid:x$ >>)
       ] in
   let rl =
     rl
@@ -1234,9 +1232,9 @@ value rewrite_righta cg loc (ename,eformals) ~{cur} ~{next} rho rl =
          ) in
   let last_rule = {ar_loc = loc;
                    ar_psymbols = [{ap_loc = loc;
-                                   ap_patt = Some <:patt< $lid:lid_guess$ >> ;
+                                   ap_patt = patt_guess ;
                                    ap_symb = ASnterm loc next (formals2actuals cg eformals) None}];
-                   ar_action = Some <:expr< $lid:lid_guess$ >> } in
+                   ar_action = expr_guess } in
   rl @ [last_rule]
 ;
 
@@ -2898,14 +2896,11 @@ value empty_level cg (ename, formal) l =
   else None
 ;
 
-value gen_re = Pcre.regexp "^([a-zA-Z0-9_]+)__([0-9]{4})(__[0-9]{2})?$" ;
-value is_generated_entry_name (_, n) = n > -1 ;
-
 value find_empty_entry cg el =
   el |> List.find_map (fun e ->
       let ename = e.ae_name in
       let formals = e.ae_formals in
-      if is_generated_entry_name e.ae_name && 1 = List.length e.ae_levels then
+      if Name.is_generated e.ae_name && 1 = List.length e.ae_levels then
         empty_level cg (ename, formals) (List.hd e.ae_levels)
       else None
   )
@@ -2932,6 +2927,87 @@ value rec exec0 cg el =
 ;
 
 value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S10UnitEntryElim = struct
+
+value unit_entry (cg : CG.t) ename =
+  if not (CG.exists_entry cg ename) then None else
+  let e = CG.gram_entry cg ename in
+  match (List.hd e.ae_levels).al_rules.au_rules with [
+      [{ar_psymbols=[{ap_patt=patt; ap_symb=ASnterm _ nt actuals None}]; ar_action = action}] ->
+      if List.length e.ae_formals = List.length actuals
+         && List.for_all2 (fun formal actual ->
+                match (formal, actual) with [
+                    (<:patt< $lid:pv$ >>, <:expr< $lid:ev$ >>) when pv = ev -> True
+                  | _ -> False
+              ]) e.ae_formals actuals
+         && (match (patt, action) with [
+                 (Some <:patt< $lid:pv$ >>, Some <:expr< $lid:ev$ >>) when pv = ev -> True
+               | (None, None) -> True
+               | _ -> False
+            ]) then
+        Some nt
+      else None
+    | _ -> None
+    ]
+;
+
+value rec furthest_unit_entry cg ename =
+  match unit_entry cg ename with [
+      None -> None
+    | Some nt ->
+       (match furthest_unit_entry cg nt with [
+            None -> Some nt
+          | Some nt' -> Some nt'
+       ])
+    ]
+;
+
+value eliminate_unit_entry_symbols changed (cg : CG.t) e =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASnterm loc nt actuals None as s ->
+        (match furthest_unit_entry cg nt with [
+             None -> s
+           | Some nt' -> do { changed.val := True ; ASnterm loc nt' actuals None }
+           ])
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value eliminate1 cg =
+  let changed = ref False in
+  let el = List.map (eliminate_unit_entry_symbols changed cg) (CG.gram_entries cg) in
+  (changed.val, CG.withg cg {(CG.g cg) with gram_entries = el })
+;
+
+value rec eliminate cg =
+  let (changed, cg) = eliminate1 cg in
+  if changed then eliminate cg else cg
+;
+
+value eliminate_unused1 mentioned_entries cg =
+  let changed = ref False in
+  let reject_unmentioned e =
+    if List.mem e.ae_name mentioned_entries then True
+    else do { changed.val := True ; False } in
+  let el = Std.filter reject_unmentioned (CG.gram_entries cg) in
+  (changed.val, CG.withg cg {(CG.g cg) with gram_entries = el })
+;
+
+value rec eliminate_unused cg =
+  let (mentioned_entries, _) = CheckSyntax.mentions cg in
+  let mentioned_entries = mentioned_entries @ (CG.g cg).gram_exports in
+  let (changed, cg) = eliminate_unused1 mentioned_entries cg in
+  if changed then eliminate_unused cg else cg
+;
+
+value exec cg = cg |> eliminate |> eliminate_unused ;
 
 end ;
 
@@ -3217,7 +3293,8 @@ type t = { branchnum : int ; priority : int ; cfgs : list CFG.t }
 value branchnum p = p.branchnum ;
 value priority p = p.priority ;
 value cfgs p = p.cfgs ;
-value canon t = {(t) with cfgs = List.stable_sort CFG.compare t.cfgs } ;
+value canon t = {(t) with cfgs = List.sort_uniq CFG.compare t.cfgs } ;
+value canon_list l = List.sort_uniq compare (List.map canon l) ;
 value eq_branchnum h h' = 
   h.branchnum = h'.branchnum
 ;
@@ -3252,11 +3329,12 @@ end ;
 
 module type DFA_STATE_SIG = sig
   type t = 'b ;
-  value mk_dfa : unit -> t ;
+  value mk_dfa : list NFACFG.t -> t ;
   type state_t = 'a [@@deriving (show,eq,ord) ;] ;
   value initial : t -> state_t ;
   value is_initial: t -> state_t -> bool ;
-  value extend_dfa : t -> state_t -> (Token.t * list NFACFG.t) -> (state_t * list NFACFG.t);
+  value extend_dfa : t -> state_t -> (Token.t * list NFACFG.t) -> (bool * state_t * list NFACFG.t);
+  value prefix : string ;
 end ;
 
 module BuildDFA(S : DFA_STATE_SIG) = struct
@@ -3270,7 +3348,7 @@ value dfastate t = t.dfastate ;
 value nfacfgs t = t.nfacfgs ;
 value mk st l = do {
     assert (Std.distinct (List.map NFACFG.branchnum l)) ;
-    {dfastate = st; nfacfgs = l}
+    {dfastate = st; nfacfgs = NFACFG.canon_list l}
 }
 ;
 end ;
@@ -3317,9 +3395,15 @@ value exceeds_recursion_depth cfg =
   countrec 0 l
 ;
 
+value has_token_edge (cg : CG.t) n =
+  n
+  |> Raw.edge_labels (CG.gram_atn cg)
+  |> List.exists (fun [ Label.TOKEN _ -> True | _ -> False ])
+;
+
 value watch_clrec1 (x : CFG.t) = () ;
-value closure loc (cg : CG.t) cfgs =
-  let acc = ref cfgs in
+value closure0 loc (cg : CG.t) cfg =
+  let acc = ref [cfg] in
   let bad = ref [] in
   let rec clrec0 = fun [
         (Node.EXIT _, [h::t]) -> clrec1 (h,t)
@@ -3348,8 +3432,9 @@ value closure loc (cg : CG.t) cfgs =
     if List.mem cfg bad.val then ()
     else if exceeds_recursion_depth cfg then do {
       let loc = CG.adjust_loc cg loc in
-      Fmt.(pf stderr "%s: ATN.closure: configuration exceeds recursion: %a\n%!"
+      Fmt.(pf stderr "%s: %s.ATN.closure: configuration exceeds recursion: %a\n%!"
              (Ploc.string_of_location loc)
+             S.prefix
              CFG.pp_hum cfg) ;
       Std.push bad cfg
     }
@@ -3359,10 +3444,41 @@ value closure loc (cg : CG.t) cfgs =
     }
     else ()
   in do {
-    List.iter clrec0 cfgs ;
-    acc.val
+    clrec0 cfg ;
+    acc.val |> List.filter (fun (st, _) -> has_token_edge cg st)
   }
 ;
+
+module Memo = struct
+type t = {
+    closure0 : MHM.t CFG.t (list CFG.t)
+  }
+;
+value mk () = {
+    closure0 = MHM.mk 23
+  }
+;
+end;
+
+type cg_memo_t = (CG.t * Memo.t) ;
+
+value memo_closure0 loc (cg, memo) cfg =
+  match MHM.map memo.Memo.closure0 cfg with [
+      x -> x
+    | exception Not_found -> do {
+        let cfgs = closure0 loc cg cfg in
+        MHM.add memo.Memo.closure0 (cfg, cfgs) ;
+        cfgs
+      }
+    ]
+;
+
+value closure loc (cg,memo) cfgs =
+  cfgs
+  |> List.concat_map (memo_closure0 loc (cg,memo))
+  |> List.sort_uniq CFG.compare
+;
+
 (** step1 [it,ec] [st]:
 
     From state [st], take one non-epsilon step in the ATN
@@ -3372,7 +3488,7 @@ value closure loc (cg : CG.t) cfgs =
     be performed prior to [step1]
  *)
 
-value step1 loc (cg : CG.t) (st : Node.t) = do {
+value step1 loc ((cg,memo) : cg_memo_t) (st : Node.t) = do {
   let it = CG.gram_atn cg in
   if Raw.is_bhole it st then
     raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
@@ -3393,6 +3509,17 @@ value step1_cfg loc cg (st, stk) =
   token_state'_list |> List.map (fun (tok, n) -> (tok,(n,stk)))
 ;
 
+value nfacfg_closure loc cg t =
+  let open NFACFG in
+  {(t) with cfgs = closure loc cg t.cfgs}
+;
+
+value scfg_closure loc cg t =
+  let nfacfgs = t.SCFG.nfacfgs in
+  let nfacfgs = List.map (nfacfg_closure loc cg) nfacfgs in
+  SCFG.mk t.SCFG.dfastate nfacfgs
+;
+
 (** extend1 loc cg [t]
 
     [t] is an NFACFG: extend it by one token.
@@ -3407,8 +3534,7 @@ value step1_cfg loc cg (st, stk) =
  *)
 value extend1 loc cg (t : NFACFG.t) =
   let open NFACFG in
-  let cfgs = closure loc cg t.cfgs in
-  cfgs
+  t.cfgs
   |> List.concat_map (fun cfg ->
          let token_cfg_list = step1_cfg loc cg cfg in
          token_cfg_list |> List.map (fun (tok, cfg) ->
@@ -3418,7 +3544,7 @@ value extend1 loc cg (t : NFACFG.t) =
   |> Std.nway_partition (fun (tok1,_) (tok2,_) -> tok1=tok2)
   |> List.map (fun l ->
          let (tok,_) = List.hd l in
-         (tok, NFACFG.concat (List.map snd l)))
+         (tok, NFACFG.(nfacfg_closure loc cg (concat (List.map snd l)))))
 ;
 
 
@@ -3428,6 +3554,8 @@ value ambiguous_scfg__t (t : SCFG._t 'a) =
   let l = t.SCFG.nfacfgs in
   not (Std.distinct (List.map NFACFG.priority l))
 ;
+
+value ambiguous_scfg_next_t (t : SCFG.next_t) = ambiguous_scfg__t t ;
 
 (** a [SCFG.t] is ambiguous if it is ambiguous as an [SCFG._t], or its
     dfastate [is_initial]
@@ -3446,11 +3574,11 @@ value ambiguous_scfg dfa (t : SCFG.t) =
   (5) This yields [list (tok, list NFACFG.t)] where the inner list has distinct branchnum.
   (6) Now add in the dfa-state to produce SCFG.next_t
  *)
-value extend_branches1 loc (cg : CG.t) dfa (t : SCFG.t) : (list SCFG.t * list SCFG.t) = do {
+value extend_branches1 loc (cg_memo : cg_memo_t) dfa (t : SCFG.t) : (list SCFG.t * list SCFG.t) = do {
   let open SCFG in
   let open NFACFG in
   assert (ambiguous_scfg dfa t) ;
-  let next_l : list (Token.t * NFACFG.t) = t.SCFG.nfacfgs |> List.concat_map (extend1 loc cg) in
+  let next_l : list (Token.t * NFACFG.t) = t.SCFG.nfacfgs |> List.concat_map (extend1 loc cg_memo) in
   let token_partitions : list (list (Token.t * NFACFG.t)) =
     Std.nway_partition (fun (tok1,_) (tok2,_) -> tok1=tok2) next_l in
   let token_nfacfgs_list : list (Token.t * list NFACFG.t) =
@@ -3463,13 +3591,14 @@ value extend_branches1 loc (cg : CG.t) dfa (t : SCFG.t) : (list SCFG.t * list SC
   let scfgs =
     token_nfacfgs_list
     |> List.map (fun (tok,nfacfgs) -> SCFG.mk (t.dfastate, tok) nfacfgs) in
-  let (ambig, ok) = Ppxutil.filter_split ambiguous_scfg__t scfgs in
+  let (ambig, ok) = Ppxutil.filter_split ambiguous_scfg_next_t scfgs in
   let to_scfg_t t =
     let (dfast, tok) = t.dfastate in
     let nfacfgs = t.nfacfgs in
-    let (dfast', nfacfgs') = S.extend_dfa dfa dfast (tok, nfacfgs) in
-    SCFG.mk dfast' nfacfgs' in
-  (List.map to_scfg_t ambig, List.map to_scfg_t ok)
+    let (fresh_state, dfast', nfacfgs') = S.extend_dfa dfa dfast (tok, nfacfgs) in
+    if fresh_state then Some (SCFG.mk dfast' nfacfgs')
+    else None in
+  (List.filter_map to_scfg_t ambig, List.filter_map to_scfg_t ok)
 }
 ;
 
@@ -3481,7 +3610,7 @@ value extend_branches1 loc (cg : CG.t) dfa (t : SCFG.t) : (list SCFG.t * list SC
   (4) concat all the ambig, all the ok
  *)
 type branches_toks_list = list SCFG.t ;
-value extend_branches loc (cg : CG.t) dfa (l : list SCFG.t) : (list SCFG.t * list SCFG.t) = do {
+value extend_branches loc (cg_memo : cg_memo_t) dfa (l : list SCFG.t) : (list SCFG.t * list SCFG.t) = do {
   let open SCFG in
   let open NFACFG in
 
@@ -3489,21 +3618,22 @@ value extend_branches loc (cg : CG.t) dfa (l : list SCFG.t) : (list SCFG.t * lis
   assert (Std.distinct (List.map SCFG.dfastate l) || List.for_all (S.is_initial dfa) (List.map SCFG.dfastate l)) ;
   let ambig_ok_l =
     l
-    |> List.map (extend_branches1 loc cg dfa) in
+    |> List.map (extend_branches1 loc cg_memo dfa) in
   (ambig_ok_l |> List.map fst |> List.concat,
    ambig_ok_l |> List.map snd |> List.concat)
 }
 ;
 
-value rec compute_firstk_depth loc cg dfa ename ~{depth} (ambig_l, ok_l) : list SCFG.t = do {
-  Fmt.(pf stderr "compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+value rec compute_firstk_depth loc ((cg, _) as cg_memo) dfa ename ~{depth} (ambig_l, ok_l) : list SCFG.t = do {
+  Fmt.(pf stderr "%s.compute_firstk_depth(%s, %d) (ambiguous=%d, ok=%d) paths\n%!"
+         S.prefix
          (Name.print ename) depth (List.length ambig_l) (List.length ok_l)) ;
   if depth = 0 then
     raise_failwithf (CG.adjust_loc cg loc) "compute_firstk_depth(%s): exceeded depth and still ambiguous" (Name.print ename)
   else
-    let (ambig_l', ok_l') = extend_branches loc cg dfa ambig_l in
+    let (ambig_l', ok_l') = extend_branches loc cg_memo dfa ambig_l in
     if ambig_l'=[] then ok_l' @ ok_l
-    else compute_firstk_depth loc cg dfa ename ~{depth=depth-1} (ambig_l', ok_l' @ ok_l)
+    else compute_firstk_depth loc cg_memo dfa ename ~{depth=depth-1} (ambig_l', ok_l' @ ok_l)
 }
 ;
 
@@ -3513,12 +3643,12 @@ value is_regexp_prediction_entry e =
   |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
 ;
 
-value compute_firstk ~{depth} cg dfa e = do {
-  Fmt.(pf stderr "START compute_first(%s)\n%!" (Name.print e.ae_name)) ;
+value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
+  let loc = e.ae_loc in
   if S9SeparateSyntactic.is_syntactic_predicate_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" (Name.print e.ae_name)
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" S.prefix (Name.print e.ae_name)
   else if is_regexp_prediction_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" (Name.print e.ae_name)
+    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" S.prefix (Name.print e.ae_name)
   else () ;
   let open SCFG in
   let atn = CG.gram_atn cg in
@@ -3531,10 +3661,12 @@ value compute_firstk ~{depth} cg dfa e = do {
            | _ -> -1
            ] in
            NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
+  let dfa = S.mk_dfa nfacfgs in
   let scfg = SCFG.mk (S.initial dfa) nfacfgs in
-  let l = compute_firstk_depth e.ae_loc cg dfa e.ae_name ~{depth=depth} ([scfg], []) in
+  let scfg = scfg_closure loc cg_memo scfg in
+  let l = compute_firstk_depth e.ae_loc cg_memo dfa e.ae_name ~{depth=depth} ([scfg], []) in
   assert (not (List.exists (ambiguous_scfg dfa) l)) ;
-  l
+  let l = l
   |> List.map (fun (t : SCFG.t) ->
          let p0 = match t.SCFG.nfacfgs with [
              [p0] -> p0
@@ -3546,64 +3678,154 @@ value compute_firstk ~{depth} cg dfa e = do {
   |> Std.nway_partition (fun (n1,_) (n2,_) -> n1=n2)
   |> List.map (fun l ->
       let n = fst (List.hd l) in
-      (n, List.map snd l))
+      (n, List.map snd l)) in
+  (l, dfa)
+}
+;
+
+value duration stime etime =
+  Int64.of_float (1000.0 *. 1000.0 *. 1000.0 *. (etime -. stime))
+;
+
+value compute_firstk ~{depth} cg e = do {
+  let loc = e.ae_loc in
+  let stime = Unix.gettimeofday() in
+  let rv = _compute_firstk ~{depth} cg e in
+  let etime = Unix.gettimeofday() in
+  if etime -. stime > 1.0 then
+    let dur = duration stime etime in
+    Fmt.(pf stderr "ELAPSED %s.compute_firstk(%s): %a\n%!"
+           S.prefix (Name.print e.ae_name)
+           uint64_ns_span dur
+    )
+  else () ;
+  rv
 }
 ;
 end ;
 
-module ListDFAState = struct
-  type t = unit ;
-  value mk_dfa () = () ;
-  type state_t = list Token.t [@@deriving (show,eq,ord) ;] ;
-  value initial () = [] ;
-  value is_initial () x = x = [] ;
-  value extend_dfa dfa st (t,l) = (st@[t], l) ;
-end ;
-module ListDFA = BuildDFA(ListDFAState) ;
+module GraphDFAState = struct
+  module Node = struct
+    type t = (int * list Token.t) [@@deriving (show,eq,ord) ;];
+    value print (n,toks) = Fmt.(str "%d [%a]" n (list ~{sep=const string " "} Token.pp) toks) ;
+    value pp_hum pps n = Fmt.(pf pps "%s" (print n)) ;
+  end ;
+  module Label = struct
+    type t = Token.t [@@deriving (show,eq,ord) ;] ;
+    value print = Token.print ;
+    value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
+  end ;
+  module G = Graph(Node)(Label) ;
+  type t = {
+      g : G.t
+    ; nodectr : Ctr.t
+    ; cfg2node : MHBIJ.t (list NFACFG.t) Node.t
+    ; initial : Node.t
+    } ;
+  value mk_dfa init_nfacfgs =
+    let g = G.mk() in
+    let nodectr = Ctr.mk() in
+    let cfg2node = MHBIJ.mk (23, 23) in
+    let initial = (Ctr.next nodectr, []) in
+    let initial = G.add_node g initial in
+    let _ = MHBIJ.add cfg2node (NFACFG.canon_list init_nfacfgs, initial) in
+    {
+      g = g
+    ; nodectr = nodectr
+    ; cfg2node = cfg2node
+    ; initial = initial
+    } ;
+  type state_t = Node.t [@@deriving (show,eq,ord) ;] ;
+  value initial dfa = dfa.initial ;
+  value is_initial dfa x = x = dfa.initial ;
 
-open ListDFA ;
-
-value store_firstk cg e =
-  let dfa = ListDFAState.mk_dfa () in
-  let lopt = match compute_firstk ~{depth=4} cg dfa e with [
-        x -> Some x
-      | exception exn ->
-         let msg = Printexc.to_string exn in do {
-          Fmt.(pf stderr "%s\n%!" msg) ;
-          None
+  value associate_nfacfgs_to_state dfa nfacfgs st =
+    MHBIJ.add dfa.cfg2node (nfacfgs, st)
+  ;
+  value state_to_nfacfgs dfa st =
+    match MHBIJ.inv dfa.cfg2node st with [
+          [x] -> x
+        | _ -> assert False
+        ]
+  ;
+  value add_edge dfa (st, t, st') =
+    G.add_edge  dfa.g (st, t, st') ;
+  value extend_dfa dfa ((_, sttoks) as st) (t,nfacfgs) =
+    let nfacfgs = NFACFG.canon_list nfacfgs in
+    match MHBIJ.map dfa.cfg2node nfacfgs with [
+        st' -> do {
+          add_edge dfa (st, t, st') ;
+          (False, st', nfacfgs)
         }
-      ] in
-  CG.set_atn_firstk cg e.ae_name lopt
+      | exception Not_found ->
+         let st' = (Ctr.next dfa.nodectr, sttoks@[t]) in
+         let st' = G.add_node dfa.g st' in
+         let _ = associate_nfacfgs_to_state dfa nfacfgs st' in
+         let _ = add_edge dfa (st, t, st') in
+         (True, st', nfacfgs)
+      ] ;
+  value prefix = "graph";
+end ;
+module GraphDFA = BuildDFA(GraphDFAState) ;
+
+module GraphFirstk = struct
+open GraphDFA ;
+open GraphDFAState ;
+
+value export_dfa dfa =
+  let nodes = List.stable_sort Stdlib.compare (G.nodes dfa.g) in
+  let initial = fst dfa.initial in
+  let convert_state ((n, _) as st) =
+    let nfacfgs = state_to_nfacfgs dfa st in
+    let final = match nfacfgs with [
+          [x] -> Some (Token.OUTPUT x.NFACFG.branchnum)
+        | [_::_] when Std.distinct (List.map NFACFG.priority nfacfgs) ->
+           let x = List.hd (nfacfgs |> List.stable_sort (fun p1 p2 -> -(Int.compare p1.NFACFG.priority p2.NFACFG.priority))) in
+           Some (Token.OUTPUT x.NFACFG.branchnum)
+        | _ -> None
+        ] in
+    let edges = G.edges dfa.g st in
+    let trans = List.map (fun (_, tok, (d, _)) -> (tok, d)) edges in
+    let trans = List.stable_sort Stdlib.compare trans in
+    (n, final, trans) in
+  (initial, List.map convert_state nodes)
 ;
 
-value node_first loc cg node =
-  let cfgs = [(node, [])] in
-  let nodes = cfgs |> closure loc cg |> List.map fst |> List.sort_uniq Node.compare in
-  let token_node_list = nodes |> List.concat_map (step1 loc cg) in
-  token_node_list |> List.map fst |> List.sort_uniq Token.compare
+value compute_dfa cg_memo e =
+  match compute_firstk ~{depth=4} cg_memo e with [
+      (_, dfa) -> Some (export_dfa dfa)
+    | exception exn ->
+       let msg = Printexc.to_string exn in do {
+        Fmt.(pf stderr "%s\n%!" msg) ;
+        None
+      }
+    ]
+;
+
+value store_dfa ((cg, _) as cg_memo) e =
+  let dfa_opt = compute_dfa cg_memo e in
+  CG.set_atn_dfa cg e.ae_name dfa_opt
+;
+
+value store_first ((cg, _) as cg_memo) e =
+  match CG.atn_dfa cg e.ae_name with [
+      Some dfa ->
+      let (initial, states) = dfa in
+      let firsts = match states |> List.find_opt (fun (st, _, _) -> st = initial) with [
+              Some (_, _, trans) -> List.map fst trans
+            | None -> Fmt.(failwithf "store_first(%a): internal error: DFA did not have an initial state"
+                             Name.pp e.ae_name)
+            ] in
+        CG.set_atn_first cg e.ae_name firsts
+
+    | None -> ()
+    | exception Not_found -> ()
+    ]
 ;
 
 
-value entry_first cg e =
-  let atn = CG.gram_atn cg in
-  let (snode, _) = Raw.entry_nodes atn e.ae_name in
-  node_first e.ae_loc cg snode
-;
 
-value entry_follow cg e =
-  let atn = CG.gram_atn cg in
-  let (_, enode) = Raw.entry_nodes atn e.ae_name in
-  node_first e.ae_loc cg enode
-;
-
-value branch_first (cg : CG.t) e =
-  let atn = CG.gram_atn cg in
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  rl
-  |> List.mapi (fun i _ ->
-         let node = Raw.entry_branch atn e.ae_name i in
-         (i, node_first e.ae_loc cg node))
-;
+end ;
 
 end ;
 
@@ -3617,24 +3839,19 @@ value exec cg = do {
 end ;
 
 module ATNFirstFollow = struct
-
-value store_entry_branch_first cg e =
-  let l = ATN.branch_first cg e in
-  CG.set_atn_first cg e.ae_name l
-;
-
-value store_entry_follow cg e =
-  let l = ATN.entry_follow cg e in
-  CG.set_atn_follow cg e.ae_name l
-;
+open ATN.GraphFirstk ;
 
 value exec cg = do {
+(*
     (CG.gram_entries cg)
-    |> List.iter (ATN.store_firstk cg) ;
+    |> List.iter (store_firstk cg) ;
+ *)
+    let memo = ATN.GraphDFA.Memo.mk() in
+    let cg_memo = (cg, memo) in
     (CG.gram_entries cg)
-    |> List.iter (store_entry_branch_first cg) ;
+    |> List.iter (ATN.GraphFirstk.store_dfa cg_memo) ;
     (CG.gram_entries cg)
-    |> List.iter (store_entry_follow cg) ;
+    |> List.iter (store_first cg_memo) ;
     cg
 }
 ;
@@ -3673,7 +3890,7 @@ and infer_psymbols loc cg e psl =
           when CG.exists_entry cg nt &&
                  MHM.in_dom (snd cg).atn_first nt ->
         let l = CG.atn_first cg nt in
-        l |> List.concat_map snd |> List.map PSyn.token |> PSyn.disjunction
+        l |> List.map PSyn.token |> PSyn.disjunction
 
      | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
 
@@ -3698,39 +3915,8 @@ value infer_branch_regexps cg e =
     List.mapi (infer_branch_regexp1 cg e) rl
 ;
 
-value firstk_branch_regexps cg e =
-  match CG.atn_firstk cg e.ae_name with [
-      None -> None
-    | Some fk ->
-       let l =
-         fk
-         |> List.concat_map (fun (branchnum, tll) ->
-                tll |> List.map (fun tl -> (branchnum, tl))
-              )
-         |> List.map (fun (branchnum, tl) ->
-                let re = List.fold_left (fun re t -> PSyn.(re @@ token t)) PSyn.epsilon tl in
-                (branchnum, re)
-              ) in
-      let l =
-        l
-        |> Std.nway_partition (fun (b1, _) (b2, _) -> b1=b2)
-        |> List.map (fun l ->
-               let bn = fst (List.hd l) in
-               (bn, l |> List.map snd |> PSyn.disjunction)) in
-       Some l
-    ]
-;
-
-value compute_branch_regexps cg e =
-  let l = match firstk_branch_regexps cg e with [
-        None -> infer_branch_regexps cg e
-      | Some l -> l
-    ] in
-  l
-;
-
 value store_entry_branch_regexps cg e =
-  let l = compute_branch_regexps cg e in
+  let l = infer_branch_regexps cg e in
   CG.set_entry_branch_regexps cg e.ae_name l
 ;
 
@@ -4130,10 +4316,10 @@ value nonanti_edge_to_branch loc generic_is_final (cls,newst) =
 value edges_to_branches loc states edges =
   let find_state st =
     try
-      List.find (fun (i, _, _, _) -> st = i) states
+      List.find (fun (i, _, _) -> st = i) states
     with Not_found -> failwithf "edges_to_branches internal error: state %d not found" st in
   let state_is_final st =
-    let (_, _, final, _) = find_state st in
+    let (_, final, _) = find_state st in
     None <> final in
 
   let spcl_edges = List.filter (fun [ (SPCL _, _) -> True | _ -> False ]) edges in
@@ -4157,17 +4343,24 @@ value edges_to_branches loc states edges =
   spcl_branches @ tokspecific_branches @ tokgeneric_branches @ anti_branches
 ;
 
-value letrec_nest (init, initre, states) =
+value strip_exported_dfa (init, initre, states) : exported_dfa_t =
+  let strip_state (i, rex, final, trans) = (i, final, trans) in
+  (init, List.map strip_state states)
+;
+
+value letrec_nest (init, states) =
+  let states = List.stable_sort Stdlib.compare states in
   let open Token in
   let loc = Ploc.dummy in
   let find_state st =
     try
-      List.find (fun (i, _, _, _) -> st = i) states
+      List.find (fun (i, _, _) -> st = i) states
     with Not_found -> failwithf "letrec_nest internal error: state %d not found" st in
   let state_is_final st =
-    let (_, _, final, _) = find_state st in
+    let (_, final, _) = find_state st in
     None <> final in
-  let export_state (i, rex, final, edges) =
+  let export_state (i, final, edges) =
+    let edges = List.stable_sort Stdlib.compare edges in
     let rhs =
       if edges = [] then <:expr< lastf >> else
         let generic_is_final =
@@ -4206,25 +4399,60 @@ value compile1b_branch cg ename branchnum r =
 ;
 
 value compute_full_regexp cg e =
-  let l = CG.entry_branch_regexps cg e.ae_name in
+  let l = EntryRegexps.infer_branch_regexps cg e in
   l
   |> List.map (fun (bn, rex) -> PSyn.(rex @@ token (OUTPUT bn)))
   |> PSyn.disjunction
+;
+
+value compute_predictor0 cg e =
+  let loc = e.ae_loc in
+  let (exported_dfa_opt, retxt) =
+    let fullre = compute_full_regexp cg e in
+    let retxt = String.escaped (PSyn.print fullre) in
+    if PSyn.(equal zero fullre) then
+      (None,retxt)
+    else
+      let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
+      let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
+      (Some (strip_exported_dfa exported_dfa), retxt) in
+
+  let predictor = match exported_dfa_opt with [
+        None -> <:expr< fun __strm__ -> raise Stream.Failure >>
+      | Some dfa -> letrec_nest dfa
+      ] in
+  (predictor, retxt)
+;
+
+value compute_predictor cg e =
+  match CG.atn_dfa cg e.ae_name with [
+      Some dfa -> (letrec_nest dfa, "<text not available>")
+    | None -> compute_predictor0 cg e
+    | exception Not_found -> compute_predictor0 cg e
+    ]
 ;
 
 value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let fullre = compute_full_regexp cg e in
-  let predictor =
+(*
+  let (exported_dfa_opt, retxt) =
+    let fullre = compute_full_regexp cg e in
+    let retxt = String.escaped (PSyn.print fullre) in
     if PSyn.(equal zero fullre) then
-      <:expr< fun __strm__ -> raise Stream.Failure >>
+      (None,retxt)
     else
       let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
       let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
-      letrec_nest exported_dfa in
-  let retxt = String.escaped (PSyn.print fullre) in
+      (Some (strip_exported_dfa exported_dfa), retxt) in
+
+  let predictor = match exported_dfa_opt with [
+        None -> <:expr< fun __strm__ -> raise Stream.Failure >>
+      | Some dfa -> letrec_nest dfa
+      ] in
+ *)
+  let (predictor, retxt) = compute_predictor cg e in
   let predictor_name = (Name.print ename)^"_regexp" in
   let branches = 
     rl
@@ -4555,9 +4783,15 @@ value separate_syntactic loc ?{bootstrap=False} s =
   |> S9SeparateSyntactic.exec
 ;
 
-value atn loc ?{bootstrap=False} s =
+value unit_entry_elim loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
+  |> S10UnitEntryElim.exec
+;
+
+value atn loc ?{bootstrap=False} s =
+  s
+  |> unit_entry_elim loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> BuildATN.exec
   |> Dump.exec "grammar before firstk"
@@ -4568,16 +4802,16 @@ value firstk loc ?{bootstrap=False} s =
   |> atn loc ~{bootstrap=bootstrap}
   |> ATNFirstFollow.exec
 ;
-
+(*
 value entry_regexps loc ?{bootstrap=False} s =
   s
   |> firstk loc ~{bootstrap=bootstrap}
   |> EntryRegexps.exec
 ;
-
+ *)
 value codegen loc ?{bootstrap=False} s =
   s
-  |> entry_regexps loc ~{bootstrap=bootstrap}
+  |> firstk loc ~{bootstrap=bootstrap}
   |> Dump.exec "final grammar before codegen"
   |> Codegen.exec
 ;
