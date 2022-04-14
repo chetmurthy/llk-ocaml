@@ -810,7 +810,7 @@ END;
     | "." GREEDY LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
-      | e1 = SELF; "."; "("; check_operator_rparen ; op = operator_rparen ->
+      | e1 = SELF; "."; "("; op = operator_rparen ->
           if op = "::" then
             Ploc.raise loc (Failure ".(::) (dot paren colon colon paren) cannot appear except after longident")
           else
@@ -869,7 +869,7 @@ END;
           <:expr< (module $me$ : $mt$) >>
       | "("; "module"; me = module_expr; ")" →
           <:expr< (module $me$) >>
-      | "("; check_operator_rparen ; op = operator_rparen ->
+      | "("; op = operator_rparen ->
           if op = "::" then
             <:expr< $uid:op$ >>
           else
@@ -881,7 +881,7 @@ END;
   expr_longident:
     [
       [ li = longident -> <:expr< $longid:li$ >>
-      | li = longident ; PRIORITY 1 ; "." ; "("; check_operator_rparen ; op = operator_rparen ->
+      | li = longident ; PRIORITY 1 ; "." ; "("; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
@@ -1039,7 +1039,7 @@ END;
       | "[|"; pl = V (LIST0 patt SEP ";"); "|]" → <:patt< [| $_list:pl$ |] >>
       | "{"; lpl = V (LIST1 label_patt SEP ";"); "}" →
           <:patt< { $_list:lpl$ } >>
-      | "("; check_operator_rparen ; op = operator_rparen ->
+      | "("; op = operator_rparen ->
           if op = "::" then
             <:patt< $uid:op$ >>
           else
@@ -1080,7 +1080,7 @@ END;
       ]
     | "simple"
       [ p = patt_ident -> p
-      | "("; check_operator_rparen ; op = operator_rparen ->
+      | "("; op = operator_rparen ->
           if op = "::" then
             <:patt< $uid:op$ >>
           else

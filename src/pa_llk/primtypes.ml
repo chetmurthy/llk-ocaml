@@ -24,5 +24,7 @@ module Name = struct
   ;
   value pp pps n = Fmt.(pf pps "%s" (print n)) ;
   value root (s, _) = s ;
+  value is_generated (_, n) = n > -1 ;
+
 end
 ;

@@ -481,8 +481,11 @@ module CompilingGrammar = struct
 
   value gram_entries cg = (g cg).gram_entries ;
   value exists_entry cg nt = List.exists (fun e -> nt = e.ae_name) (g cg).gram_entries ;
+  value gram_entry_opt cg nt =
+    List.find_opt (fun e -> nt = e.ae_name) (g cg).gram_entries
+  ;
   value gram_entry cg nt =
-    match List.find_opt (fun e -> nt = e.ae_name) (g cg).gram_entries with [
+    match gram_entry_opt cg nt with [
         None -> assert False
       | Some e -> e
       ]
@@ -2893,14 +2896,11 @@ value empty_level cg (ename, formal) l =
   else None
 ;
 
-value gen_re = Pcre.regexp "^([a-zA-Z0-9_]+)__([0-9]{4})(__[0-9]{2})?$" ;
-value is_generated_entry_name (_, n) = n > -1 ;
-
 value find_empty_entry cg el =
   el |> List.find_map (fun e ->
       let ename = e.ae_name in
       let formals = e.ae_formals in
-      if is_generated_entry_name e.ae_name && 1 = List.length e.ae_levels then
+      if Name.is_generated e.ae_name && 1 = List.length e.ae_levels then
         empty_level cg (ename, formals) (List.hd e.ae_levels)
       else None
   )
@@ -2927,6 +2927,87 @@ value rec exec0 cg el =
 ;
 
 value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
+
+end ;
+
+module S10UnitEntryElim = struct
+
+value unit_entry (cg : CG.t) ename =
+  if not (CG.exists_entry cg ename) then None else
+  let e = CG.gram_entry cg ename in
+  match (List.hd e.ae_levels).al_rules.au_rules with [
+      [{ar_psymbols=[{ap_patt=patt; ap_symb=ASnterm _ nt actuals None}]; ar_action = action}] ->
+      if List.length e.ae_formals = List.length actuals
+         && List.for_all2 (fun formal actual ->
+                match (formal, actual) with [
+                    (<:patt< $lid:pv$ >>, <:expr< $lid:ev$ >>) when pv = ev -> True
+                  | _ -> False
+              ]) e.ae_formals actuals
+         && (match (patt, action) with [
+                 (Some <:patt< $lid:pv$ >>, Some <:expr< $lid:ev$ >>) when pv = ev -> True
+               | (None, None) -> True
+               | _ -> False
+            ]) then
+        Some nt
+      else None
+    | _ -> None
+    ]
+;
+
+value rec furthest_unit_entry cg ename =
+  match unit_entry cg ename with [
+      None -> None
+    | Some nt ->
+       (match furthest_unit_entry cg nt with [
+            None -> Some nt
+          | Some nt' -> Some nt'
+       ])
+    ]
+;
+
+value eliminate_unit_entry_symbols changed (cg : CG.t) e =
+  let dt = Llk_migrate.make_dt () in
+  let fallback_migrate_a_symbol = dt.migrate_a_symbol in
+  let migrate_a_symbol dt = fun [
+        ASnterm loc nt actuals None as s ->
+        (match furthest_unit_entry cg nt with [
+             None -> s
+           | Some nt' -> do { changed.val := True ; ASnterm loc nt' actuals None }
+           ])
+      | s -> fallback_migrate_a_symbol dt s
+      ] in
+  let dt = { (dt) with Llk_migrate.migrate_a_symbol = migrate_a_symbol } in
+  dt.migrate_a_entry dt e
+;
+
+value eliminate1 cg =
+  let changed = ref False in
+  let el = List.map (eliminate_unit_entry_symbols changed cg) (CG.gram_entries cg) in
+  (changed.val, CG.withg cg {(CG.g cg) with gram_entries = el })
+;
+
+value rec eliminate cg =
+  let (changed, cg) = eliminate1 cg in
+  if changed then eliminate cg else cg
+;
+
+value eliminate_unused1 mentioned_entries cg =
+  let changed = ref False in
+  let reject_unmentioned e =
+    if List.mem e.ae_name mentioned_entries then True
+    else do { changed.val := True ; False } in
+  let el = Std.filter reject_unmentioned (CG.gram_entries cg) in
+  (changed.val, CG.withg cg {(CG.g cg) with gram_entries = el })
+;
+
+value rec eliminate_unused cg =
+  let (mentioned_entries, _) = CheckSyntax.mentions cg in
+  let mentioned_entries = mentioned_entries @ (CG.g cg).gram_exports in
+  let (changed, cg) = eliminate_unused1 mentioned_entries cg in
+  if changed then eliminate_unused cg else cg
+;
+
+value exec cg = cg |> eliminate |> eliminate_unused ;
 
 end ;
 
@@ -4702,9 +4783,15 @@ value separate_syntactic loc ?{bootstrap=False} s =
   |> S9SeparateSyntactic.exec
 ;
 
-value atn loc ?{bootstrap=False} s =
+value unit_entry_elim loc ?{bootstrap=False} s =
   s
   |> separate_syntactic loc ~{bootstrap=bootstrap}
+  |> S10UnitEntryElim.exec
+;
+
+value atn loc ?{bootstrap=False} s =
+  s
+  |> unit_entry_elim loc ~{bootstrap=bootstrap}
   |> SortEntries.exec
   |> BuildATN.exec
   |> Dump.exec "grammar before firstk"
