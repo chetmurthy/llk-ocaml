@@ -2,7 +2,6 @@ open Pa_ppx_testutils ;
 open Testutil ;
 open Pa_ppx_base ;
 
-
 [@@@llk
 {foo|
 GRAMMAR Longident:
@@ -12,11 +11,20 @@ REGEXPS:
 END;
 
   longident:
-    [ LEFTA
-      [ me1 = SELF ; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
+    [ [ i = V UIDENT "uid" ;
+        l = LIST0 [ (["." ; V UIDENT])? ; "." ; i' = V UIDENT "uid" -> i' ] ->
+        List.fold_left (fun li i -> <:extended_longident< $longid:li$ . $_uid:i$ >>)
+        <:extended_longident< $_uid:i$ >> l
+      ] ]
+      ;
+(*
+  longident:
+    [ NONGREEDY LEFTA
+      [ me1 = SELF ; (["."; V UIDENT "uid"])?  ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
+*)
   longident_eoi: [ [ x = longident ; EOI -> x ] ] ;
 
   expr: [
@@ -66,7 +74,7 @@ open OUnit2 ;
 open OUnitTest ;
 value tests = "simple" >::: [
 
-      "Longident2" >:: (fun _ -> do {
+      "Longident" >:: (fun _ -> do {
         assert_equal ~{cmp=Reloc.eq_longid} <:longident< A.B.C >> (pa Longident.longident_eoi "A.B.C")
       ; assert_equal ~{cmp=Reloc.eq_expr} <:expr< A.B.c >> (pa Longident.expr_eoi "A.B.c")
       ; assert_equal ~{cmp=Reloc.eq_expr}

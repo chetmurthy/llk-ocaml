@@ -328,6 +328,7 @@ module Label = struct
       EPS
     | TOKEN of Token.t
     | NTERM of Name.t
+    | SYNPRED of a_symbol
     ] [@@deriving (show,eq,ord) ;]
   ;
 
@@ -335,6 +336,7 @@ module Label = struct
       EPS -> "eps"
     | TOKEN tok -> Token.print tok
     | NTERM n -> Name.print n
+    | SYNPRED s -> Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)
   ] ;
   value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
@@ -437,8 +439,21 @@ value dump f it = G.dump f it.g ;
 end ;
 
 end ;
+module Step = struct
+type t = [
+    TOKEN_STEP of Token.t
+  | SYNPRED_STEP of a_symbol
+  ] [@@deriving (show,eq,ord) ;]
+;
+value print = fun [
+    TOKEN_STEP t -> Token.print t
+  | SYNPRED_STEP s -> Fmt.(str "(%s)?" (Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)))
+]
+;
+value pp pps t = Fmt.(pf pps "%s" (print t)) ;
+end ;
 
-type exported_dfa_t = (int * list (int * option Token.t * list (Token.t * int))) ;
+type exported_dfa_t = (int * list (int * option Token.t * list (Step.t * int))) ;
 
 module CompilingGrammar = struct
   type error_t = { loc : Ploc.t ; ename : Name.t ; kind : string ; msg : string ; backtrace : string } ;
@@ -448,7 +463,7 @@ module CompilingGrammar = struct
     ; gram_regexps: mutable list (Name.t * regexp)
     ; gram_externals: mutable list (Name.t * regexp)
     ; errors : mutable list error_t
-    ; atn_first: MHM.t Name.t (list Token.t)
+    ; atn_first: MHM.t Name.t (list Step.t)
     ; atn : mutable ATN0.Raw.t
     ; atn_dfa : MHM.t Name.t (option exported_dfa_t)
     ; entry_branch_regexps: MHM.t Name.t (list (int * PSyn.t))
@@ -560,7 +575,7 @@ value dump_gram oc cg msg = do {
     ) ;
     (match CG.atn_first cg e.ae_name with [
        fo ->
-       Fmt.(pf stderr "ATN First: %a\n" (list ~{sep=const string " "} Token.pp) fo)
+       Fmt.(pf stderr "ATN First: %a\n" (list ~{sep=const string " "} Step.pp) fo)
      | exception Not_found -> ()
      ]) ;
     (match CG.entry_branch_regexps cg e.ae_name with [
@@ -3397,9 +3412,10 @@ value rec symbol it (snode, enode) = fun [
 
   | ASregexp _ _
   | ASpriority _ _
-  | ASsyntactic _ _
-
     -> Raw.add_edge it (snode, Label.EPS, enode)
+
+  | ASsyntactic _ s
+    -> Raw.add_edge it (snode, Label.SYNPRED s, enode)
 
   | ASopt _ _ s
   | ASoptv _ _ _ s -> do {
@@ -3546,7 +3562,7 @@ module type DFA_STATE_SIG = sig
   type state_t = 'a [@@deriving (show,eq,ord) ;] ;
   value initial : t -> state_t ;
   value is_initial: t -> state_t -> bool ;
-  value extend_dfa : t -> state_t -> (Token.t * list NFACFG.t) -> (bool * state_t * list NFACFG.t);
+  value extend_dfa : t -> state_t -> (Step.t * list NFACFG.t) -> (bool * state_t * list NFACFG.t);
   value prefix : string ;
 end ;
 
@@ -3555,7 +3571,7 @@ module S = S ;
 module StateCFG = struct
 type _t 'a = { dfastate : 'a ; nfacfgs : list NFACFG.t } [@@deriving (show,eq,ord) ;] ;
 type t = _t S.state_t [@@deriving (show,eq,ord) ;] ;
-type next_t = _t (S.state_t * Token.t) [@@deriving (show,eq,ord) ;] ;
+type next_t = _t (S.state_t * Step.t) [@@deriving (show,eq,ord) ;] ;
 
 value dfastate t = t.dfastate ;
 value nfacfgs t = t.nfacfgs ;
@@ -3608,10 +3624,10 @@ value exceeds_recursion_depth cfg =
   countrec 0 l
 ;
 
-value has_token_edge (cg : CG.t) n =
+value has_steppable_edge (cg : CG.t) n =
   n
   |> Raw.edge_labels (CG.gram_atn cg)
-  |> List.exists (fun [ Label.TOKEN _ -> True | _ -> False ])
+  |> List.exists (fun [ Label.TOKEN _ | SYNPRED _ -> True | _ -> False ])
 ;
 
 value watch_clrec1 (x : CFG.t) = () ;
@@ -3630,7 +3646,7 @@ value closure0 loc (cg : CG.t) cfg =
              Label.EPS as lab ->
              let dsts = Raw.traverse (CG.gram_atn cg) n lab in
              dsts |> List.iter (fun dst -> clrec1 (dst,stk))
-           | TOKEN _ -> ()
+           | TOKEN _ | SYNPRED _ -> ()
            | NTERM nt as lab ->
               let (snode, _) = Raw.entry_nodes (CG.gram_atn cg) nt in
               let dsts = Raw.traverse (CG.gram_atn cg) n lab in
@@ -3658,7 +3674,7 @@ value closure0 loc (cg : CG.t) cfg =
     else ()
   in do {
     clrec0 cfg ;
-    acc.val |> List.filter (fun (st, _) -> has_token_edge cg st)
+    acc.val |> List.filter (fun (st, _) -> has_steppable_edge cg st)
   }
 ;
 
@@ -3712,7 +3728,10 @@ value step1 loc ((cg,memo) : cg_memo_t) (st : Node.t) = do {
        Label.EPS|NTERM _ -> []
     | (TOKEN tok) as lab ->
        let dsts = Raw.traverse it st lab in
-       dsts |> List.map (fun dst -> (tok, dst))
+       dsts |> List.map (fun dst -> (Step.TOKEN_STEP tok, dst))
+    | (SYNPRED s) as lab ->
+       let dsts = Raw.traverse it st lab in
+       dsts |> List.map (fun dst -> (Step.SYNPRED_STEP s, dst))
        ])
 }
 ;
@@ -3791,10 +3810,10 @@ value extend_branches1 loc (cg_memo : cg_memo_t) dfa (t : SCFG.t) : (list SCFG.t
   let open SCFG in
   let open NFACFG in
   assert (ambiguous_scfg dfa t) ;
-  let next_l : list (Token.t * NFACFG.t) = t.SCFG.nfacfgs |> List.concat_map (extend1 loc cg_memo) in
-  let token_partitions : list (list (Token.t * NFACFG.t)) =
+  let next_l : list (Step.t * NFACFG.t) = t.SCFG.nfacfgs |> List.concat_map (extend1 loc cg_memo) in
+  let token_partitions : list (list (Step.t * NFACFG.t)) =
     Std.nway_partition (fun (tok1,_) (tok2,_) -> tok1=tok2) next_l in
-  let token_nfacfgs_list : list (Token.t * list NFACFG.t) =
+  let token_nfacfgs_list : list (Step.t * list NFACFG.t) =
     token_partitions
     |> List.map (fun l ->
            let tok = fst (List.hd l) in
@@ -3858,9 +3877,7 @@ value is_regexp_prediction_entry e =
 
 value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
   let loc = e.ae_loc in
-  if S9SeparateSyntactic.is_syntactic_predicate_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses syntactic predicates: cannot compute firstk" S.prefix (Name.print e.ae_name)
-  else if is_regexp_prediction_entry e then
+  if is_regexp_prediction_entry e then
     raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" S.prefix (Name.print e.ae_name)
   else () ;
   let open SCFG in
@@ -3919,13 +3936,13 @@ end ;
 
 module GraphDFAState = struct
   module Node = struct
-    type t = (int * list Token.t) [@@deriving (show,eq,ord) ;];
-    value print (n,toks) = Fmt.(str "%d [%a]" n (list ~{sep=const string " "} Token.pp) toks) ;
+    type t = (int * list Step.t) [@@deriving (show,eq,ord) ;];
+    value print (n,toks) = Fmt.(str "%d [%a]" n (list ~{sep=const string " "} Step.pp) toks) ;
     value pp_hum pps n = Fmt.(pf pps "%s" (print n)) ;
   end ;
   module Label = struct
-    type t = Token.t [@@deriving (show,eq,ord) ;] ;
-    value print = Token.print ;
+    type t = Step.t [@@deriving (show,eq,ord) ;] ;
+    value print = Step.print ;
     value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
   end ;
   module G = Graph(Node)(Label) ;
@@ -4103,6 +4120,7 @@ and infer_psymbols loc cg e psl =
           when CG.exists_entry cg nt &&
                  MHM.in_dom (snd cg).atn_first nt ->
         let l = CG.atn_first cg nt in
+        let l = l |> List.map (fun [ Step.TOKEN_STEP t -> t | _ -> failwith "infer_psymbols: unsupported: found a syntactic predicate" ]) in
         l |> List.map PSyn.token |> PSyn.disjunction
 
      | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
@@ -4535,6 +4553,8 @@ value edges_to_branches loc states edges =
     let (_, final, _) = find_state st in
     None <> final in
 
+  let edges = edges |> List.map (fun [
+      (Step.TOKEN_STEP t, st) -> (t,st) | _ -> assert False ]) in
   let spcl_edges = List.filter (fun [ (SPCL _, _) -> True | _ -> False ]) edges in
   let anti_edges = List.filter (fun [ (ANTI _, _) -> True | _ -> False ]) edges in
   let tokgeneric_edges = List.filter (fun [ (CLS _ None, _) -> True | _ -> False ]) edges in
@@ -4556,9 +4576,10 @@ value edges_to_branches loc states edges =
   spcl_branches @ tokspecific_branches @ tokgeneric_branches @ anti_branches
 ;
 
-value strip_exported_dfa (init, initre, states) : exported_dfa_t =
-  let strip_state (i, rex, final, trans) = (i, final, trans) in
-  (init, List.map strip_state states)
+value convert_exported_dfa (init, initre, states) : exported_dfa_t =
+  let conv_edge (t, st) = (Step.TOKEN_STEP t, st) in
+  let conv_state (i, rex, final, trans) = (i, final, List.map conv_edge trans) in
+  (init, List.map conv_state states)
 ;
 
 value letrec_nest (init, states) =
@@ -4576,15 +4597,6 @@ value letrec_nest (init, states) =
     let edges = List.stable_sort Stdlib.compare edges in
     let rhs =
       if edges = [] then <:expr< lastf >> else
-        let generic_is_final =
-          edges
-        |> List.find_map (fun [ (CLS ty None, st) when state_is_final st -> Some (ty, st) | _ -> None ]) in
-(*
-      let branches =
-        let edge_groups = Std.nway_partition (fun (_, st) (_, st') -> st = st') edges in
-        edge_groups
-        |> List.concat_map (edge_group_to_branches loc generic_is_final) in
- *)
       let branches = edges_to_branches loc states edges in
       let branches = branches @ [
           (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
@@ -4628,7 +4640,7 @@ value compute_predictor0 cg e =
     else
       let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
       let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
-      (Some (strip_exported_dfa exported_dfa), retxt) in
+      (Some (convert_exported_dfa exported_dfa), retxt) in
 
   let predictor = match exported_dfa_opt with [
         None -> <:expr< fun __strm__ -> raise Stream.Failure >>
@@ -4649,22 +4661,6 @@ value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
-(*
-  let (exported_dfa_opt, retxt) =
-    let fullre = compute_full_regexp cg e in
-    let retxt = String.escaped (PSyn.print fullre) in
-    if PSyn.(equal zero fullre) then
-      (None,retxt)
-    else
-      let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
-      let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
-      (Some (strip_exported_dfa exported_dfa), retxt) in
-
-  let predictor = match exported_dfa_opt with [
-        None -> <:expr< fun __strm__ -> raise Stream.Failure >>
-      | Some dfa -> letrec_nest dfa
-      ] in
- *)
   let (predictor, retxt) = compute_predictor cg e in
   let predictor_name = (Name.print ename)^"_regexp" in
   let branches = 

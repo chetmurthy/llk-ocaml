@@ -768,7 +768,6 @@ END;
       | s = V FLOAT → <:expr< $_flo:s$ >>
       | s = V STRING → <:expr< $_str:s$ >>
       | s = V CHAR → <:expr< $_chr:s$ >>
-      | "." -> <:expr< . >>
       | e = alg_extension -> <:expr< [% $_extension:e$ ] >>
       | i = V LIDENT → <:expr< $_lid:i$ >>
       | i = V GIDENT → <:expr< $_lid:i$ >>
@@ -877,7 +876,8 @@ END;
       | "="; e = expr → <:expr< $e$ >> ] ]
   ;
   match_case:
-    [ [ p = patt; aso = as_patt_opt; w = V (OPT when_expr); "->"; e = expr →
+    [ [ p = patt; aso = as_patt_opt; w = V (OPT when_expr); "->";
+        e = [ e' = expr -> e' | "." -> <:expr< . >> ] →
           mkmatchcase loc p aso w e
       ] ]
   ;
@@ -1070,15 +1070,15 @@ END;
       | "_" → None ] ]
   ;
   longident:
-    [ LEFTA
-      [ me1 = SELF ; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
+    [ NONGREEDY LEFTA
+      [ me1 = SELF ; (["."; V UIDENT "uid"])?  ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
   extended_longident:
-    [ LEFTA
+    [ NONGREEDY LEFTA
       [ me1 = SELF; "(" ; me2 = SELF ; ")" → <:extended_longident< $longid:me1$ ( $longid:me2$ ) >>
-      | me1 = SELF ; check_dot_uid ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
+      | me1 = SELF ; (["."; V UIDENT "uid"])?  ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >>
       ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
