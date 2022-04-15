@@ -3500,7 +3500,8 @@ value grammar it cg = do {
   (CG.g cg).gram_exports
   |> List.iter (fun ename -> 
          let (snode, enode) = Raw.entry_nodes it ename in do {
-                  Raw.add_edge it (enode, Label.TOKEN (CLS "EOI" None), enode)
+                  let enode' = Raw._add_node it (Node.BHOLE ename (-1)) in
+                  Raw.add_edge it (enode, Label.TOKEN (CLS "EOI" None), enode')
                 }
        ) ;
   (CG.gram_externals cg) |> List.iter (external_entry cg it)
