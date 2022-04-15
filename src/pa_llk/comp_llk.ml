@@ -18,6 +18,12 @@ open Llk_regexps ;
 open Llk_types ;
 open Print_gram ;
 
+value identical l = do {
+    assert (l <> []) ;
+    List.for_all ((=) (List.hd l)) (List.tl l)
+}
+;
+
 value entry_name e = e.ae_name ;
 value entry_labels e =
   e.ae_levels
@@ -2969,7 +2975,7 @@ value eliminate_unit_entry_symbols changed (cg : CG.t) e =
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
-        ASnterm loc nt actuals None as s ->
+        ASnterm loc nt actuals None as s when Name.is_generated nt ->
         (match furthest_unit_entry cg nt with [
              None -> s
            | Some nt' -> do { changed.val := True ; ASnterm loc nt' actuals None }
@@ -3163,6 +3169,219 @@ value length_regexp_of_rule cg ename r length =
 
 end ;
 
+module CheckLeftRecursion = struct
+
+type null_t = [ NULLABLE | NONNULL | EMPTY ] [@@deriving (show,eq,ord) ;];
+
+value define_nullable_entry (nullmap : MHM.t Name.t (option null_t)) ename defval =
+  match MHM.map nullmap ename with [
+      None -> MHM.remap nullmap ename (Some defval)
+    | Some oldval when defval = oldval -> ()
+    | Some oldval ->
+       Fmt.(failwithf "CheckLeftRecursion: entry %s was deduced as both %a and %a"
+              (Name.print ename) pp_null_t oldval pp_null_t defval)
+    ]
+;
+
+value compute1_nullable_symbol nullmap s =
+  let rec crec = fun [
+        ASflag _ _ _ 
+      | ASlist _ _ _ _ _
+      | ASopt _ _ _
+      | ASoptv _ _ _ _
+      | ASleft_assoc _ _ _ _ _
+      | ASrules _ _
+      | ASself _ _
+      | ASnext _ _
+      | ASvala _ _ _ -> assert False
+
+      | ASsyntactic _ _
+      | ASregexp _ _
+      | ASpriority _ _ -> Some NULLABLE
+
+      | ASkeyw _ _ -> Some NONNULL
+      | ASnterm _ nt _ _ -> MHM.map nullmap nt
+      | AStok _ _ _ -> Some NONNULL
+      | ASanti _ _ -> Some NONNULL
+      ]
+  in crec s
+;
+
+value rec compute1_nullable_psymbols nullmap = fun [
+  [] -> Some NULLABLE
+| [h :: t] ->
+   let h_ans = compute1_nullable_symbol nullmap h.ap_symb in
+   let t_ans = compute1_nullable_psymbols nullmap t in
+   (match (h_ans, t_ans) with [
+        (Some NULLABLE, Some NULLABLE) -> Some NULLABLE
+      | (Some NONNULL, _) -> Some NONNULL
+      | (_, Some NONNULL) -> Some NONNULL
+      | (Some EMPTY, _) -> Some EMPTY
+      | (_, Some EMPTY) -> Some EMPTY
+      | _ -> None
+   ])
+]
+;
+value compute1_nullable_rule nullmap r =
+  compute1_nullable_psymbols nullmap r.ar_psymbols ;
+
+value compute1_nullable_entry nullmap e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  if rl = [] then ()
+  else
+  let per_rule = List.map (compute1_nullable_rule nullmap) rl in
+  let ans =
+    List.fold_left (fun a b ->
+        match (a,b) with [
+            (_, Some NULLABLE) -> Some NULLABLE
+          | (Some NULLABLE, _) -> Some NULLABLE
+          | (None, _) -> None
+          | (_, None) -> None
+          | (Some NONNULL, Some NONNULL) -> Some NONNULL
+          | (Some EMPTY, v) -> v
+          | (v, Some EMPTY) -> v
+      ])
+      (List.hd per_rule) (List.tl per_rule) in
+  match ans with [
+      None -> ()
+    | Some v -> define_nullable_entry nullmap e.ae_name v
+    ]
+;
+
+value compute1_nullable nullmap el =
+  List.iter (compute1_nullable_entry nullmap) el ;
+
+
+value rec compute_nullable_fixpoint nullmap el = do {
+    let pre = List.stable_sort Stdlib.compare (MHM.toList nullmap) in
+    compute1_nullable nullmap el ;
+    let post = List.stable_sort Stdlib.compare (MHM.toList nullmap) in
+    if pre = post then ()
+    else
+      compute_nullable_fixpoint nullmap el
+}
+;
+
+(** Compute the set of nullable entries
+
+    (1) for external entries, they're nullable if their regexps accept [eps].
+
+    (2) for normal entries, we compute nullability structurally, using
+        three-state logic: nullable, not-nullable, not-known.
+
+    (3) Initially, all entries are not-known.
+ *)
+value compute_nullable cg = do {
+  let nullmap = MHM.mk 23 in
+  (CG.gram_entries cg)
+  |> List.iter (fun e ->
+     MHM.add nullmap (e.ae_name, None)) ;
+  (CG.gram_externals cg)
+  |> List.iter (fun (ename, rex) ->
+         let module C = Compile(struct value rex = rex ; value extra = (CG.alphabet cg); end) in
+         let is_nullable = C.BEval.nullable rex in
+         let v = if is_nullable then NULLABLE else NONNULL in
+         MHM.add nullmap (ename, Some v)) ;
+  compute_nullable_fixpoint nullmap (CG.gram_entries cg) ;
+  nullmap
+}
+;
+
+value left_reaches_symbol = fun [
+        ASflag _ _ _ 
+      | ASlist _ _ _ _ _
+      | ASopt _ _ _
+      | ASoptv _ _ _ _
+      | ASleft_assoc _ _ _ _ _
+      | ASrules _ _
+      | ASself _ _
+      | ASnext _ _
+      | ASvala _ _ _ -> assert False
+
+      | ASsyntactic _ _
+      | ASregexp _ _
+      | ASpriority _ _ -> []
+
+      | ASkeyw _ _ -> []
+      | ASnterm _ nt _ _ -> [nt]
+      | AStok _ _ _ -> []
+      | ASanti _ _ -> []
+]
+;
+
+value rec left_reaches_psymbols nullmap = fun [
+  [] -> []
+| [h :: t] ->
+   let h_reaches = left_reaches_symbol h.ap_symb in
+   h_reaches @
+     (if Some NULLABLE = compute1_nullable_symbol nullmap h.ap_symb then
+        left_reaches_psymbols nullmap t
+      else [])
+]
+;
+value left_reaches_rule nullmap rule =
+  left_reaches_psymbols nullmap rule.ar_psymbols ;
+
+value left_reaches_entry nullmap e =
+  let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  List.concat_map (left_reaches_rule nullmap) rl |> List.sort_uniq Name.compare
+;
+
+value compute_left_reaches nullmap cg = do {
+    let m = MHM.mk 23 in
+    (CG.gram_entries cg)
+    |> List.iter (fun e ->
+           let l = left_reaches_entry nullmap e in
+           MHM.add m (e.ae_name, l)) ;
+    m
+}
+;
+
+value rec left_recursive_path acc lrmap ename stk nt =
+  if ename = nt then do {
+    Std.push acc [nt :: stk] ;
+    failwith "caught"
+  }
+  else
+  let stk = [nt :: stk] in
+  let l = match MHM.map lrmap nt with [ x -> x | exception Not_found -> [] ] in
+  List.iter (left_recursive_path acc lrmap ename stk) l
+;
+
+value check_left_recursive_entry acc lrmap e =
+  try
+    let l = match MHM.map lrmap e.ae_name with [ x -> x | exception Not_found -> [] ] in
+    List.iter (left_recursive_path acc lrmap e.ae_name [e.ae_name]) l
+  with
+    Failure _ -> () 
+;
+
+value compute_left_recursives lrmap cg = do {
+    let acc = ref [] in
+    (CG.gram_entries cg)
+    |> List.iter (check_left_recursive_entry acc lrmap) ;
+    List.stable_sort Stdlib.compare acc.val
+}
+;
+
+value exec cg = do {
+    let nullmap = compute_nullable cg in
+    let lrmap = compute_left_reaches nullmap cg in
+    let l = compute_left_recursives lrmap cg in
+    if l <> [] then do {
+      Fmt.(pf stderr "Left Recursive entries found:\n");
+      l |> List.iter (fun path ->
+               Fmt.(pf stderr "  [%a]\n" (list ~{sep=const string " -> "} Name.pp) path)) ;
+      Fmt.(pf stderr "%!") ;
+    }
+    else ();
+    cg ;
+}
+;
+
+end ;
+
+
 (** Build the ATN First/Follow/First(k) sets this grammar
 *)
 
@@ -3310,12 +3529,6 @@ value concat = fun [
   }
 ]
 ; 
-
-value identical l = do {
-    assert (l <> []) ;
-    List.for_all ((=) (List.hd l)) (List.tl l)
-}
-;
 
 value branchnum_partition_then_concat (l : list t) = do {
   let ll =
@@ -4551,8 +4764,10 @@ value compile_prio_entry cg e = do {
 value compile_entry cg e =
   if S9SeparateSyntactic.is_syntactic_predicate_entry e then
     compile_sp_entry cg e
+(*
   else if is_prioritized_entry e then
     compile_prio_entry cg e
+ *)
   else
     compile1_entry cg e
 ;
@@ -4792,6 +5007,7 @@ value unit_entry_elim loc ?{bootstrap=False} s =
 value atn loc ?{bootstrap=False} s =
   s
   |> unit_entry_elim loc ~{bootstrap=bootstrap}
+  |> CheckLeftRecursion.exec
   |> SortEntries.exec
   |> BuildATN.exec
   |> Dump.exec "grammar before firstk"
