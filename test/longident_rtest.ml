@@ -6,25 +6,14 @@ open Pa_ppx_base ;
 {foo|
 GRAMMAR Longident:
 EXPORT: longident longident_eoi expr expr_eoi expr_longident;
-REGEXPS:
-  check_dot_uid =  "." (UIDENT | $uid | $_uid) ;
-END;
 
-  longident:
-    [ [ i = V UIDENT "uid" ;
-        l = LIST0 [ (["." ; V UIDENT])? ; "." ; i' = V UIDENT "uid" -> i' ] ->
-        List.fold_left (fun li i -> <:extended_longident< $longid:li$ . $_uid:i$ >>)
-        <:extended_longident< $_uid:i$ >> l
-      ] ]
-      ;
-(*
   longident:
     [ NONGREEDY LEFTA
       [ me1 = SELF ; (["."; V UIDENT "uid"])?  ; "."; i = V UIDENT "uid" → <:extended_longident< $longid:me1$ . $_uid:i$ >> ]
     | [ i = V UIDENT "uid" → <:extended_longident< $_uid:i$ >>
       ] ]
   ;
-*)
+
   longident_eoi: [ [ x = longident ; EOI -> x ] ] ;
 
   expr: [

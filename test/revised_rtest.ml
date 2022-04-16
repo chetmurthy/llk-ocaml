@@ -875,9 +875,10 @@ END;
     [ [ p = ipatt; e = fun_binding → <:expr< fun $p$ → $e$ >>
       | "="; e = expr → <:expr< $e$ >> ] ]
   ;
+  expr_or_unreachable: [ [ e' = expr -> e' | "." -> <:expr< . >> ] ] ;
   match_case:
     [ [ p = patt; aso = as_patt_opt; w = V (OPT when_expr); "->";
-        e = [ e' = expr -> e' | "." -> <:expr< . >> ] →
+        e = expr_or_unreachable →
           mkmatchcase loc p aso w e
       ] ]
   ;
@@ -894,7 +895,7 @@ END;
   fun_def:
     [ RIGHTA
       [ p = ipatt; e = SELF → <:expr< fun $p$ → $e$ >> ]
-    | [ "->"; e = expr → e ] ]
+    | [ "->"; e = expr_or_unreachable → e ] ]
   ;
   patt_ident: [
     [ s = V LIDENT → <:patt< $_lid:s$ >>

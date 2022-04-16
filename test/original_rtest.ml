@@ -183,16 +183,6 @@ value make_string_extension loc s =
   <:attribute_body< $attrid:(loc,attrid)$ $str:strpayload$ ; >>
 ;
 
-
-value e_phony =
-  Grammar.Entry.of_parser gram "e_phony"
-    (parser [])
-;
-value p_phony =
-  Grammar.Entry.of_parser gram "p_phony"
-    (parser [])
-;
-
 [@@@llk
 {foo|
 GRAMMAR Original:
@@ -242,9 +232,6 @@ REGEXPS:
   check_uident_eq = UIDENT "=" ;
 
 END;
-
-external e_phony : PREDICTION empty ;
-external p_phony : PREDICTION empty ;
 
   infix_operator0: [ [
       x = INFIXOP0 -> x
@@ -340,7 +327,6 @@ external p_phony : PREDICTION empty ;
       op = operator ; ")" -> op
     ] ]
     ;
-  lp_operator_rp: [ [ "(" ; op = operator_rparen -> op ] ] ;
   (* This is copied from parser.mly (nonterminal "single_attr_id") in the ocaml 4.10.0 distribution. *)
   kwd_attribute_id:
   [ [ s = [ "and" | "as" | "assert" | "begin" | "class" | "constraint" | "do" | "done"
@@ -750,7 +736,7 @@ external p_phony : PREDICTION empty ;
           <:expr< do { $list:[e1 :: get_seq e2]$ } >>
       | e1 = NEXT ; PRIORITY 1; ";" -> e1
       | e1 = NEXT -> e1
-      | check_phony_list ; el = V e_phony "list" -> <:expr< do { $_list:el$ } >> ]
+      | el = ANTI "list" -> <:expr< do { $_list:el$ } >> ]
     | "expr1"
       [ "let" ; "exception" ; id = V UIDENT "uid" ;
         "of" ; tyl = V (LIST1 ctyp LEVEL "apply") ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
@@ -811,7 +797,7 @@ external p_phony : PREDICTION empty ;
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
           let el = Pcaml.vala_map get_seq e in
           expr_to_inline <:expr< for $i$ = $e1$ $_to:df$ $e2$ do { $_list:el$ } >> ext attrs
-      | "for"; (ext,attrs) = ext_attributes; (lp_operator_rp)? ; "("; i = operator_rparen; "="; e1 = SELF; df = V direction_flag "to";
+      | "for"; (ext,attrs) = ext_attributes; (["("; operator_rparen])? ; "("; i = operator_rparen; "="; e1 = SELF; df = V direction_flag "to";
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
           let i = Ploc.VaVal i in
           let el = Pcaml.vala_map get_seq e in
@@ -821,9 +807,9 @@ external p_phony : PREDICTION empty ;
           expr_to_inline <:expr< while $e1$ do { $_list:el$ } >> ext attrs
       | e = NEXT -> e
       ]
-    | "," [ e = NEXT; ","; el = GREEDY LIST1 NEXT SEP "," ->
+    | "," [ e = NEXT; PRIORITY 1; ","; el = GREEDY LIST1 NEXT SEP "," ->
           <:expr< ( $list:[e :: el]$ ) >>
-          | e = NEXT ; check_eps -> e
+          | e = NEXT -> e
           ]
     | ":=" NONA
       [ e1 = NEXT; ":="; e2 = expr LEVEL "expr1" ->
@@ -921,7 +907,7 @@ external p_phony : PREDICTION empty ;
     | "." LEFTA
       [ e1 = SELF; "."; lili = V longident_lident "lilongid" ->
         <:expr< $e1$ . $_lilongid:lili$ >>
-      | e1 = SELF; "."; (lp_operator_rp)? ; "("; op = operator_rparen ->
+      | e1 = SELF; ".";  "("; op = operator_rparen ->
           if op = "::" then
             Ploc.raise loc (Failure ".(::) (dot paren colon colon paren) cannot appear except after longident")
           else
@@ -985,7 +971,7 @@ external p_phony : PREDICTION empty ;
           <:expr< (module $me$ : $mt$) >>
       | "("; "module"; me = module_expr; ")" ->
           <:expr< (module $me$) >>
-      | (lp_operator_rp)? ; "("; op = operator_rparen ->
+      | "("; ([operator_rparen])? ; op = operator_rparen ->
         if op = "::" then
           <:expr< $uid:op$ >>
         else
@@ -1025,12 +1011,12 @@ external p_phony : PREDICTION empty ;
         (p, e, attrs)
 
       | alg_attrs = alg_attributes_no_anti ;
-        check_eps ; p = patt; "="; e = expr ;
+        p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
       | alg_attrs = alg_attributes_no_anti ;
-        check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ;
+        p = patt; ":"; t = poly_type; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, <:expr< ( $e$ : $t$ ) >>, attrs)
@@ -1052,10 +1038,10 @@ external p_phony : PREDICTION empty ;
       | (val_ident)? ; p = val_ident; e = rest_fun_binding ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
-      | check_eps ; p = patt; "="; e = expr ;
+      | p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
         (p, e, item_attrs)
-      | check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ;
+      | p = patt; ":"; t = poly_type; "="; e = expr ;
         item_attrs = item_attributes ->
         (<:patt< ($p$ : $t$) >>, e, item_attrs)
       ] ]
@@ -1082,12 +1068,12 @@ external p_phony : PREDICTION empty ;
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        check_eps ; p = patt; "="; e = expr ;
+        p = patt; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (p, e, attrs)
       | "and"; alg_attrs = alg_attributes_no_anti ;
-        check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ;
+        p = patt; ":"; t = poly_type; "="; e = expr ;
         item_attrs = item_attributes ->
         let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
         (<:patt< ($p$ : $t$) >>, e, attrs)
@@ -1100,8 +1086,8 @@ external p_phony : PREDICTION empty ;
              <:patt< $lid:s$ >> -> (p, <:expr< $lid:s$ >>)
            | _ -> failwith "letop punning: binder must be a lowercase ident (variable)"
            ]
-      | check_eps ; p = patt; "="; e = expr -> (p, e)
-      | check_eps ; p = patt; ":"; t = poly_type; "="; e = expr ->
+      | p = patt; "="; e = expr -> (p, e)
+      | p = patt; ":"; t = poly_type; "="; e = expr ->
           (<:patt< ($p$ : $t$) >>, e)
       ] ]
   ;
@@ -1196,7 +1182,7 @@ external p_phony : PREDICTION empty ;
   expr_longident:
     [
       [ li = longident ; check_eps -> <:expr< $longid:li$ >>
-      | li = longident ; "." ; (lp_operator_rp)? ; "("; op = operator_rparen ->
+      | li = longident ; "." ; "("; ([operator_rparen])? ; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
@@ -1311,12 +1297,12 @@ external p_phony : PREDICTION empty ;
       | "{"; lpl = V lbl_patt_list "list"; "}" ->
           <:patt< { $_list:lpl$ } >>
       | "("; ")" -> <:patt< $uid:"()"$ >>
-      | (lp_operator_rp)? ; "("; op = operator_rparen -> 
+      | "("; op = operator_rparen -> 
           if op = "::" then
             <:patt< $uid:op$ >>
           else
             <:patt< $lid:op$ >>
-      | "("; check_phony_list ; pl = V p_phony "list"; ")" -> <:patt< ($_list:pl$) >>
+      | "("; pl = ANTI "list" ; ")" -> <:patt< ($_list:pl$) >>
       | "("; p = patt; ":"; t = ctyp; ")" -> <:patt< ($p$ : $t$) >>
       | "("; p = patt; ")" -> <:patt< $p$ >>
       | "("; "type"; s = V LIDENT; ")" -> <:patt< (type $_lid:s$) >>

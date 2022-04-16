@@ -1479,7 +1479,7 @@ and t2 = bool[@@"foo"];
      exclude=[];
      o_input = EXN {foo|.|foo} (Ploc.Exc Ploc.dummy (Stream.Error "illegal begin of implem")) ;
      official_input = EXN {foo|.|foo} (Syntaxerr.Error (Syntaxerr.Other Location.none)) ;
-     r_input = OK {foo| . ;|foo} ;
+     r_input = EXN {foo| . |foo} (Ploc.Exc Ploc.dummy (Stream.Error "illegal begin of implem")) ;
      o_output = EXN "" (Ploc.Exc Ploc.dummy
                         (Failure "pr_expr of (PaUnr _) not allowed except at rhs of match-case"));
      official_output = EXN ""

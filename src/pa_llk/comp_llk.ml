@@ -4830,13 +4830,13 @@ value compile_prio_entry cg e = do {
 ;
 
 value compile_entry cg e =
+(*
   if S9SeparateSyntactic.is_syntactic_predicate_entry e then
     compile_sp_entry cg e
-(*
   else if is_prioritized_entry e then
     compile_prio_entry cg e
- *)
   else
+ *)
     compile1_entry cg e
 ;
 
@@ -5059,16 +5059,16 @@ value lambda_lift2 loc ?{bootstrap=False} s =
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
-
+(*
 value separate_syntactic loc ?{bootstrap=False} s =
   s
   |> lambda_lift2 loc ~{bootstrap=bootstrap}
   |> S9SeparateSyntactic.exec
 ;
-
+ *)
 value unit_entry_elim loc ?{bootstrap=False} s =
   s
-  |> separate_syntactic loc ~{bootstrap=bootstrap}
+  |> lambda_lift2 loc ~{bootstrap=bootstrap}
   |> S10UnitEntryElim.exec
 ;
 
