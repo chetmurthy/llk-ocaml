@@ -160,7 +160,7 @@ and pattern ~{pctxt} pc p =
   | p ->
       pprintf pc "@[<1>(%p)@]" patt p ]
 
-and symbol~{pctxt} pc =
+and symbol ~{pctxt} pc =
   let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
   fun [
       ASlist _ g lml symb None ->
@@ -202,7 +202,7 @@ and symbol~{pctxt} pc =
     | sy -> (simple_symbol ~{pctxt=pctxt}) pc sy
     ]
 
-and simple_symbol~{pctxt} pc sy =
+and simple_symbol ~{pctxt} pc sy =
   match sy with
   [ ASregexp _ id ->
     pprintf pc "PREDICT %s" (Name.print id)
