@@ -15,12 +15,6 @@ GRAMMAR LLKGram:
 EXTEND Pcaml.gram ;
 EXPORT: bootstrapped_top;
 
-REGEXPS:
-  check_lident_equal = LIDENT "=" ;
-  check_lident_lbracket = LIDENT "[" ;
-  check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
-END;
-
 external expr : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
 external expr_LEVEL_simple : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
 external patt : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
