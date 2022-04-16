@@ -106,13 +106,9 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       ] ]
   ;
   psymbol:
-    [ [ check_lident_equal; p = LIDENT; "="; s = symbol ->
+    [ [ p = LIDENT; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some <:patt< $lid:p$ >>; ap_symb = s}
-      | check_lident_lbracket; p = LIDENT; 
-        args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
-        lev = OPT [ UIDENT/"LEVEL"; s = STRING -> s ] ->
-          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm (loc, Name.mk p, args, lev)}
-      | check_pattern_equal ; p = paren_pattern; "="; s = symbol ->
+      | ([paren_pattern; "="])? ; p = paren_pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
        | "_" ; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some <:patt< _ >>; ap_symb = s}

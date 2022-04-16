@@ -21,9 +21,9 @@ REGEXPS:
   check_pattern_equal = "(" ("(" | LIDENT | "_" | "," | ")")* "=" ;
 END;
 
-external expr : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
-external expr_LEVEL_simple : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
-external patt : PREDICTION LIDENT | INT | "(" | "[" | "{" ;
+external expr : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
+external expr_LEVEL_simple : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
+external patt : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
 external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $_lid ;
 
   bootstrapped_top:
@@ -31,7 +31,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   ;
   grammar_body:
     [ [ gid = UIDENT ; ":" ;
-        extend_opt = OPT [ UIDENT/"EXTEND" ; id = longident_lident ; ";" -> id ] ;
+        extend_opt = OPT [ "EXTEND" ; id = longident_lident ; ";" -> id ] ;
         expl = [ l = exports -> l | -> [] ];
         rl = [ l = regexps -> l | -> [] ];
         extl = [ l = externals -> l | -> [] ];
@@ -87,7 +87,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
           {al_loc = loc; al_label = lab; al_assoc = ass; al_rules = rules} ] ]
   ;
   assoc:
-    [ [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LEFTA" -> LEFTA g
+    [ [ g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LEFTA" -> LEFTA g
       | UIDENT/"RIGHTA" -> RIGHTA
       | UIDENT/"NONA" -> NONA ] ]
   ;
@@ -106,13 +106,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       ] ]
   ;
   psymbol:
-    [ [ check_lident_equal; p = LIDENT; "="; s = symbol ->
-          {ap_loc = loc; ap_patt = Some <:patt< $lid:p$ >>; ap_symb = s}
-      | check_lident_lbracket; p = LIDENT; 
-        args = [ "[" ; l = LIST1 expr SEP "," ; "]" -> l | -> [] ] ;
-        lev = OPT [ UIDENT/"LEVEL"; s = STRING -> s ] ->
-          {ap_loc = loc; ap_patt = None; ap_symb = ASnterm (loc, Name.mk p, args, lev)}
-      | check_pattern_equal ; p = paren_pattern; "="; s = symbol ->
+    [ [ ([paren_pattern; "="])? ; p = paren_pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
        | "_" ; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some <:patt< _ >>; ap_symb = s}
@@ -125,15 +119,17 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
   ;
   symbol:
     [ "top" NONA
-      [ g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST0"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
+      [ g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LIST0"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_0, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LIST1"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LIST1"; s = NEXT; sep = GREEDY OPT sep_opt_sep ->
          ASlist (loc, g, LML_1, s, sep)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"OPT"; s = NEXT ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"OPT"; s = NEXT ->
          ASopt (loc, g, s)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"OPTV"; e = expr; s = NEXT ->
+         ASoptv (loc, g, e, s)
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"LEFT_ASSOC"; s1 = NEXT ; UIDENT/"ACCUMULATE" ; s2 = NEXT ; UIDENT/"WITH" ; e=expr_LEVEL_simple ->
          ASleft_assoc (loc, g, s1, s2, e)
-      | g = FLAG UIDENT/"GREEDY" ; UIDENT/"FLAG"; s = NEXT ->
+      | g = [ UIDENT/"GREEDY" -> true | UIDENT/"NONGREEDY" -> false | -> true ] ; UIDENT/"FLAG"; s = NEXT ->
           ASflag (loc, g, s)
       | s = NEXT -> s
       ]
