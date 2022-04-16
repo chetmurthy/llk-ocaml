@@ -102,6 +102,9 @@ let pp_name n = Fmt.(pf stdout "%s" (Primtypes.Name.print n)) ;;
 let pp_token t = Fmt.(pf stdout "%s" (PatternBaseToken.print t)) ;;
 #install_printer pp_token ;;
 
+let pp_step t = Fmt.(pf stdout "%s" (Step.print t)) ;;
+#install_printer pp_step ;;
+
 let pp_tokenset ts = Fmt.(pf stdout "%s" (TS.print PatternBaseToken.print ts)) ;;
 #install_printer pp_tokenset ;;
 
@@ -344,7 +347,7 @@ let pp_nfacfg x =
  *)
 
 let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
-let e = CG.gram_entry cg (Name.mk "f1") ;;
+let e = CG.gram_entry cg (Name.mk "e1") ;;
 (*
 let (l, dfa) =
 let memo = ATN.GraphDFA.Memo.mk() in

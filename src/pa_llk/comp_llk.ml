@@ -3501,6 +3501,7 @@ value grammar it cg = do {
   |> List.iter (fun ename -> 
          let (snode, enode) = Raw.entry_nodes it ename in do {
                   let enode' = Raw._add_node it (Node.BHOLE ename (-1)) in
+                  Raw.mark_bhole it enode' ;
                   Raw.add_edge it (enode, Label.TOKEN (CLS "EOI" None), enode')
                 }
        ) ;
@@ -3675,7 +3676,9 @@ value closure0 loc (cg : CG.t) cfg =
     else ()
   in do {
     clrec0 cfg ;
-    acc.val |> List.filter (fun (st, _) -> has_steppable_edge cg st)
+    acc.val |> List.filter (fun (st, _) ->
+    has_steppable_edge cg st
+    || Raw.is_bhole (CG.gram_atn cg) st)
   }
 ;
 
