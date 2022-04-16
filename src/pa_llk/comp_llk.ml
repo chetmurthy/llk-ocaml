@@ -4393,11 +4393,25 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
        let exp = <:expr< parse_antiquot_token $kinds_list_expr$ >> in
        (SpNtr loc patt (must exp), SpoNoth)
 
+    | ASsyntactic loc s ->
+       let exp = <:expr< (fun strm -> if $compile_syntactic_predicate cg e s$ then
+                                        () else raise Stream.Failure) >> in
+       (SpNtr loc patt (must exp), SpoNoth)
+
     | s -> do {
         CG.add_failuref cg (CG.adjust_loc cg (loc_of_a_symbol s)) e.ae_name "compile1_psymbol: %s" Pr.(symbol~{pctxt=errmsg} Pprintf.empty_pc s) ;
         failwith "caught"
       }
     ]
+
+and compile_syntactic_predicate cg e s =
+  let loc = e.ae_loc in
+  let spred_expr = compile1_symbol cg loc e s in
+  <:expr<
+    try do { ignore ($spred_expr$ (clone_stream strm)) ; True }
+    with [ (Stream.Failure | Stream.Error _) -> False ]
+         >>
+
 ;
 
 value compile1_psymbols cg loc e psl =
@@ -4557,8 +4571,6 @@ value edges_to_branches loc states edges =
     let (_, final, _) = find_state st in
     None <> final in
 
-  let edges = edges |> List.map (fun [
-      (Step.TOKEN_STEP t, st) -> (t,st) | _ -> assert False ]) in
   let spcl_edges = List.filter (fun [ (SPCL _, _) -> True | _ -> False ]) edges in
   let anti_edges = List.filter (fun [ (ANTI _, _) -> True | _ -> False ]) edges in
   let tokgeneric_edges = List.filter (fun [ (CLS _ None, _) -> True | _ -> False ]) edges in
@@ -4586,7 +4598,50 @@ value convert_exported_dfa (init, initre, states) : exported_dfa_t =
   (init, List.map conv_state states)
 ;
 
-value letrec_nest (init, states) =
+value dfa_states_past_start ((init, states) as dfa) =
+  let past_start = MHS.mk 23 in
+  let pass1 () =
+    states
+    |> List.iter (fun (i, _, edges) ->
+           edges |> List.iter (fun [
+               (Step.TOKEN_STEP _, st') -> MHS.add st' past_start
+             | (_, st') when MHS.mem i past_start -> MHS.add st' past_start
+             | _ -> ()
+             ])) in
+  let rec fix () = do {
+    let oldv = MHS.toList past_start |> List.stable_sort Int.compare in
+    pass1 () ;
+    let newv = MHS.toList past_start |> List.stable_sort Int.compare in
+    if oldv = newv then ()
+    else fix ()
+  } in do {
+    fix() ;
+    MHS.toList past_start
+  }
+;
+
+value check_dfa_implementable cg e ((init, states) as dfa) =
+  let states_past_start = dfa_states_past_start dfa in
+  let state_synpreds_list =
+    states
+    |> List.filter_map (fun (i, _, edges) ->
+           let synpreds = edges |> List.filter_map (fun [ (Step.SYNPRED_STEP s, _) -> Some s | _ -> None ]) in
+           if synpreds = [] then None
+           else Some (i, synpreds)
+         ) in
+  if [] <> Std.intersect (List.map fst state_synpreds_list) states_past_start then
+    let pp_symbol pps s = Fmt.(pf pps "%s" Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)) in
+    Fmt.(raise_failwithf (CG.adjust_loc cg e.ae_loc)
+           "check_dfa_implementable: DFA for entry %a has non-start-states with outgoing syntactic predicates (and we're not yet hoisting predicates leftward):\n%a"
+           Name.pp e.ae_name
+           (list ~{sep=const string "\n"} (pair ~{sep=const string ": "} int (list ~{sep=const string " "} pp_symbol)))
+           state_synpreds_list)
+  else ()
+;
+
+value letrec_nest cg e ((init, states) as dfa) = do {
+  check_dfa_implementable cg e dfa ;
+  let states_past_start = dfa_states_past_start dfa in
   let states = List.stable_sort Stdlib.compare states in
   let open Token in
   let loc = Ploc.dummy in
@@ -4598,27 +4653,40 @@ value letrec_nest (init, states) =
     let (_, final, _) = find_state st in
     None <> final in
   let export_state (i, final, edges) =
-    let edges = List.stable_sort Stdlib.compare edges in
-    let rhs =
+    let (synpred_edges, token_edges) =
+      edges |> Ppxutil.filter_split (fun [ (Step.SYNPRED_STEP _, _) -> True | _ -> False ]) in
+    let match_tree =
+      let edges = token_edges |> List.map (fun [ (Step.TOKEN_STEP t, s) -> (t,s) ]) in
+      let edges = List.stable_sort Stdlib.compare edges in
       if edges = [] then <:expr< lastf >> else
-      let branches = edges_to_branches loc states edges in
-      let branches = branches @ [
-          (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
-        ] in
-      <:expr< match must_peek_nth (ofs+1) strm with [
-                            $list:branches$
-                          ] >> in
+        let branches = edges_to_branches loc states edges in
+        let branches = branches @ [
+              (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
+            ] in
+        <:expr< match must_peek_nth (ofs+1) strm with [
+                    $list:branches$
+                  ] >> in do {
+    if [] <> synpred_edges then assert (not (List.mem i states_past_start)) else () ;
+    let synpred_edges = synpred_edges |> List.map (fun [ (Step.SYNPRED_STEP s, st) -> (s,st) ]) in
+    let synpred_edges = List.stable_sort Stdlib.compare synpred_edges in
+    let rhs = List.fold_right (fun (s, st) rhs ->
+                  <:expr< if $compile_syntactic_predicate cg e s$
+                          then $lid:(statename st)$ lastf ofs
+                          else $rhs$ >>)
+            synpred_edges match_tree in
     match final with [
-      Some (OUTPUT output) ->
-      (<:patt< $lid:(statename i)$ >>, <:expr< fun lastf ofs -> let lastf = Some (ofs, $int:string_of_int output$) in $rhs$ >>, <:vala< [] >>)
-    | None ->
-      (<:patt< $lid:(statename i)$ >>, <:expr< fun lastf ofs -> $rhs$ >>, <:vala< [] >>)
-    ] in
+        Some (OUTPUT output) ->
+        (<:patt< $lid:(statename i)$ >>, <:expr< fun lastf ofs -> let lastf = Some (ofs, $int:string_of_int output$) in $rhs$ >>, <:vala< [] >>)
+      | None ->
+         (<:patt< $lid:(statename i)$ >>, <:expr< fun lastf ofs -> $rhs$ >>, <:vala< [] >>)
+      ] 
+  } in
   let bindl = List.map export_state states in
   <:expr< fun strm ->
     let open Llk_regexps in
     let open Token in
     let rec $list:bindl$ in $lid:(statename init)$ None 0 >>
+}
 ;
 
 value compile1b_branch cg ename branchnum r =
@@ -4648,14 +4716,14 @@ value compute_predictor0 cg e =
 
   let predictor = match exported_dfa_opt with [
         None -> <:expr< fun __strm__ -> raise Stream.Failure >>
-      | Some dfa -> letrec_nest dfa
+      | Some dfa -> letrec_nest cg e dfa
       ] in
   (predictor, retxt)
 ;
 
 value compute_predictor cg e =
   match CG.atn_dfa cg e.ae_name with [
-      Some dfa -> (letrec_nest dfa, "<text not available>")
+      Some dfa -> (letrec_nest cg e dfa, "<text not available>")
     | None -> compute_predictor0 cg e
     | exception Not_found -> compute_predictor0 cg e
     ]
