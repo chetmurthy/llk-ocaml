@@ -457,7 +457,7 @@ module ExportedDFA = struct
 type state_t =
   {
     num : int
-  ; final : option Token.t
+  ; final : list int
   ; transitions : list (Step.t * int)
   }
 ;
@@ -4027,13 +4027,11 @@ value export_dfa dfa =
   let initial = fst dfa.initial in
   let convert_state ((n, _) as st) =
     let nfacfgs = state_to_nfacfgs dfa st in
-    let final = match nfacfgs with [
-          [x] -> Some (Token.OUTPUT x.NFACFG.branchnum)
-        | [_::_] when Std.distinct (List.map NFACFG.priority nfacfgs) ->
-           let x = List.hd (nfacfgs |> List.stable_sort (fun p1 p2 -> -(Int.compare p1.NFACFG.priority p2.NFACFG.priority))) in
-           Some (Token.OUTPUT x.NFACFG.branchnum)
-        | _ -> None
-        ] in
+    let final =
+      nfacfgs
+      |> List.stable_sort (fun p1 p2 -> -(Int.compare p1.NFACFG.priority p2.NFACFG.priority))
+      |> List.map (fun p -> p.NFACFG.branchnum) in
+
     let edges = G.edges dfa.g st in
     let trans = List.map (fun (_, tok, (d, _)) -> (tok, d)) edges in
     let trans = List.stable_sort Stdlib.compare trans in
@@ -4586,7 +4584,7 @@ value edges_to_branches loc states edges =
     with Not_found -> failwithf "edges_to_branches internal error: state %d not found" num in
   let state_is_final num =
     let st = find_state num in
-    None <> st.final in
+    [] <> st.final in
 
   let spcl_edges = List.filter (fun [ (SPCL _, _) -> True | _ -> False ]) edges in
   let anti_edges = List.filter (fun [ (ANTI _, _) -> True | _ -> False ]) edges in
@@ -4611,7 +4609,12 @@ value edges_to_branches loc states edges =
 
 value convert_exported_dfa (init, initre, states) : EDFA.t =
   let conv_edge (t, st) = (Step.TOKEN_STEP t, st) in
-  let conv_state (i, rex, final, trans) = {EDFA.num=i; final=final; transitions=List.map conv_edge trans} in
+  let conv_state (i, rex, final, trans) =
+    let final = match final with [
+          Some (OUTPUT n) -> [n]
+        | None -> []
+        | _ -> assert False ] in
+    {EDFA.num=i; final=final; transitions=List.map conv_edge trans} in
   {EDFA.init=init; states=List.map conv_state states}
 ;
 
@@ -4671,7 +4674,7 @@ value letrec_nest cg e dfa = do {
     with Not_found -> failwithf "letrec_nest internal error: state %d not found" st in
   let state_is_final st =
     let st = find_state st in
-    None <> st.EDFA.final in
+    [] <> st.EDFA.final in
   let export_state st =
     let (synpred_edges, token_edges) =
       st.transitions |> Ppxutil.filter_split (fun [ (Step.SYNPRED_STEP _, _) -> True | _ -> False ]) in
@@ -4695,10 +4698,11 @@ value letrec_nest cg e dfa = do {
                           else $rhs$ >>)
             synpred_edges match_tree in
     match st.final with [
-        Some (OUTPUT output) ->
+        [output :: _] ->
         (<:patt< $lid:(statename st.num)$ >>, <:expr< fun lastf ofs -> let lastf = Some (ofs, $int:string_of_int output$) in $rhs$ >>, <:vala< [] >>)
-      | None ->
+      | [] ->
          (<:patt< $lid:(statename st.num)$ >>, <:expr< fun lastf ofs -> $rhs$ >>, <:vala< [] >>)
+      | _ -> assert False
       ] 
   } in
   let bindl = List.map export_state dfa.states in
