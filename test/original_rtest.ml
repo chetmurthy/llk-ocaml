@@ -788,10 +788,10 @@ END;
           expr_to_inline <:expr< match $e$ with [ $_list:l$ ] >> ext attrs
       | "try"; (ext,attrs) = ext_attributes; e = SELF; "with"; OPT "|"; l = V (GREEDY LIST1 match_case SEP "|") ->
           expr_to_inline <:expr< try $e$ with [ $_list:l$ ] >> ext attrs
-      | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1"; "else";
+      | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1"; PRIORITY 1 ; "else";
         e3 = expr LEVEL "expr1" ->
           expr_to_inline <:expr< if $e1$ then $e2$ else $e3$ >> ext attrs
-      | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1" ; check_eps ->
+      | "if"; (ext,attrs) = ext_attributes; e1 = SELF; "then"; e2 = expr LEVEL "expr1" ->
           expr_to_inline <:expr< if $e1$ then $e2$ else () >> ext attrs
       | "for"; (ext,attrs) = ext_attributes; i = patt; "="; e1 = SELF; df = V direction_flag "to";
         e2 = SELF; "do"; e = V SELF "list"; "done" ->
