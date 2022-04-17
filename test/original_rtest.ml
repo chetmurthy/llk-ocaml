@@ -198,41 +198,6 @@ EXTEND gram ;
     ext_attributes
     interf implem use_file top_phrase expr patt;
 
-REGEXPS:
-  check_and_in = "and" | "in" ;
-  check_colon = ":" ;
-  check_eps = eps ;
-  check_phony_list = $list | $_list ;
-  check_lbracket = "[" ;
-  check_lbrace = "{" ;
-  check_lbracketbar = "[|" ;
-  check_type_decl =
-         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
-         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
-         let type_parameters = eps | type_parameter | "(" ($list | $_list | type_parameter ("," type_parameter)* ) ")" in
-         let v_flag_nonrec = ($flag | $_flag | "nonrec")? in
-         let type_patt = $tp | $_tp | $lid | $_lid | LIDENT in
-         v_flag_nonrec type_parameters type_patt
-  ;
-  v_uident = $uid | $_uid | UIDENT ;
-  v_longident = (v_uident ".") * v_uident ;
-  v_lident = $lid | $_lid | LIDENT ;
-  v_longident_lident = (v_longident ".")? v_lident ;
-  check_type_extension =
-         let tyvar = "'" (LIDENT | UIDENT) | GIDENT in
-         let type_parameter = ("+"|"-"|"!"|"!+"|"+!"| "!-"|"-!")* (tyvar | "_") in
-         let type_parameters = eps | type_parameter | "(" ($list | $_list | type_parameter ("," type_parameter)* ) ")" in
-         type_parameters v_longident_lident "+="
-  ;
-  check_label_eq = (UIDENT | LIDENT | "." | $uid | $_uid ) * ("=" | ";" | "}" | ":") ;
-
-  check_constr_decl = UIDENT [^ "." "("] | "true" | "false" | "|" | "[" "]";
-  check_lident_colon = LIDENT ":" ;
-  check_uident_coloneq = UIDENT ":=" ;
-  check_uident_eq = UIDENT "=" ;
-
-END;
-
   infix_operator0: [ [
       x = INFIXOP0 -> x
     | "!=" -> "!="
