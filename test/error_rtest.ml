@@ -96,7 +96,7 @@ value tests = "simple" >::: [
         assert_raises_exn_pattern "[e] or [e2] or [e3] expected (in [etop1])"
           (fun () -> pa Interp.etop1 {foo|foo a|foo})
       ; assert_raises_exn_pattern
-{foo|[y = e4] expected|foo}
+{foo|[x__0001 = etop1__0001] expected|foo}
 (*
  {foo|[x = e] or [x = e2] or [x = e3]|foo}
  *)
@@ -105,7 +105,7 @@ value tests = "simple" >::: [
       ; assert_raises_exn_pattern "[e] or [e2] or [e3] expected after 'foo' (in [etop2])"
           (fun () -> (pa Interp.etop2 {foo|foo a|foo}))
       ; assert_raises_exn_pattern
-{foo|[y = e4] expected|foo}
+{foo|[x__0002 = etop2__0001] expected|foo}
 (*
  {foo|[x = e] or [x = e2] or [x = e3] expected after ['foo'] (in [etop2])|foo}
  *)
@@ -123,7 +123,7 @@ value tests = "simple" >::: [
 
       ; assert_raises_exn_pattern "[e5] expected after 'foo' (in [etop3])"
           (fun () -> (pa Interp.etop3 {foo|foo goo|foo}))
-      ; assert_raises_exn (Ploc.Exc Ploc.dummy (Stream.Error ""))
+      ; assert_raises_exn_pattern "[x = e5] expected"
           (fun () -> (pa Error1.etop3 {foo|foo goo|foo}))
 
       })
