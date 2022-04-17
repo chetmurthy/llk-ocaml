@@ -221,6 +221,7 @@ and simple_symbol ~{pctxt} pc sy =
   | ASnext _ args ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in
      pprintf pc "NEXT%p" (pr_option (entry_actuals ~{pctxt=pctxt})) args_opt
+  | ASrules _ {au_rules=[]} -> pprintf pc "[ ]"
   | ASrules _ rl ->
      horiz_vertic
        (fun () ->

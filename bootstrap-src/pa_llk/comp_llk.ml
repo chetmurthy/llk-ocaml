@@ -3456,10 +3456,13 @@ value exceeds_recursion_depth cfg =
   countrec 0 l
 ;
 
-value has_steppable_edge (cg : CG.t) n =
+value has_steppable_edge (cg : CG.t) = fun [
+  (Node.EXIT _, [_ :: _]) -> False
+| (n,_) ->
   n
   |> Raw.edge_labels (CG.gram_atn cg)
   |> List.exists (fun [ Label.TOKEN _ | SYNPRED _ -> True | _ -> False ])
+]
 ;
 
 value watch_clrec1 (x : CFG.t) = () ;
@@ -3506,8 +3509,8 @@ value closure0 loc (cg : CG.t) cfg =
     else ()
   in do {
     clrec0 cfg ;
-    acc.val |> List.filter (fun (st, _) ->
-    has_steppable_edge cg st
+    acc.val |> List.filter (fun ((st, _) as cfg) ->
+    has_steppable_edge cg cfg
     || Raw.is_bhole (CG.gram_atn cg) st)
   }
 ;
