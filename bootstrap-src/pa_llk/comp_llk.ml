@@ -3869,14 +3869,15 @@ value export_dfa dfa =
   let initial = fst dfa.initial in
   let convert_state ((n, _) as st) =
     let nfacfgs = state_to_nfacfgs dfa st in
+    let edges = G.edges dfa.g st in
+    let trans = List.map (fun (_, tok, (d, _)) -> (tok, d)) edges in
+    let trans = List.stable_sort Stdlib.compare trans in
     let final =
+      if trans <> [] then [] else
       nfacfgs
       |> List.stable_sort (fun p1 p2 -> -(Int.compare p1.NFACFG.priority p2.NFACFG.priority))
       |> List.map (fun p -> p.NFACFG.branchnum) in
 
-    let edges = G.edges dfa.g st in
-    let trans = List.map (fun (_, tok, (d, _)) -> (tok, d)) edges in
-    let trans = List.stable_sort Stdlib.compare trans in
     {num=n; final=final; transitions=trans} in
   {init=initial; states=List.map convert_state nodes}
 ;
@@ -4279,7 +4280,7 @@ value statename i = Printf.sprintf "q%04d" i ;
 
 value edge_group_to_branches loc generic_is_final edges =
   let newst = snd (List.hd edges) in
-  let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
+  let branch_body = <:expr< $lid:(statename newst)$ (ofs+1) >> in
   let toks = List.map fst edges in
   let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
   let rest_branches =
@@ -4311,7 +4312,7 @@ value edge_group_to_branches loc generic_is_final edges =
 
 value anti_edgegroup_to_branch loc edges =
   let newst = snd (List.hd edges) in
-  let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
+  let branch_body = <:expr< $lid:(statename newst)$ (ofs+1) >> in
   let toks = List.map fst edges in
   let (antis, rest) = Ppxutil.filter_split (fun [ ANTI _ -> True | _ -> False ]) toks in
 
@@ -4331,7 +4332,7 @@ value anti_edgegroup_to_branch loc edges =
 ;
 
 value nonanti_edge_to_branch loc generic_is_final (cls,newst) =
-  let branch_body = <:expr< $lid:(statename newst)$ lastf (ofs+1) >> in
+  let branch_body = <:expr< $lid:(statename newst)$ (ofs+1) >> in
   match cls with [
     CLS s None ->
     let patt = <:patt< Some ($str:s$, _) >> in
@@ -4339,12 +4340,6 @@ value nonanti_edge_to_branch loc generic_is_final (cls,newst) =
 
   | CLS s (Some tok) ->
     let patt = <:patt< Some ($str:s$, $str:String.escaped tok$) >> in
-    let branch_body =
-      match List.assoc s generic_is_final with [
-          st -> 
-        <:expr< let lastf = Some (ofs, $int:string_of_int st$) in $branch_body$ >>
-      | exception Not_found -> branch_body
-    ] in
     (patt, <:vala< None >>, branch_body)
 
   | SPCL s ->
@@ -4457,46 +4452,47 @@ value letrec_nest cg e dfa = do {
     let st = find_state st in
     [] <> st.EDFA.final in
   let export_state st =
-    let (synpred_edges, token_edges) =
-      st.transitions |> Ppxutil.filter_split (fun [ (Step.SYNPRED_STEP _, _) -> True | _ -> False ]) in
-    let match_tree =
-      let edges = token_edges |> List.map (fun [ (Step.TOKEN_STEP t, s) -> (t,s) ]) in
-      let edges = List.stable_sort Stdlib.compare edges in
-      if edges = [] then <:expr< lastf >> else
-        let branches = edges_to_branches loc dfa.states edges in
-        let branches = branches @ [
-              (<:patt< _ >>, <:vala< None >>, <:expr< lastf >>)
-            ] in
-        <:expr< match must_peek_nth (ofs+1) strm with [
-                    $list:branches$
-                  ] >> in do {
-    if [] <> synpred_edges then assert (not (List.mem st.num states_past_start)) else () ;
-    let synpred_edges = synpred_edges |> List.map (fun [ (Step.SYNPRED_STEP s, st) -> (s,st) ]) in
-    let synpred_edges = List.stable_sort Stdlib.compare synpred_edges in
-    let rhs = List.fold_right (fun (s, st) rhs ->
-                  <:expr< if $compile_syntactic_predicate cg e s$
-                          then $lid:(statename st)$ lastf ofs
-                          else $rhs$ >>)
-            synpred_edges match_tree in
     match st.final with [
         [] ->
-         (<:patt< $lid:(statename st.num)$ >>, <:expr< fun lastf ofs -> $rhs$ >>, <:vala< [] >>)
-      | [output] ->
-         (<:patt< $lid:(statename st.num)$ >>, <:expr< fun lastf ofs -> let lastf = Some (ofs, $int:string_of_int output$) in $rhs$ >>, <:vala< [] >>)
-      | l ->
-         let output = -(Ctr.next ctr) in do {
-          Std.push extra_branches (output, l) ;
-          (<:patt< $lid:(statename st.num)$ >>, <:expr< fun lastf ofs -> let lastf = Some (ofs, $int:string_of_int output$) in $rhs$ >>, <:vala< [] >>)
+        let (synpred_edges, token_edges) =
+          st.transitions |> Ppxutil.filter_split (fun [ (Step.SYNPRED_STEP _, _) -> True | _ -> False ]) in
+        let match_tree =
+          let edges = token_edges |> List.map (fun [ (Step.TOKEN_STEP t, s) -> (t,s) ]) in
+          let edges = List.stable_sort Stdlib.compare edges in
+          if edges = [] then <:expr< None >> else
+            let branches = edges_to_branches loc dfa.states edges in
+            let branches = branches @ [
+                  (<:patt< _ >>, <:vala< None >>, <:expr< None >>)
+                ] in
+            <:expr< match must_peek_nth (ofs+1) strm with [
+                        $list:branches$
+                      ] >> in do {
+          if [] <> synpred_edges then assert (not (List.mem st.num states_past_start)) else () ;
+          let synpred_edges = synpred_edges |> List.map (fun [ (Step.SYNPRED_STEP s, st) -> (s,st) ]) in
+          let synpred_edges = List.stable_sort Stdlib.compare synpred_edges in
+          let rhs = List.fold_right (fun (s, st) rhs ->
+                        <:expr< if $compile_syntactic_predicate cg e s$
+                                then $lid:(statename st)$ ofs
+                                else $rhs$ >>)
+                      synpred_edges match_tree in
+          (<:patt< $lid:(statename st.num)$ >>, <:expr< fun ofs -> $rhs$ >>, <:vala< [] >>)
+        }
+        | [output] ->
+           (<:patt< $lid:(statename st.num)$ >>, <:expr< fun ofs -> Some (ofs, $int:string_of_int output$) >>, <:vala< [] >>)
+        | l ->
+           let output = -(Ctr.next ctr) in do {
+            Std.push extra_branches (output, l) ;
+            (<:patt< $lid:(statename st.num)$ >>, <:expr< fun ofs -> Some (ofs, $int:string_of_int output$) >>, <:vala< [] >>)
         }
       | _ -> assert False
-      ] 
-  } in
+      ]
+  in
   let bindl = List.map export_state dfa.states in
   let e =
     <:expr< fun strm ->
             let open Llk_regexps in
             let open Token in
-            let rec $list:bindl$ in $lid:(statename dfa.init)$ None 0 >> in
+            let rec $list:bindl$ in $lid:(statename dfa.init)$ 0 >> in
   (e, extra_branches.val)
 }
 ;
