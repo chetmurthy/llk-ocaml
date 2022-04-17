@@ -3926,6 +3926,12 @@ value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
   |> List.map (fun (t : SCFG.t) ->
          let p0 = match t.SCFG.nfacfgs with [
              [p0] -> p0
+           | [] ->
+              Fmt.(raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): no NFACFGs in SCFG:\n%a"
+                     S.prefix (Name.print e.ae_name)
+                     SCFG.pp t
+              )
+
            | l ->
              List.hd (l |> List.stable_sort (fun p1 p2 -> -(Int.compare p1.NFACFG.priority p2.NFACFG.priority)))
            ] in
@@ -4076,8 +4082,9 @@ value compute_dfa cg_memo e =
   match compute_firstk ~{depth=4} cg_memo e with [
       (_, dfa) -> Some (export_dfa dfa)
     | exception exn ->
+       let bts = Printexc.(get_raw_backtrace() |> raw_backtrace_to_string) in       
        let msg = Printexc.to_string exn in do {
-        Fmt.(pf stderr "%s\n%!" msg) ;
+        Fmt.(pf stderr "%s\n%s\n%!" msg bts) ;
         None
       }
     ]

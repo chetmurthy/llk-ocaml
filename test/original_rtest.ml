@@ -1181,19 +1181,19 @@ END;
   ;
   expr_longident:
     [
-      [ li = longident ; check_eps -> <:expr< $longid:li$ >>
-      | li = longident ; "." ; "("; ([operator_rparen])? ; op = operator_rparen ->
+      [ li = longident -> <:expr< $longid:li$ >>
+      | li = longident ; PRIORITY 1 ; "." ; "("; ([operator_rparen])? ; op = operator_rparen ->
           if op = "::" then
             <:expr< $longid:li$ . $uid:op$ >>
           else
             <:expr< $longid:li$ . $lid:op$ >>
 
-      | li = longident ; "." ; "(" ; e = expr ; ")" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; id = V LIDENT "lid" ->
+      | li = longident ; PRIORITY 1 ; "." ; "(" ; e = expr ; ")" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; id = V LIDENT "lid" ->
         <:expr< $longid:li$ . $_lid:id$ >>
-      | li = longident ; "." ; check_lbracket ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; check_lbrace ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
-      | li = longident ; "." ; check_lbracketbar ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; (["["])? ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; (["{"])? ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
+      | li = longident ; PRIORITY 1 ; "." ; (["[|"])? ; e = expr LEVEL "simple" -> <:expr< $longid:li$ . ( $e$ ) >>
       ]
     ]
   ;
@@ -1406,19 +1406,20 @@ END;
     [ [ "constraint"; t1 = ctyp; "="; t2 = ctyp -> (t1, t2) ] ]
   ;
   type_kind:
-    [ [ check_constr_decl ; OPT "|";
-        cdl = LIST0 constructor_declaration SEP "|" ->
+    [ [ "|"; cdl = LIST0 constructor_declaration SEP "|" ->
+          <:ctyp< [ $list:cdl$ ] >>
+       | cdl = LIST1 constructor_declaration SEP "|" ->
           <:ctyp< [ $list:cdl$ ] >>
       | ".." -> <:ctyp< .. >>
-      | check_eps ; t = ctyp ->
+      | ([ctyp])? ; t = ctyp ->
           <:ctyp< $t$ >>
-      | check_eps ; t = ctyp; "="; pf = FLAG "private"; "{";
+      | ([ctyp])? ; t = ctyp; "="; pf = FLAG "private"; "{";
         ldl = V label_declarations "list"; "}" ->
           <:ctyp< $t$ == $priv:pf$ { $_list:ldl$ } >>
-      | check_eps ; t = ctyp; "="; pf = FLAG "private"; OPT "|";
+      | ([ctyp])? ; t = ctyp; "="; pf = FLAG "private"; OPT "|";
         cdl = LIST1 constructor_declaration SEP "|" ->
           <:ctyp< $t$ == $priv:pf$ [ $list:cdl$ ] >>
-      | check_eps ; t = ctyp; "="; pf = FLAG "private"; ".." ->
+      | ([ctyp])? ; t = ctyp; "="; pf = FLAG "private"; ".." ->
           <:ctyp< $t$ == $priv:pf$ .. >>
       | "{"; ldl = V label_declarations "list"; "}" ->
           <:ctyp< { $_list:ldl$ } >> ] ]
@@ -1566,8 +1567,8 @@ END;
       | t1 = NEXT -> t1
       ]
     | "arrow" NONA
-      [ t1 = NEXT; "->"; t2 = SELF -> <:ctyp< $t1$ -> $t2$ >>
-      | t1 = NEXT ; check_eps -> t1
+      [ t1 = NEXT; PRIORITY 1 ; "->"; t2 = SELF -> <:ctyp< $t1$ -> $t2$ >>
+      | t1 = NEXT -> t1
       ]
     | "star"
       [ t = NEXT; "*"; tl = LIST1 (ctyp LEVEL "apply") SEP "*" ->
@@ -1726,7 +1727,7 @@ END;
               else
                 <:class_str_item< value virtual $flag:mf$ $_lid:lab$ : $t$ $_itemattrs:attrs$ >>
           ]
-      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; ":"; t = poly_type_below_alg_attribute ; item_attrs = item_attributes ->
+      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; PRIORITY 1 ; ":"; t = poly_type_below_alg_attribute; item_attrs = item_attributes ->
           if Pcaml.unvala ov then
             Ploc.raise loc (Stream.Error "method without definition is not being overriden!")
           else if not vf then
@@ -1735,11 +1736,11 @@ END;
             let attrs = merge_left_auxiliary_attrs ~{nonterm_name="cstr-inherit"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
             <:class_str_item< method virtual $flag:pf$ $_lid:l$ : $t$ $_itemattrs:attrs$ >>
 
-      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; ":"; t = poly_type_below_alg_attribute; "="; e = expr ; item_attrs = item_attributes ->
+      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; PRIORITY 1 ; ":"; t = poly_type_below_alg_attribute; "="; e = expr ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="cstr-inherit"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:class_str_item< method $_!:ov$ $priv:pf$ $_lid:l$ : $t$ = $e$ $_itemattrs:attrs$ >>
 
-      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; check_eps ; sb = fun_binding ; item_attrs = item_attributes ->
+      | "method"; ov = V (FLAG "!") "!"; alg_attrs = alg_attributes_no_anti; (pf, vf) = priv_virt; l = V LIDENT "lid" ""; sb = fun_binding ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="cstr-inherit"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           <:class_str_item< method $_!:ov$ $priv:pf$ $_lid:l$ = $sb$ $_itemattrs:attrs$ >>
 
