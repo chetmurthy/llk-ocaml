@@ -504,7 +504,8 @@ END;
       | "open"; (ext,alg_attrs) = ext_attributes; ovf = V (FLAG "!") "!"; me = module_expr ; item_attrs = item_attributes ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-open"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           str_item_to_inline <:str_item< open $_!:ovf$ $me$ $_itemattrs:attrs$ >> ext
-      | "type"; (ext,attrs) = ext_attributes; check_type_decl ; nr = FLAG "nonrec";
+      | "type"; (ext,attrs) = ext_attributes;
+        nr = FLAG "nonrec";
         htd = first_type_decl ; ttd = LIST0 rest_type_decl ->
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-type_decl"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} attrs htd.MLast.tdAttributes in
           let htd = {(htd) with MLast.tdAttributes = attrs } in
@@ -515,7 +516,7 @@ END;
             else failwith "type-declaration cannot mix decl and subst" ;
             str_item_to_inline <:str_item< type $flag:nr$ $list:tdl$ >> ext
           }
-      | "type"; (ext,attrs) = ext_attributes; check_type_extension ; te = type_extension →
+      | "type"; (ext,attrs) = ext_attributes; ([type_parameters; V longident_lident "lilongid"; "+="])? ; te = type_extension →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="str_item-type_extension"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} attrs te.MLast.teAttributes in
           let te = { (te) with MLast.teAttributes = attrs } in
           str_item_to_inline <:str_item< type $_lilongid:te.MLast.teNam$ $_list:te.MLast.tePrm$ += $_priv:te.MLast.tePrv$ [ $_list:te.MLast.teECs$ ] $_itemattrs:te.MLast.teAttributes$ >> ext
