@@ -961,9 +961,9 @@ END;
       | "[|"; "|]" -> <:expr< [| |] >>
       | "[|"; el = V expr1_semi_list "list"; "|]" ->
           <:expr< [| $_list:el$ |] >>
-      | "{"; check_label_eq ; lel = V lbl_expr_list "list"; "}" ->
+      | "{" ; lel = V lbl_expr_list "list"; "}" ->
           <:expr< { $_list:lel$ } >>
-      | "{"; e = expr LEVEL "apply"; "with"; lel = V lbl_expr_list "list";
+      | "{"; ([expr LEVEL "apply"; "with"])? ; e = expr LEVEL "apply"; "with"; lel = V lbl_expr_list "list";
         "}" ->
           <:expr< { ($e$) with $_list:lel$ } >>
       | "("; ")" -> <:expr< $uid:"()"$ >>
