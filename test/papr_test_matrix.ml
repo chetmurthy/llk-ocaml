@@ -4802,6 +4802,15 @@ END
      r_output = OK {foo|foo.val;
 |foo}
     };
+    {name="phrase-1"; implem = True ;
+     exclude=[];
+     o_input = OK {foo|#install_printer foo;;|foo} ;
+     official_input = OK {foo|#install_printer foo|foo} ;
+     r_input = OK {foo|#install_printer foo;|foo} ;
+     o_output = OK {foo||foo};
+     official_output = OK {foo||foo} ;
+     r_output = OK {foo||foo}
+    };
     {name="test-prototype"; implem = True ;
      exclude=[];
      o_input = OK {foo||foo} ;
