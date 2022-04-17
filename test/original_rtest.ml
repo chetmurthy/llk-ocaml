@@ -599,7 +599,7 @@ END;
       ]
     | [ mt1=NEXT ; "->" ; mt2=SELF ->
         <:module_type< $mt1$ → $mt2$ >>
-      | mt1=NEXT ; check_eps -> mt1
+      | mt1=NEXT ; PRIORITY -1 -> mt1
      ]
     | "alg_attribute" LEFTA
       [ e1 = SELF ; "[@" ; attr = V attribute_body "attribute"; "]" ->
@@ -638,17 +638,17 @@ END;
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-include"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< include $mt$ $_itemattrs:attrs$ >> ext
 
-      | "module"; check_uident_coloneq; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
+      | "module"; ([V UIDENT ; ":="])? ; i = V UIDENT ; ":="; li = extended_longident ; attrs = item_attributes →
         <:sig_item< module $_uid:i$ := $longid:li$ $_itemattrs:attrs$ >>
 
-      | "module"; check_eps; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
+      | "module"; PRIORITY -1; (ext,alg_attrs) = ext_attributes; rf = FLAG "rec";
         h = first_mod_decl_binding ; t = LIST0 rest_mod_decl_binding ->
           let (i, mt, item_attrs) = h in
           let item_attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           let h = (i, mt, item_attrs) in
           sig_item_to_inline <:sig_item< module $flag:rf$ $list:[h::t]$ >> ext
 
-      | "module"; check_eps; (ext,alg_attrs) = ext_attributes; check_uident_eq; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
+      | "module"; PRIORITY -1; (ext,alg_attrs) = ext_attributes; ([V UIDENT "uid"; "="])? ; i = V UIDENT "uid"; "="; li = longident ; item_attrs = item_attributes →
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="sig_item-module"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
           sig_item_to_inline <:sig_item< module alias $_uid:i$ = $longid:li$ $_itemattrs:attrs$ >> ext
 
@@ -744,7 +744,7 @@ END;
       | "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
         "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >>
-      | "let"; check_eps ; (ext,alg_attrs) = ext_attributes; o = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
+      | "let"; PRIORITY -1 ; (ext,alg_attrs) = ext_attributes; o = V (FLAG "rec"); h = first_let_binding ; t = LIST0 and_let_binding; "in";
         x = expr LEVEL "top" ->
           let (a, b, item_attrs) = h in
           let attrs = merge_left_auxiliary_attrs ~{nonterm_name="let_binding"} ~{left_name="algebraic attributes"} ~{right_name="item attributes"} alg_attrs item_attrs in
