@@ -13,7 +13,7 @@ let expr_LEVEL_simple = expr ;;
 {foo|
 GRAMMAR LLKGram:
 EXTEND Pcaml.gram ;
-EXPORT: bootstrapped_top;
+EXPORT: bootstrapped_top entry level_list level rule_list rule symbol psymbol;
 
 external expr : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
 external expr_LEVEL_simple : PREDICTION LIDENT | INT | QUOTATION | "(" | "[" | "{" ;
@@ -77,7 +77,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
     [ [ "["; ll = LIST0 level SEP "|"; "]" -> ll ] ]
   ;
   level:
-    [ [ lab = OPT STRING; ass = OPT assoc; rules = rule_list ->
+    [ [ lab = NONGREEDY OPT STRING; ass = NONGREEDY OPT assoc; rules = rule_list ->
           {al_loc = loc; al_label = lab; al_assoc = ass; al_rules = rules} ] ]
   ;
   assoc:
@@ -100,7 +100,9 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       ] ]
   ;
   psymbol:
-    [ [ ([paren_pattern; "="])? ; p = paren_pattern; "="; s = symbol ->
+    [ [ p = LIDENT; "="; s = symbol ->
+          {ap_loc = loc; ap_patt = Some <:patt< $lid:p$ >>; ap_symb = s}
+      | ([paren_pattern; "="])? ; p = paren_pattern; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some p; ap_symb = s}
        | "_" ; "="; s = symbol ->
           {ap_loc = loc; ap_patt = Some <:patt< _ >>; ap_symb = s}
