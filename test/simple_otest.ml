@@ -296,9 +296,12 @@ END;
 [@@@llk
 {foo|
 GRAMMAR Priority:
-EXPORT: e;
+EXPORT: e e';
   e: [ [ PRIORITY 1 ; "let" ; s = STRING -> ("e: let "^s)
        |  e = e1 -> e ] ] ;
+
+  e': [ [ "let" ; s = STRING -> ("e': let "^s)
+        |  PRIORITY -1 ; e = e1 -> e ] ] ;
 
   e1:
     [
@@ -542,6 +545,8 @@ let tests = "simple" >::: [
     ; "Priority" >:: (fun _ ->
         assert_equal ~printer:(fun x -> x) "e: let a" (pa Priority.e {|let "a"|})
       ; assert_equal ~printer:(fun x -> x) "e1: 0" (pa Priority.e {|0|})
+      ; assert_equal ~printer:(fun x -> x) "e': let a" (pa Priority.e' {|let "a"|})
+      ; assert_equal ~printer:(fun x -> x) "e1: 0" (pa Priority.e' {|0|})
     )
     ; "Empty" >:: (fun _ ->
         assert_equal (Right "let a") (pa Empty.e {|let "a"|})
