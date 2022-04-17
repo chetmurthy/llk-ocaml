@@ -76,8 +76,8 @@ concatenation2:
     | → [] ] ]
 ;
 
-  repetition: [ [ r = OPT repeat_ ; e = element -> (r,e) ] ] ;
-  repeat_: [ [ n = INT -> (Some n, Some n) | ([ OPT INT ; "*" ])? ; n = OPT INT ; "*" ; m = OPT INT -> (n,m) ] ] ;
+  repetition: [ [ r = NONGREEDY OPT repeat_ ; e = element -> (r,e) ] ] ;
+  repeat_: [ [ n = INT -> (Some n, Some n) | n = OPT INT ; "*" ; m = OPT INT -> (n,m) ] ] ;
   element: [ [
     id = ID -> ID id
   | g = group -> GROUP g

@@ -604,10 +604,10 @@ END;
   ext_attributes: [ [ e = ext_opt ; l = alg_attributes_no_anti -> (e, l) ] ] ;
   expr:
     [ "top" NONA
-      [ check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ;
+      [ (* check_let_exception ; *) "let" ; "exception" ; id = V UIDENT "uid" ;
         "of" ; tyl = V (GREEDY LIST1 ctyp_below_alg_attribute) ; alg_attrs = alg_attributes ; "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ of $_list:tyl$ $_algattrs:alg_attrs$ in $x$ >>
-      | check_let_exception ; "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
+      | (* check_let_exception ; *) "let" ; "exception" ; id = V UIDENT "uid" ; alg_attrs = alg_attributes ;
         "in" ; x = SELF ->
         <:expr< let exception $_uid:id$ $_algattrs:alg_attrs$ in $x$ >>
 

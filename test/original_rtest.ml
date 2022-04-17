@@ -468,8 +468,8 @@ END;
   ;
 
   type_binder_opt: [ [
-    ([ LIST1 typevar ; "."])? ; ls = V (LIST1 typevar) ; "." -> ls
-  | check_eps -> <:vala< [] >>
+    ls = V (LIST1 typevar) ; "." -> ls
+  | -> <:vala< [] >>
   ] ]
   ;
   ext_opt: [ [ ext = OPT [ "%" ; id = attribute_id -> id ] -> ext ] ] ;
