@@ -24,11 +24,18 @@ module LLKGram =
           | Some (_, 2) ->
               (parser [< g = assoc__0001; '"UIDENT", "LEFTA" >] -> LEFTA g)
                 __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"UIDENT", "NONA" >] -> NONA
+               | [< '"UIDENT", "RIGHTA" >] -> RIGHTA
+               | [< g = assoc__0001; '"UIDENT", "LEFTA" >] -> LEFTA g)
+                __strm__
           | _ -> raise Stream.Failure
         and assoc_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "GREEDY") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "LEFTA") -> q0002 lastf (ofs + 1)
@@ -49,11 +56,18 @@ module LLKGram =
           | Some (_, 1) ->
               (parser [< '"UIDENT", "NONGREEDY" >] -> false) __strm__
           | Some (_, 2) -> (parser [< >] -> true) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"UIDENT", "GREEDY" >] -> true
+               | [< '"UIDENT", "NONGREEDY" >] -> false
+               | [< >] -> true)
+                __strm__
           | _ -> raise Stream.Failure
         and assoc__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "GREEDY") -> q0002 lastf (ofs + 1)
             | Some ("UIDENT", "LEFTA") -> q0001 lastf (ofs + 1)
@@ -81,12 +95,7 @@ module LLKGram =
         and bootstrapped_top_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "GRAMMAR") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e0 __strm__ =
           match e0_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -138,11 +147,42 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ID (loc, Name.mk x))
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "(";
+                    x =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x = e6] expected after ['('] (in [e0])" e6;
+                    '"", ")" >] ->
+                   x
+               | [< '"", "["; '"", "^";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = e0__0001] expected after ['['; '^'] (in [e0])"
+                        e0__0001;
+                    '"", "]" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   EXCEPT (loc, l)
+               | [< '"", "_" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in ANY loc
+               | [< '"", "empty" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   DISJ (loc, [])
+               | [< '"", "eps" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in EPS loc
+               | [< t = token >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   TOKEN (loc, t)
+               | [< '"LIDENT", x >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ID (loc, Name.mk x))
+                __strm__
           | _ -> raise Stream.Failure
         and e0_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0002 lastf (ofs + 1)
             | Some ("", "$") -> q0009 lastf (ofs + 1)
@@ -183,18 +223,7 @@ module LLKGram =
         and e0__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0004 lastf (ofs + 1)
-            | Some ("", "$") -> q0002 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0003 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e0__0002 __strm__ =
           match
@@ -210,24 +239,21 @@ module LLKGram =
                    x__0011 :: y__0002)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0011 = token;
+                    y__0002 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0002 = e0__0002] expected after [PRIORITY 1; x__0011 = token] (in [e0])"
+                        e0__0002 >] ->
+                   x__0011 :: y__0002
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and e0__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0002 lastf (ofs + 1)
-            | Some ("", "$") -> q0004 lastf (ofs + 1)
-            | Some ("", "]") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0005 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0003 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and e1 __strm__ =
           match e1_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -244,26 +270,7 @@ module LLKGram =
         and e1_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0006 lastf (ofs + 1)
-            | Some ("", "$") -> q0003 lastf (ofs + 1)
-            | Some ("", "(") -> q0002 lastf (ofs + 1)
-            | Some ("", "[") -> q0005 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e1__0001 x __strm__ =
           match
@@ -282,11 +289,22 @@ module LLKGram =
                    CONC (loc, [x; STAR (loc, x)]))
                 __strm__
           | Some (_, 2) -> (parser [< >] -> x) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "*" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   STAR (loc, x)
+               | [< '"", "+" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   CONC (loc, [x; STAR (loc, x)])
+               | [< >] -> x)
+                __strm__
           | _ -> raise Stream.Failure
         and e1__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0002 lastf (ofs + 1)
             | Some ("", "$") -> q0012 lastf (ofs + 1)
@@ -337,11 +355,23 @@ module LLKGram =
                    NEG (loc, x))
                 __strm__
           | Some (_, 1) -> (parser [< a = e2' >] -> a) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "~";
+                    x =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x = e2'] expected after ['~'] (in [e2])"
+                        e2' >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   NEG (loc, x)
+               | [< a = e2' >] -> a)
+                __strm__
           | _ -> raise Stream.Failure
         and e2_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0007 lastf (ofs + 1)
             | Some ("", "$") -> q0003 lastf (ofs + 1)
@@ -378,26 +408,7 @@ module LLKGram =
         and e2'_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0006 lastf (ofs + 1)
-            | Some ("", "$") -> q0003 lastf (ofs + 1)
-            | Some ("", "(") -> q0002 lastf (ofs + 1)
-            | Some ("", "[") -> q0005 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e2'__0001 x __strm__ =
           match
@@ -410,11 +421,19 @@ module LLKGram =
                    OPT (loc, x))
                 __strm__
           | Some (_, 1) -> (parser [< >] -> x) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "?" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   OPT (loc, x)
+               | [< >] -> x)
+                __strm__
           | _ -> raise Stream.Failure
         and e2'__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0002 lastf (ofs + 1)
             | Some ("", "$") -> q0006 lastf (ofs + 1)
@@ -460,28 +479,7 @@ module LLKGram =
         and e3_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0007 lastf (ofs + 1)
-            | Some ("", "$") -> q0005 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "~") -> q0003 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e3__0001 __strm__ =
           match
@@ -500,28 +498,7 @@ module LLKGram =
         and e3__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0007 lastf (ofs + 1)
-            | Some ("", "$") -> q0005 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "~") -> q0003 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e3__0002 __strm__ =
           match
@@ -537,42 +514,21 @@ module LLKGram =
                    x__0013 :: y__0004)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0013 = e2;
+                    y__0004 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0004 = e3__0002] expected after [PRIORITY 1; x__0013 = e2] (in [e3])"
+                        e3__0002 >] ->
+                   x__0013 :: y__0004
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and e3__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0004 lastf (ofs + 1)
-            | Some ("", "$") -> q0007 lastf (ofs + 1)
-            | Some ("", "&") -> q0012 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "[") -> q0010 lastf (ofs + 1)
-            | Some ("", "_") -> q0005 lastf (ofs + 1)
-            | Some ("", "empty") -> q0005 lastf (ofs + 1)
-            | Some ("", "eps") -> q0005 lastf (ofs + 1)
-            | Some ("", "in") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0002 lastf (ofs + 1)
-            | Some ("", "~") -> q0009 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0005 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0005 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0008 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and e4 __strm__ =
           match e4_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -586,28 +542,7 @@ module LLKGram =
         and e4_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0007 lastf (ofs + 1)
-            | Some ("", "$") -> q0005 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "~") -> q0003 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e4__0001 __strm__ =
           match
@@ -626,28 +561,7 @@ module LLKGram =
         and e4__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0007 lastf (ofs + 1)
-            | Some ("", "$") -> q0005 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "~") -> q0003 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e4__0002 __strm__ =
           match
@@ -663,24 +577,21 @@ module LLKGram =
                    x__0015 :: y__0006)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0015 = e4__0003;
+                    y__0006 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0006 = e4__0002] expected after [PRIORITY 1; x__0015 = e4__0003] (in [e4])"
+                        e4__0002 >] ->
+                   x__0015 :: y__0006
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and e4__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "&") -> q0003 lastf (ofs + 1)
-            | Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", ";") -> q0004 lastf (ofs + 1)
-            | Some ("", "in") -> q0002 lastf (ofs + 1)
-            | Some ("", "|") -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and e4__0003 __strm__ =
           match
@@ -699,12 +610,7 @@ module LLKGram =
         and e4__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "&") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e5 __strm__ =
           match e5_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -718,28 +624,7 @@ module LLKGram =
         and e5_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0007 lastf (ofs + 1)
-            | Some ("", "$") -> q0005 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "~") -> q0003 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e5__0001 __strm__ =
           match
@@ -758,28 +643,7 @@ module LLKGram =
         and e5__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0007 lastf (ofs + 1)
-            | Some ("", "$") -> q0005 lastf (ofs + 1)
-            | Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "~") -> q0003 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e5__0002 __strm__ =
           match
@@ -795,22 +659,21 @@ module LLKGram =
                    x__0017 :: y__0008)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0017 = e5__0003;
+                    y__0008 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0008 = e5__0002] expected after [PRIORITY 1; x__0017 = e5__0003] (in [e5])"
+                        e5__0002 >] ->
+                   x__0017 :: y__0008
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and e5__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", ";") -> q0002 lastf (ofs + 1)
-            | Some ("", "in") -> q0004 lastf (ofs + 1)
-            | Some ("", "|") -> q0003 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and e5__0003 __strm__ =
           match
@@ -829,12 +692,7 @@ module LLKGram =
         and e5__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "|") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and e6 __strm__ =
           match e6_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -854,11 +712,28 @@ module LLKGram =
                    LETIN (loc, Name.mk s, re1, re2))
                 __strm__
           | Some (_, 1) -> (parser [< a = e5 >] -> a) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "let"; '"LIDENT", s; '"", "=";
+                    re1 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[re1 = e5] expected after ['let'; s = LIDENT; '='] (in [e6])"
+                        e5;
+                    '"", "in";
+                    re2 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[re2 = e6] expected after ['let'; s = LIDENT; '='; re1 = e5; 'in'] (in [e6])"
+                        e6 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   LETIN (loc, Name.mk s, re1, re2)
+               | [< a = e5 >] -> a)
+                __strm__
           | _ -> raise Stream.Failure
         and e6_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0008 lastf (ofs + 1)
             | Some ("", "$") -> q0006 lastf (ofs + 1)
@@ -909,12 +784,7 @@ module LLKGram =
         and entry_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and entry__0001 __strm__ =
           match
@@ -931,11 +801,23 @@ module LLKGram =
                    l)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "[";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = entry__0002] expected after [n = LIDENT; '['] (in [entry])"
+                        entry__0002;
+                    '"", "]" >] ->
+                   l
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and entry__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ":") -> q0001 lastf (ofs + 1)
             | Some ("", "[") -> q0002 lastf (ofs + 1)
@@ -960,22 +842,7 @@ module LLKGram =
         and entry__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("", "{") -> q0003 lastf (ofs + 1)
-            | Some ("INT", _) -> q0002 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0004 lastf (ofs + 1)
-            | Some ("QUOTATION", _) -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and entry__0003 __strm__ =
           match
@@ -991,18 +858,21 @@ module LLKGram =
                    x__0019 :: y__0010)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0019 = entry__0005;
+                    y__0010 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0010 = entry__0003] expected after [PRIORITY 1; x__0019 = entry__0005] (in [entry])"
+                        entry__0003 >] ->
+                   x__0019 :: y__0010
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and entry__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0002 lastf (ofs + 1)
-            | Some ("", "]") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and entry__0004 __strm__ =
           match
@@ -1011,27 +881,16 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< x__0047 = position >] -> Some x__0047) __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = position >] -> Some a
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and entry__0004_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "AFTER") -> q0005 lastf (ofs + 1)
-            | Some ("UIDENT", "BEFORE") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "FIRST") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "LAST") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "LEVEL") -> q0006 lastf (ofs + 1)
-            | Some ("UIDENT", "LIKE") -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and entry__0005 __strm__ =
           match
@@ -1050,12 +909,7 @@ module LLKGram =
         and entry__0005_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and exports __strm__ =
           match
@@ -1075,12 +929,7 @@ module LLKGram =
         and exports_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", "EXPORT") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and exports__0001 __strm__ =
           match
@@ -1099,12 +948,7 @@ module LLKGram =
         and exports__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and exports__0002 __strm__ =
           match
@@ -1120,18 +964,21 @@ module LLKGram =
                    x__0021 :: y__0012)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"LIDENT", x__0021;
+                    y__0012 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0012 = exports__0002] expected after [PRIORITY 1; x__0021 = LIDENT] (in [exports])"
+                        exports__0002 >] ->
+                   x__0021 :: y__0012
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and exports__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ";") -> q0001 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and external_entry __strm__ =
           match
@@ -1152,12 +999,7 @@ module LLKGram =
         and external_entry_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "external") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and externals __strm__ =
           match
@@ -1168,12 +1010,7 @@ module LLKGram =
         and externals_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "external") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and externals__0001 __strm__ =
           match
@@ -1192,12 +1029,7 @@ module LLKGram =
         and externals__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "external") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and externals__0002 __strm__ =
           match
@@ -1213,18 +1045,21 @@ module LLKGram =
                    x__0023 :: y__0014)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0023 = external_entry;
+                    y__0014 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0014 = externals__0002] expected after [PRIORITY 1; x__0023 = external_entry] (in [externals])"
+                        externals__0002 >] ->
+                   x__0023 :: y__0014
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and externals__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "external") -> q0002 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and grammar_body __strm__ =
           match
@@ -1262,12 +1097,7 @@ module LLKGram =
         and grammar_body_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and grammar_body__0001 __strm__ =
           match
@@ -1287,12 +1117,7 @@ module LLKGram =
         and grammar_body__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "EXTEND") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and grammar_body__0002 __strm__ =
           match
@@ -1300,11 +1125,17 @@ module LLKGram =
           with
             Some (_, 0) -> (parser [< a = exports >] -> a) __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = exports >] -> a
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and grammar_body__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "EXPORT") -> q0003 lastf (ofs + 1)
@@ -1322,11 +1153,17 @@ module LLKGram =
           with
             Some (_, 0) -> (parser [< a = regexps >] -> a) __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = regexps >] -> a
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and grammar_body__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0003 lastf (ofs + 1)
             | Some ("UIDENT", "REGEXPS") -> q0002 lastf (ofs + 1)
@@ -1342,11 +1179,17 @@ module LLKGram =
           with
             Some (_, 0) -> (parser [< a = externals >] -> a) __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = externals >] -> a
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and grammar_body__0004_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "external") -> q0002 lastf (ofs + 1)
             | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
@@ -1363,12 +1206,7 @@ module LLKGram =
         and grammar_body__0005_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and grammar_body__0006 __strm__ =
           match
@@ -1387,12 +1225,7 @@ module LLKGram =
         and grammar_body__0006_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and grammar_body__0007 __strm__ =
           match
@@ -1408,18 +1241,21 @@ module LLKGram =
                    x__0025 :: y__0016)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0025 = grammar_body__0005;
+                    y__0016 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0016 = grammar_body__0007] expected after [PRIORITY 1; x__0025 = grammar_body__0005] (in [grammar_body])"
+                        grammar_body__0007 >] ->
+                   x__0025 :: y__0016
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and grammar_body__0007_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "END") -> q0001 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and grammar_body__0008 __strm__ =
           match
@@ -1429,24 +1265,16 @@ module LLKGram =
               (parser [< x__0048 = grammar_body__0001 >] -> Some x__0048)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = grammar_body__0001 >] -> Some a
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and grammar_body__0008_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "EXTEND") -> q0003 lastf (ofs + 1)
-            | Some ("", "external") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "EXPORT") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "REGEXPS") -> q0004 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and level __strm__ =
           match level_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -1469,21 +1297,7 @@ module LLKGram =
         and level_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFTA") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "NONA") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "NONGREEDY") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "RIGHTA") -> q0002 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and level__0001 __strm__ =
           match
@@ -1492,11 +1306,17 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< '"STRING", x__0052 >] -> Some x__0052) __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"STRING", x__0052 >] -> Some x__0052
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and level__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
@@ -1518,11 +1338,17 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< x__0053 = assoc >] -> Some x__0053) __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = assoc >] -> Some a
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and level__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
@@ -1553,12 +1379,7 @@ module LLKGram =
         and level_list_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and level_list__0001 __strm__ =
           match
@@ -1566,27 +1387,16 @@ module LLKGram =
           with
             Some (_, 0) -> (parser [< a = level_list__0002 >] -> a) __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = level_list__0002 >] -> a
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and level_list__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0005 lastf (ofs + 1)
-            | Some ("", "]") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "GREEDY") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFTA") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "NONA") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "NONGREEDY") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "RIGHTA") -> q0003 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and level_list__0002 __strm__ =
           match
@@ -1605,21 +1415,7 @@ module LLKGram =
         and level_list__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFTA") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "NONA") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "NONGREEDY") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "RIGHTA") -> q0002 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0004 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and level_list__0003 __strm__ =
           match
@@ -1635,18 +1431,21 @@ module LLKGram =
                    x__0027 :: y__0019)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0027 = level_list__0004;
+                    y__0019 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0019 = level_list__0003] expected after [PRIORITY 1; x__0027 = level_list__0004] (in [level_list])"
+                        level_list__0003 >] ->
+                   x__0027 :: y__0019
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and level_list__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "]") -> q0001 lastf (ofs + 1)
-            | Some ("", "|") -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and level_list__0004 __strm__ =
           match
@@ -1665,12 +1464,7 @@ module LLKGram =
         and level_list__0004_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "|") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and paren_pattern __strm__ =
           match
@@ -1691,12 +1485,7 @@ module LLKGram =
         and paren_pattern_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and paren_pattern__0001 __strm__ =
           match
@@ -1715,15 +1504,7 @@ module LLKGram =
         and paren_pattern__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0002 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and paren_pattern__0002 __strm__ =
           match
@@ -1739,18 +1520,21 @@ module LLKGram =
                    x__0029 :: y__0021)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0029 = paren_pattern__0003;
+                    y__0021 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0021 = paren_pattern__0002] expected after [PRIORITY 1; x__0029 = paren_pattern__0003] (in [paren_pattern])"
+                        paren_pattern__0002 >] ->
+                   x__0029 :: y__0021
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and paren_pattern__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", ",") -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and paren_pattern__0003 __strm__ =
           match
@@ -1769,12 +1553,7 @@ module LLKGram =
         and paren_pattern__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and pattern __strm__ =
           match
@@ -1793,11 +1572,22 @@ module LLKGram =
                    MLast.PaLid (loc, Ploc.VaVal i))
                 __strm__
           | Some (_, 2) -> (parser [< a = paren_pattern >] -> a) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "_" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   MLast.PaAny loc
+               | [< '"LIDENT", i >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   MLast.PaLid (loc, Ploc.VaVal i)
+               | [< a = paren_pattern >] -> a)
+                __strm__
           | _ -> raise Stream.Failure
         and pattern_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0001 lastf (ofs + 1)
             | Some ("", "_") -> q0002 lastf (ofs + 1)
@@ -1827,11 +1617,21 @@ module LLKGram =
           | Some (_, 5) ->
               (parser [< '"UIDENT", "LIKE"; '"STRING", n >] -> POS_LIKE n)
                 __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"UIDENT", "AFTER"; '"STRING", n >] -> POS_AFTER n
+               | [< '"UIDENT", "BEFORE"; '"STRING", n >] -> POS_BEFORE n
+               | [< '"UIDENT", "FIRST" >] -> POS_FIRST
+               | [< '"UIDENT", "LAST" >] -> POS_LAST
+               | [< '"UIDENT", "LEVEL"; '"STRING", n >] -> POS_LEVEL n
+               | [< '"UIDENT", "LIKE"; '"STRING", n >] -> POS_LIKE n)
+                __strm__
           | _ -> raise Stream.Failure
         and position_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "AFTER") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "BEFORE") -> q0003 lastf (ofs + 1)
@@ -1902,11 +1702,69 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {ap_loc = loc; ap_patt = None; ap_symb = s})
                 __strm__
+          | Some (_, (-2)) ->
+              (parser bp
+                 [< '"LIDENT", p; '"", "=";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol] expected after [p = LIDENT; '='] (in [psymbol])"
+                        symbol >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ap_loc = loc;
+                    ap_patt = Some (MLast.PaLid (loc, Ploc.VaVal p));
+                    ap_symb = s}
+               | [< s = symbol >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ap_loc = loc; ap_patt = None; ap_symb = s})
+                __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "_"; '"", "=";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol] expected after ['_'; '='] (in [psymbol])"
+                        symbol >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ap_loc = loc; ap_patt = Some (MLast.PaAny loc);
+                    ap_symb = s}
+               | [< _ =
+                      (fun strm ->
+                         if try
+                              ignore (psymbol__0001 (clone_stream strm)); true
+                            with Stream.Failure | Stream.Error _ -> false
+                         then
+                           ()
+                         else raise Stream.Failure);
+                    p =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[p = paren_pattern] expected after [(psymbol__0001)?] (in [psymbol])"
+                        paren_pattern;
+                    '"", "=";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol] expected after [(psymbol__0001)?; p = paren_pattern; '='] (in [psymbol])"
+                        symbol >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ap_loc = loc; ap_patt = Some p; ap_symb = s}
+               | [< '"LIDENT", p; '"", "=";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol] expected after [p = LIDENT; '='] (in [psymbol])"
+                        symbol >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ap_loc = loc;
+                    ap_patt = Some (MLast.PaLid (loc, Ploc.VaVal p));
+                    ap_symb = s}
+               | [< s = symbol >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ap_loc = loc; ap_patt = None; ap_symb = s})
+                __strm__
           | _ -> raise Stream.Failure
         and psymbol_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             if try ignore (psymbol__0001 (clone_stream strm)); true with
                  Stream.Failure | Stream.Error _ -> false
             then
@@ -1967,6 +1825,7 @@ module LLKGram =
           and q0017 lastf ofs = let lastf = Some (ofs, 3) in lastf
           and q0018 lastf ofs = let lastf = Some (ofs, 3) in lastf
           and q0019 lastf ofs =
+            let lastf = Some (ofs, (-2)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0025 lastf (ofs + 1)
             | Some ("", "->") -> q0022 lastf (ofs + 1)
@@ -2007,12 +1866,7 @@ module LLKGram =
         and psymbol__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and regexp __strm__ =
           match
@@ -2023,30 +1877,7 @@ module LLKGram =
         and regexp_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "#") -> q0008 lastf (ofs + 1)
-            | Some ("", "$") -> q0004 lastf (ofs + 1)
-            | Some ("", "(") -> q0007 lastf (ofs + 1)
-            | Some ("", "[") -> q0003 lastf (ofs + 1)
-            | Some ("", "_") -> q0001 lastf (ofs + 1)
-            | Some ("", "empty") -> q0001 lastf (ofs + 1)
-            | Some ("", "eps") -> q0001 lastf (ofs + 1)
-            | Some ("", "let") -> q0006 lastf (ofs + 1)
-            | Some ("", "~") -> q0002 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and regexp_entry __strm__ =
           match
@@ -2066,12 +1897,7 @@ module LLKGram =
         and regexp_entry_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and regexps __strm__ =
           match
@@ -2091,12 +1917,7 @@ module LLKGram =
         and regexps_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", "REGEXPS") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and regexps__0001 __strm__ =
           match
@@ -2115,12 +1936,7 @@ module LLKGram =
         and regexps__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("LIDENT", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and regexps__0002 __strm__ =
           match
@@ -2136,18 +1952,21 @@ module LLKGram =
                    x__0031 :: y__0023)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0031 = regexp_entry;
+                    y__0023 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0023 = regexps__0002] expected after [PRIORITY 1; x__0031 = regexp_entry] (in [regexps])"
+                        regexps__0002 >] ->
+                   x__0031 :: y__0023
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and regexps__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "END") -> q0001 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and rule __strm__ =
           match rule_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -2170,11 +1989,28 @@ module LLKGram =
                         (rule__0001 psl) >] ->
                    a)
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "->";
+                    act =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[act = expr] expected after ['->'] (in [rule])"
+                        (Grammar.Entry.parse_token_stream expr) >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ar_loc = loc; ar_psymbols = []; ar_action = Some act}
+               | [< psl = rule__0002;
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x__0003 = rule__0001[<expr>]] expected after [psl = rule__0002] (in [rule])"
+                        (rule__0001 psl) >] ->
+                   a)
+                __strm__
           | _ -> raise Stream.Failure
         and rule_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             if try ignore (psymbol__0001 (clone_stream strm)); true with
                  Stream.Failure | Stream.Error _ -> false
             then
@@ -2258,11 +2094,25 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {ar_loc = loc; ar_psymbols = psl; ar_action = None})
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "->";
+                    act =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[act = expr] expected after [psl = GREEDY LIST1 psymbol SEP ';'; '->'] (in [rule])"
+                        (Grammar.Entry.parse_token_stream expr) >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ar_loc = loc; ar_psymbols = psl; ar_action = Some act}
+               | [< >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {ar_loc = loc; ar_psymbols = psl; ar_action = None})
+                __strm__
           | _ -> raise Stream.Failure
         and rule__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "->") -> q0003 lastf (ofs + 1)
             | Some ("", "]") -> q0002 lastf (ofs + 1)
@@ -2291,68 +2141,7 @@ module LLKGram =
         and rule__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            if try ignore (psymbol__0001 (clone_stream strm)); true with
-                 Stream.Failure | Stream.Error _ -> false
-            then
-              q0005 lastf ofs
-            else
-              match must_peek_nth (ofs + 1) strm with
-                Some ("", "(") -> q0004 lastf (ofs + 1)
-              | Some ("", "[") -> q0006 lastf (ofs + 1)
-              | Some ("", "_") -> q0016 lastf (ofs + 1)
-              | Some ("UIDENT", "ANTI") ->
-                  let lastf = Some (ofs, 8) in q0017 lastf (ofs + 1)
-              | Some ("UIDENT", "FLAG") ->
-                  let lastf = Some (ofs, 8) in q0001 lastf (ofs + 1)
-              | Some ("UIDENT", "GREEDY") ->
-                  let lastf = Some (ofs, 8) in q0012 lastf (ofs + 1)
-              | Some ("UIDENT", "LEFT_ASSOC") ->
-                  let lastf = Some (ofs, 8) in q0009 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST0") ->
-                  let lastf = Some (ofs, 8) in q0019 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST1") ->
-                  let lastf = Some (ofs, 8) in q0011 lastf (ofs + 1)
-              | Some ("UIDENT", "NEXT") ->
-                  let lastf = Some (ofs, 8) in q0014 lastf (ofs + 1)
-              | Some ("UIDENT", "NONGREEDY") ->
-                  let lastf = Some (ofs, 8) in q0012 lastf (ofs + 1)
-              | Some ("UIDENT", "OPT") ->
-                  let lastf = Some (ofs, 8) in q0001 lastf (ofs + 1)
-              | Some ("UIDENT", "OPTV") ->
-                  let lastf = Some (ofs, 8) in q0010 lastf (ofs + 1)
-              | Some ("UIDENT", "PREDICT") ->
-                  let lastf = Some (ofs, 8) in q0003 lastf (ofs + 1)
-              | Some ("UIDENT", "PRIORITY") ->
-                  let lastf = Some (ofs, 8) in q0007 lastf (ofs + 1)
-              | Some ("UIDENT", "SELF") ->
-                  let lastf = Some (ofs, 8) in q0018 lastf (ofs + 1)
-              | Some ("UIDENT", "V") ->
-                  let lastf = Some (ofs, 8) in q0015 lastf (ofs + 1)
-              | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-              | Some ("STRING", _) -> q0013 lastf (ofs + 1)
-              | Some ("UIDENT", _) -> q0008 lastf (ofs + 1)
-              | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0013 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0014 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0015 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0016 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0017 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0018 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0019 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and rule__0003 __strm__ =
           match
@@ -2368,24 +2157,21 @@ module LLKGram =
                    x__0033 :: y__0025)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0033 = rule__0004;
+                    y__0025 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0025 = rule__0003] expected after [PRIORITY 1; x__0033 = rule__0004] (in [rule])"
+                        rule__0003 >] ->
+                   x__0033 :: y__0025
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and rule__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "->") -> q0005 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0004 lastf (ofs + 1)
-            | Some ("", "|") -> q0002 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and rule__0004 __strm__ =
           match
@@ -2404,12 +2190,7 @@ module LLKGram =
         and rule__0004_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ";") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and rule_list __strm__ =
           match
@@ -2428,12 +2209,7 @@ module LLKGram =
         and rule_list_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and rule_list__0001 __strm__ =
           match
@@ -2451,11 +2227,21 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    {au_loc = loc; au_rules = rules})
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "]" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {au_loc = loc; au_rules = []}
+               | [< rules = rule_list__0002; '"", "]" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   {au_loc = loc; au_rules = rules})
+                __strm__
           | _ -> raise Stream.Failure
         and rule_list__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             if try ignore (psymbol__0001 (clone_stream strm)); true with
                  Stream.Failure | Stream.Error _ -> false
             then
@@ -2538,70 +2324,7 @@ module LLKGram =
         and rule_list__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            if try ignore (psymbol__0001 (clone_stream strm)); true with
-                 Stream.Failure | Stream.Error _ -> false
-            then
-              q0005 lastf ofs
-            else
-              match must_peek_nth (ofs + 1) strm with
-                Some ("", "(") -> q0004 lastf (ofs + 1)
-              | Some ("", "->") -> q0017 lastf (ofs + 1)
-              | Some ("", "[") -> q0015 lastf (ofs + 1)
-              | Some ("", "_") -> q0016 lastf (ofs + 1)
-              | Some ("UIDENT", "ANTI") ->
-                  let lastf = Some (ofs, 13) in q0018 lastf (ofs + 1)
-              | Some ("UIDENT", "FLAG") ->
-                  let lastf = Some (ofs, 13) in q0001 lastf (ofs + 1)
-              | Some ("UIDENT", "GREEDY") ->
-                  let lastf = Some (ofs, 13) in q0009 lastf (ofs + 1)
-              | Some ("UIDENT", "LEFT_ASSOC") ->
-                  let lastf = Some (ofs, 13) in q0012 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST0") ->
-                  let lastf = Some (ofs, 13) in q0020 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST1") ->
-                  let lastf = Some (ofs, 13) in q0010 lastf (ofs + 1)
-              | Some ("UIDENT", "NEXT") ->
-                  let lastf = Some (ofs, 13) in q0007 lastf (ofs + 1)
-              | Some ("UIDENT", "NONGREEDY") ->
-                  let lastf = Some (ofs, 13) in q0009 lastf (ofs + 1)
-              | Some ("UIDENT", "OPT") ->
-                  let lastf = Some (ofs, 13) in q0001 lastf (ofs + 1)
-              | Some ("UIDENT", "OPTV") ->
-                  let lastf = Some (ofs, 13) in q0011 lastf (ofs + 1)
-              | Some ("UIDENT", "PREDICT") ->
-                  let lastf = Some (ofs, 13) in q0003 lastf (ofs + 1)
-              | Some ("UIDENT", "PRIORITY") ->
-                  let lastf = Some (ofs, 13) in q0014 lastf (ofs + 1)
-              | Some ("UIDENT", "SELF") ->
-                  let lastf = Some (ofs, 13) in q0019 lastf (ofs + 1)
-              | Some ("UIDENT", "V") ->
-                  let lastf = Some (ofs, 13) in q0006 lastf (ofs + 1)
-              | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-              | Some ("STRING", _) -> q0008 lastf (ofs + 1)
-              | Some ("UIDENT", _) -> q0013 lastf (ofs + 1)
-              | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0013 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0014 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0015 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0016 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0017 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0018 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0019 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0020 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and rule_list__0003 __strm__ =
           match
@@ -2617,18 +2340,21 @@ module LLKGram =
                    x__0035 :: y__0027)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0035 = rule_list__0004;
+                    y__0027 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0027 = rule_list__0003] expected after [PRIORITY 1; x__0035 = rule_list__0004] (in [rule_list])"
+                        rule_list__0003 >] ->
+                   x__0035 :: y__0027
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and rule_list__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "]") -> q0001 lastf (ofs + 1)
-            | Some ("", "|") -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and rule_list__0004 __strm__ =
           match
@@ -2647,12 +2373,7 @@ module LLKGram =
         and rule_list__0004_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "|") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and sep_opt_sep __strm__ =
           match
@@ -2675,12 +2396,7 @@ module LLKGram =
         and sep_opt_sep_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", "SEP") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and sep_opt_sep__0001 __strm__ =
           match
@@ -2691,12 +2407,7 @@ module LLKGram =
         and sep_opt_sep__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", "OPT_SEP") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and sep_opt_sep__0002 __strm__ =
           match
@@ -2705,28 +2416,42 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< _ = sep_opt_sep__0001 >] -> true) __strm__
           | Some (_, 1) -> (parser [< >] -> false) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< _ = sep_opt_sep__0001 >] -> true
+               | [< >] -> false)
+                __strm__
           | _ -> raise Stream.Failure
         and sep_opt_sep__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
+          q0000 None 0
+        and signed_int __strm__ =
+          match
+            signed_int_regexp __strm__[@llk.regexp "<text not available>"]
+          with
+            Some (_, 0) ->
+              (parser [< '"", "-"; '"INT", n >] -> -int_of_string n) __strm__
+          | Some (_, 1) ->
+              (parser [< '"INT", n >] -> int_of_string n) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "-"; '"INT", n >] -> -int_of_string n
+               | [< '"INT", n >] -> int_of_string n)
+                __strm__
+          | _ -> raise Stream.Failure
+        and signed_int_regexp strm =
+          let open Llk_regexps in
+          let open Token in
           let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0004 lastf (ofs + 1)
-            | Some ("", "|") -> q0007 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0005 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0006 lastf (ofs + 1)
+              Some ("", "-") -> q0002 lastf (ofs + 1)
+            | Some ("INT", _) -> q0001 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol __strm__ =
           match
@@ -2737,60 +2462,7 @@ module LLKGram =
         and symbol_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0004 lastf (ofs + 1)
-            | Some ("", "[") -> q0005 lastf (ofs + 1)
-            | Some ("UIDENT", "ANTI") ->
-                let lastf = Some (ofs, 7) in q0015 lastf (ofs + 1)
-            | Some ("UIDENT", "FLAG") ->
-                let lastf = Some (ofs, 7) in q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "GREEDY") ->
-                let lastf = Some (ofs, 7) in q0011 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFT_ASSOC") ->
-                let lastf = Some (ofs, 7) in q0008 lastf (ofs + 1)
-            | Some ("UIDENT", "LIST0") ->
-                let lastf = Some (ofs, 7) in q0017 lastf (ofs + 1)
-            | Some ("UIDENT", "LIST1") ->
-                let lastf = Some (ofs, 7) in q0010 lastf (ofs + 1)
-            | Some ("UIDENT", "NEXT") ->
-                let lastf = Some (ofs, 7) in q0013 lastf (ofs + 1)
-            | Some ("UIDENT", "NONGREEDY") ->
-                let lastf = Some (ofs, 7) in q0011 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT") ->
-                let lastf = Some (ofs, 7) in q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "OPTV") ->
-                let lastf = Some (ofs, 7) in q0009 lastf (ofs + 1)
-            | Some ("UIDENT", "PREDICT") ->
-                let lastf = Some (ofs, 7) in q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "PRIORITY") ->
-                let lastf = Some (ofs, 7) in q0006 lastf (ofs + 1)
-            | Some ("UIDENT", "SELF") ->
-                let lastf = Some (ofs, 7) in q0016 lastf (ofs + 1)
-            | Some ("UIDENT", "V") ->
-                let lastf = Some (ofs, 7) in q0014 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0012 lastf (ofs + 1)
-            | Some ("UIDENT", _) -> q0007 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0013 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0014 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0015 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0016 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0017 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0002 __strm__ =
           match
@@ -2806,11 +2478,22 @@ module LLKGram =
                    a)
                 __strm__
           | Some (_, 1) -> (parser [< a = symbol__0003 >] -> a) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< g = symbol__0006;
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x__0005 = symbol__0007[<expr>]] expected after [g = symbol__0006] (in [symbol])"
+                        (symbol__0007 g) >] ->
+                   a
+               | [< a = symbol__0003 >] -> a)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0003 lastf (ofs + 1)
             | Some ("", "[") -> q0004 lastf (ofs + 1)
@@ -2883,11 +2566,27 @@ module LLKGram =
                    ASvala (loc, s, al))
                 __strm__
           | Some (_, 1) -> (parser [< a = symbol__0004 >] -> a) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"UIDENT", "V";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [UIDENT 'V'] (in [symbol])"
+                        symbol__0003;
+                    al =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[al = symbol__0014] expected after [UIDENT 'V'; s = symbol__0003] (in [symbol])"
+                        symbol__0014 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASvala (loc, s, al)
+               | [< a = symbol__0004 >] -> a)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0003_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0003 lastf (ofs + 1)
             | Some ("", "[") -> q0009 lastf (ofs + 1)
@@ -2976,9 +2675,13 @@ module LLKGram =
                 __strm__
           | Some (_, 5) ->
               (parser bp
-                 [< '"UIDENT", "PRIORITY"; '"INT", n >] ep ->
+                 [< '"UIDENT", "PRIORITY";
+                    n =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[n = signed_int] expected after [UIDENT 'PRIORITY'] (in [symbol])"
+                        signed_int >] ep ->
                    let loc = Grammar.loc_of_token_interval bp ep in
-                   ASpriority (loc, int_of_string n))
+                   ASpriority (loc, n))
                 __strm__
           | Some (_, 6) ->
               (parser bp
@@ -3019,11 +2722,85 @@ module LLKGram =
                         (symbol__0013 x) >] ->
                    a)
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "(";
+                    s_t =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s_t = symbol__0002] expected after ['('] (in [symbol])"
+                        symbol__0002;
+                    '"", ")";
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x__0006 = symbol__0008[<expr>]] expected after ['('; s_t = symbol__0002; ')'] (in [symbol])"
+                        (symbol__0008 s_t) >] ->
+                   a
+               | [< '"", "[";
+                    rl =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[rl = symbol__0015] expected after ['['] (in [symbol])"
+                        symbol__0015;
+                    '"", "]" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASrules (loc, {au_loc = loc; au_rules = rl})
+               | [< '"UIDENT", "ANTI";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = symbol__0016] expected after [UIDENT 'ANTI'] (in [symbol])"
+                        symbol__0016 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASanti (loc, l)
+               | [< '"UIDENT", "NEXT";
+                    args =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[args = symbol__0009] expected after [UIDENT 'NEXT'] (in [symbol])"
+                        symbol__0009 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASnext (loc, args)
+               | [< '"UIDENT", "PREDICT"; '"LIDENT", id >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASregexp (loc, Name.mk id)
+               | [< '"UIDENT", "PRIORITY";
+                    n =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[n = signed_int] expected after [UIDENT 'PRIORITY'] (in [symbol])"
+                        signed_int >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASpriority (loc, n)
+               | [< '"UIDENT", "SELF";
+                    args =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[args = symbol__0010] expected after [UIDENT 'SELF'] (in [symbol])"
+                        symbol__0010 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASself (loc, args)
+               | [< '"STRING", e >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASkeyw (loc, e)
+               | [< '"LIDENT", id;
+                    args =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[args = symbol__0011] expected after [id = LIDENT] (in [symbol])"
+                        symbol__0011;
+                    lev =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[lev = symbol__0026] expected after [id = LIDENT; args = symbol__0011] (in [symbol])"
+                        symbol__0026 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASnterm (loc, Name.mk id, args, lev)
+               | [< '"UIDENT", x;
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x__0007 = symbol__0013[<expr>]] expected after [x = UIDENT] (in [symbol])"
+                        (symbol__0013 x) >] ->
+                   a)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0004_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "(") -> q0006 lastf (ofs + 1)
             | Some ("", "[") -> q0005 lastf (ofs + 1)
@@ -3060,11 +2837,18 @@ module LLKGram =
           | Some (_, 1) ->
               (parser [< '"UIDENT", "NONGREEDY" >] -> false) __strm__
           | Some (_, 2) -> (parser [< >] -> true) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"UIDENT", "GREEDY" >] -> true
+               | [< '"UIDENT", "NONGREEDY" >] -> false
+               | [< >] -> true)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0006_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "FLAG") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") -> q0004 lastf (ofs + 1)
@@ -3170,11 +2954,80 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    ASoptv (loc, g, e, s))
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"UIDENT", "FLAG";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = symbol__0006; UIDENT 'FLAG'] (in [symbol])"
+                        symbol__0003 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASflag (loc, g, s)
+               | [< '"UIDENT", "LEFT_ASSOC";
+                    s1 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s1 = symbol__0003] expected after [g = symbol__0006; UIDENT 'LEFT_ASSOC'] (in [symbol])"
+                        symbol__0003;
+                    '"UIDENT", "ACCUMULATE";
+                    s2 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s2 = symbol__0003] expected after [g = symbol__0006; UIDENT 'LEFT_ASSOC'; s1 = symbol__0003; UIDENT 'ACCUMULATE'] (in [symbol])"
+                        symbol__0003;
+                    '"UIDENT", "WITH";
+                    e =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[e = expr_LEVEL_simple] expected after [g = symbol__0006; UIDENT 'LEFT_ASSOC'; s1 = symbol__0003; UIDENT 'ACCUMULATE'; s2 = symbol__0003; UIDENT 'WITH'] (in [symbol])"
+                        (Grammar.Entry.parse_token_stream
+                           expr_LEVEL_simple) >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASleft_assoc (loc, g, s1, s2, e)
+               | [< '"UIDENT", "LIST0";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = symbol__0006; UIDENT 'LIST0'] (in [symbol])"
+                        symbol__0003;
+                    sep =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[sep = symbol__0028] expected after [g = symbol__0006; UIDENT 'LIST0'; s = symbol__0003] (in [symbol])"
+                        symbol__0028 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASlist (loc, g, LML_0, s, sep)
+               | [< '"UIDENT", "LIST1";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = symbol__0006; UIDENT 'LIST1'] (in [symbol])"
+                        symbol__0003;
+                    sep =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[sep = symbol__0029] expected after [g = symbol__0006; UIDENT 'LIST1'; s = symbol__0003] (in [symbol])"
+                        symbol__0029 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASlist (loc, g, LML_1, s, sep)
+               | [< '"UIDENT", "OPT";
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = symbol__0006; UIDENT 'OPT'] (in [symbol])"
+                        symbol__0003 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASopt (loc, g, s)
+               | [< '"UIDENT", "OPTV";
+                    e =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[e = expr] expected after [g = symbol__0006; UIDENT 'OPTV'] (in [symbol])"
+                        (Grammar.Entry.parse_token_stream expr);
+                    s =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[s = symbol__0003] expected after [g = symbol__0006; UIDENT 'OPTV'; e = expr] (in [symbol])"
+                        symbol__0003 >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASoptv (loc, g, e, s))
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0007_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("UIDENT", "FLAG") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "LEFT_ASSOC") -> q0003 lastf (ofs + 1)
@@ -3201,11 +3054,19 @@ module LLKGram =
                    ASsyntactic (loc, s_t))
                 __strm__
           | Some (_, 1) -> (parser [< >] -> s_t) __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "?" >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   ASsyntactic (loc, s_t)
+               | [< >] -> s_t)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0008_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0005 lastf (ofs + 1)
             | Some ("", "->") -> q0011 lastf (ofs + 1)
@@ -3248,11 +3109,23 @@ module LLKGram =
                    l)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "[";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = symbol__0020] expected after [UIDENT 'NEXT'; '['] (in [symbol])"
+                        symbol__0020;
+                    '"", "]" >] ->
+                   l
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0009_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0005 lastf (ofs + 1)
             | Some ("", "->") -> q0011 lastf (ofs + 1)
@@ -3295,11 +3168,23 @@ module LLKGram =
                    l)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "[";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = symbol__0022] expected after [UIDENT 'SELF'; '['] (in [symbol])"
+                        symbol__0022;
+                    '"", "]" >] ->
+                   l
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0010_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0005 lastf (ofs + 1)
             | Some ("", "->") -> q0011 lastf (ofs + 1)
@@ -3342,11 +3227,23 @@ module LLKGram =
                    l)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "[";
+                    l =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[l = symbol__0024] expected after [id = LIDENT; '['] (in [symbol])"
+                        symbol__0024;
+                    '"", "]" >] ->
+                   l
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0011_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0009 lastf (ofs + 1)
             | Some ("", "->") -> q0004 lastf (ofs + 1)
@@ -3386,12 +3283,7 @@ module LLKGram =
         and symbol__0012_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("UIDENT", "LEVEL") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0013 x __strm__ =
           match
@@ -3409,11 +3301,21 @@ module LLKGram =
                    let loc = Grammar.loc_of_token_interval bp ep in
                    AStok (loc, x, None))
                 __strm__
+          | Some (_, (-1)) ->
+              (parser bp
+                 [< '"", "/"; '"STRING", e >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   AStok (loc, x, Some (Scanf.unescaped e))
+               | [< >] ep ->
+                   let loc = Grammar.loc_of_token_interval bp ep in
+                   AStok (loc, x, None))
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0013_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0005 lastf (ofs + 1)
             | Some ("", "->") -> q0011 lastf (ofs + 1)
@@ -3455,36 +3357,21 @@ module LLKGram =
                    x__0036 :: y__0028)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"STRING", x__0036;
+                    y__0028 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0028 = symbol__0014] expected after [PRIORITY 1; x__0036 = STRING] (in [symbol])"
+                        symbol__0014 >] ->
+                   x__0036 :: y__0028
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0014_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0005 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", ";") -> q0009 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0008 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0007 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0015 __strm__ =
           match
@@ -3492,76 +3379,16 @@ module LLKGram =
           with
             Some (_, 0) -> (parser [< a = symbol__0018 >] -> a) __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = symbol__0018 >] -> a
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0015_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            if try ignore (psymbol__0001 (clone_stream strm)); true with
-                 Stream.Failure | Stream.Error _ -> false
-            then
-              q0017 lastf ofs
-            else
-              match must_peek_nth (ofs + 1) strm with
-                Some ("", "(") -> q0018 lastf (ofs + 1)
-              | Some ("", "->") -> q0006 lastf (ofs + 1)
-              | Some ("", "[") -> q0008 lastf (ofs + 1)
-              | Some ("", "]") -> q0001 lastf (ofs + 1)
-              | Some ("", "_") -> q0007 lastf (ofs + 1)
-              | Some ("UIDENT", "ANTI") ->
-                  let lastf = Some (ofs, 10) in q0005 lastf (ofs + 1)
-              | Some ("UIDENT", "FLAG") ->
-                  let lastf = Some (ofs, 10) in q0021 lastf (ofs + 1)
-              | Some ("UIDENT", "GREEDY") ->
-                  let lastf = Some (ofs, 10) in q0003 lastf (ofs + 1)
-              | Some ("UIDENT", "LEFT_ASSOC") ->
-                  let lastf = Some (ofs, 10) in q0011 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST0") ->
-                  let lastf = Some (ofs, 10) in q0002 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST1") ->
-                  let lastf = Some (ofs, 10) in q0013 lastf (ofs + 1)
-              | Some ("UIDENT", "NEXT") ->
-                  let lastf = Some (ofs, 10) in q0015 lastf (ofs + 1)
-              | Some ("UIDENT", "NONGREEDY") ->
-                  let lastf = Some (ofs, 10) in q0003 lastf (ofs + 1)
-              | Some ("UIDENT", "OPT") ->
-                  let lastf = Some (ofs, 10) in q0021 lastf (ofs + 1)
-              | Some ("UIDENT", "OPTV") ->
-                  let lastf = Some (ofs, 10) in q0012 lastf (ofs + 1)
-              | Some ("UIDENT", "PREDICT") ->
-                  let lastf = Some (ofs, 10) in q0019 lastf (ofs + 1)
-              | Some ("UIDENT", "PRIORITY") ->
-                  let lastf = Some (ofs, 10) in q0009 lastf (ofs + 1)
-              | Some ("UIDENT", "SELF") ->
-                  let lastf = Some (ofs, 10) in q0004 lastf (ofs + 1)
-              | Some ("UIDENT", "V") ->
-                  let lastf = Some (ofs, 10) in q0016 lastf (ofs + 1)
-              | Some ("LIDENT", _) -> q0020 lastf (ofs + 1)
-              | Some ("STRING", _) -> q0014 lastf (ofs + 1)
-              | Some ("UIDENT", _) -> q0010 lastf (ofs + 1)
-              | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0013 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0014 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0015 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0016 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0017 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0018 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0019 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0020 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0021 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0016 __strm__ =
           match
@@ -3580,12 +3407,7 @@ module LLKGram =
         and symbol__0016_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("STRING", _) -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0017 __strm__ =
           match
@@ -3601,36 +3423,21 @@ module LLKGram =
                    x__0038 :: y__0031)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"STRING", x__0038;
+                    y__0031 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0031 = symbol__0017] expected after [PRIORITY 1; x__0038 = STRING] (in [symbol])"
+                        symbol__0017 >] ->
+                   x__0038 :: y__0031
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0017_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0005 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", ";") -> q0009 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0008 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0007 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0018 __strm__ =
           match
@@ -3649,70 +3456,7 @@ module LLKGram =
         and symbol__0018_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            if try ignore (psymbol__0001 (clone_stream strm)); true with
-                 Stream.Failure | Stream.Error _ -> false
-            then
-              q0005 lastf ofs
-            else
-              match must_peek_nth (ofs + 1) strm with
-                Some ("", "(") -> q0004 lastf (ofs + 1)
-              | Some ("", "->") -> q0017 lastf (ofs + 1)
-              | Some ("", "[") -> q0015 lastf (ofs + 1)
-              | Some ("", "_") -> q0016 lastf (ofs + 1)
-              | Some ("UIDENT", "ANTI") ->
-                  let lastf = Some (ofs, 13) in q0018 lastf (ofs + 1)
-              | Some ("UIDENT", "FLAG") ->
-                  let lastf = Some (ofs, 13) in q0001 lastf (ofs + 1)
-              | Some ("UIDENT", "GREEDY") ->
-                  let lastf = Some (ofs, 13) in q0009 lastf (ofs + 1)
-              | Some ("UIDENT", "LEFT_ASSOC") ->
-                  let lastf = Some (ofs, 13) in q0012 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST0") ->
-                  let lastf = Some (ofs, 13) in q0020 lastf (ofs + 1)
-              | Some ("UIDENT", "LIST1") ->
-                  let lastf = Some (ofs, 13) in q0010 lastf (ofs + 1)
-              | Some ("UIDENT", "NEXT") ->
-                  let lastf = Some (ofs, 13) in q0007 lastf (ofs + 1)
-              | Some ("UIDENT", "NONGREEDY") ->
-                  let lastf = Some (ofs, 13) in q0009 lastf (ofs + 1)
-              | Some ("UIDENT", "OPT") ->
-                  let lastf = Some (ofs, 13) in q0001 lastf (ofs + 1)
-              | Some ("UIDENT", "OPTV") ->
-                  let lastf = Some (ofs, 13) in q0011 lastf (ofs + 1)
-              | Some ("UIDENT", "PREDICT") ->
-                  let lastf = Some (ofs, 13) in q0003 lastf (ofs + 1)
-              | Some ("UIDENT", "PRIORITY") ->
-                  let lastf = Some (ofs, 13) in q0014 lastf (ofs + 1)
-              | Some ("UIDENT", "SELF") ->
-                  let lastf = Some (ofs, 13) in q0019 lastf (ofs + 1)
-              | Some ("UIDENT", "V") ->
-                  let lastf = Some (ofs, 13) in q0006 lastf (ofs + 1)
-              | Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
-              | Some ("STRING", _) -> q0008 lastf (ofs + 1)
-              | Some ("UIDENT", _) -> q0013 lastf (ofs + 1)
-              | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0013 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0014 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0015 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0016 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0017 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0018 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0019 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0020 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0019 __strm__ =
           match
@@ -3728,18 +3472,21 @@ module LLKGram =
                    x__0040 :: y__0033)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0040 = symbol__0027;
+                    y__0033 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0033 = symbol__0019] expected after [PRIORITY 1; x__0040 = symbol__0027] (in [symbol])"
+                        symbol__0019 >] ->
+                   x__0040 :: y__0033
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0019_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "]") -> q0001 lastf (ofs + 1)
-            | Some ("", "|") -> q0002 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0020 __strm__ =
           match
@@ -3758,22 +3505,7 @@ module LLKGram =
         and symbol__0020_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("", "{") -> q0003 lastf (ofs + 1)
-            | Some ("INT", _) -> q0002 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0004 lastf (ofs + 1)
-            | Some ("QUOTATION", _) -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0021 __strm__ =
           match
@@ -3789,18 +3521,21 @@ module LLKGram =
                    x__0042 :: y__0035)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0042 = symbol__0030;
+                    y__0035 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0035 = symbol__0021] expected after [PRIORITY 1; x__0042 = symbol__0030] (in [symbol])"
+                        symbol__0021 >] ->
+                   x__0042 :: y__0035
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0021_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0002 lastf (ofs + 1)
-            | Some ("", "]") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0022 __strm__ =
           match
@@ -3819,22 +3554,7 @@ module LLKGram =
         and symbol__0022_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("", "{") -> q0003 lastf (ofs + 1)
-            | Some ("INT", _) -> q0002 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0004 lastf (ofs + 1)
-            | Some ("QUOTATION", _) -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0023 __strm__ =
           match
@@ -3850,18 +3570,21 @@ module LLKGram =
                    x__0044 :: y__0037)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0044 = symbol__0031;
+                    y__0037 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0037 = symbol__0023] expected after [PRIORITY 1; x__0044 = symbol__0031] (in [symbol])"
+                        symbol__0023 >] ->
+                   x__0044 :: y__0037
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0023_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0002 lastf (ofs + 1)
-            | Some ("", "]") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0024 __strm__ =
           match
@@ -3880,22 +3603,7 @@ module LLKGram =
         and symbol__0024_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "(") -> q0006 lastf (ofs + 1)
-            | Some ("", "[") -> q0001 lastf (ofs + 1)
-            | Some ("", "{") -> q0003 lastf (ofs + 1)
-            | Some ("INT", _) -> q0002 lastf (ofs + 1)
-            | Some ("LIDENT", _) -> q0004 lastf (ofs + 1)
-            | Some ("QUOTATION", _) -> q0005 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0025 __strm__ =
           match
@@ -3911,18 +3619,21 @@ module LLKGram =
                    x__0046 :: y__0039)
                 __strm__
           | Some (_, 1) -> (parser [< >] -> []) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< x__0046 = symbol__0032;
+                    y__0039 =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[y__0039 = symbol__0025] expected after [PRIORITY 1; x__0046 = symbol__0032] (in [symbol])"
+                        symbol__0025 >] ->
+                   x__0046 :: y__0039
+               | [< >] -> [])
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0025_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0002 lastf (ofs + 1)
-            | Some ("", "]") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0026 __strm__ =
           match
@@ -3931,38 +3642,16 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< x__0054 = symbol__0012 >] -> Some x__0054) __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = symbol__0012 >] -> Some a
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0026_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0005 lastf (ofs + 1)
-            | Some ("", "->") -> q0011 lastf (ofs + 1)
-            | Some ("", ";") -> q0010 lastf (ofs + 1)
-            | Some ("", "]") -> q0012 lastf (ofs + 1)
-            | Some ("", "|") -> q0009 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
-            | Some ("UIDENT", "LEVEL") -> q0007 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0027 __strm__ =
           match
@@ -3981,12 +3670,7 @@ module LLKGram =
         and symbol__0027_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", "|") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0028 __strm__ =
           match
@@ -3995,30 +3679,16 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< x__0057 = sep_opt_sep >] -> Some x__0057) __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = sep_opt_sep >] -> Some a
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0028_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0004 lastf (ofs + 1)
-            | Some ("", "|") -> q0008 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0006 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0005 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0007 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0029 __strm__ =
           match
@@ -4027,30 +3697,16 @@ module LLKGram =
             Some (_, 0) ->
               (parser [< x__0058 = sep_opt_sep >] -> Some x__0058) __strm__
           | Some (_, 1) -> (parser [< >] -> None) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< a = sep_opt_sep >] -> Some a
+               | [< >] -> None)
+                __strm__
           | _ -> raise Stream.Failure
         and symbol__0029_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0001 lastf (ofs + 1)
-            | Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0004 lastf (ofs + 1)
-            | Some ("", "|") -> q0008 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0006 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0005 lastf (ofs + 1)
-            | Some ("EOI", _) -> q0007 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, (-1)) in lastf in
           q0000 None 0
         and symbol__0030 __strm__ =
           match
@@ -4069,12 +3725,7 @@ module LLKGram =
         and symbol__0030_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0031 __strm__ =
           match
@@ -4093,12 +3744,7 @@ module LLKGram =
         and symbol__0031_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and symbol__0032 __strm__ =
           match
@@ -4117,12 +3763,7 @@ module LLKGram =
         and symbol__0032_regexp strm =
           let open Llk_regexps in
           let open Token in
-          let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
-            match must_peek_nth (ofs + 1) strm with
-              Some ("", ",") -> q0001 lastf (ofs + 1)
-            | _ -> lastf
-          and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf in
+          let rec q0000 lastf ofs = let lastf = Some (ofs, 0) in lastf in
           q0000 None 0
         and token __strm__ =
           match token_regexp __strm__[@llk.regexp "<text not available>"] with
@@ -4148,11 +3789,29 @@ module LLKGram =
                         (token__0002 x) >] ->
                    a)
                 __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "#"; '"INT", x >] -> Output (int_of_string x)
+               | [< '"", "$";
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x__0008 = token__0001] expected after ['$'] (in [token])"
+                        token__0001 >] ->
+                   a
+               | [< '"STRING", x >] -> Special x
+               | [< '"UIDENT", x;
+                    a =
+                      Pa_llk_runtime.Llk_runtime.must_parse
+                        ~msg:"[x__0009 = token__0002[<expr>]] expected after [x = UIDENT] (in [token])"
+                        (token__0002 x) >] ->
+                   a)
+                __strm__
           | _ -> raise Stream.Failure
         and token_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0003 lastf (ofs + 1)
             | Some ("", "$") -> q0002 lastf (ofs + 1)
@@ -4171,11 +3830,17 @@ module LLKGram =
             Some (_, 0) -> (parser [< '"LIDENT", x >] -> Anti x) __strm__
           | Some (_, 1) ->
               (parser [< '"STRING", x >] -> Anti (Scanf.unescaped x)) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"LIDENT", x >] -> Anti x
+               | [< '"STRING", x >] -> Anti (Scanf.unescaped x))
+                __strm__
           | _ -> raise Stream.Failure
         and token__0001_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("LIDENT", _) -> q0002 lastf (ofs + 1)
             | Some ("STRING", _) -> q0001 lastf (ofs + 1)
@@ -4191,11 +3856,17 @@ module LLKGram =
               (parser [< '"", "/"; '"STRING", s >] -> Class (x, Some s))
                 __strm__
           | Some (_, 1) -> (parser [< >] -> Class (x, None)) __strm__
+          | Some (_, (-1)) ->
+              (parser
+                 [< '"", "/"; '"STRING", s >] -> Class (x, Some s)
+               | [< >] -> Class (x, None))
+                __strm__
           | _ -> raise Stream.Failure
         and token__0002_regexp strm =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
+            let lastf = Some (ofs, (-1)) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "#") -> q0003 lastf (ofs + 1)
             | Some ("", "$") -> q0015 lastf (ofs + 1)
@@ -4312,6 +3983,7 @@ module LLKGram =
       lexer.tok_using ("", "*");
       lexer.tok_using ("", "+");
       lexer.tok_using ("", ",");
+      lexer.tok_using ("", "-");
       lexer.tok_using ("", "->");
       lexer.tok_using ("", "/");
       lexer.tok_using ("", ":");

@@ -182,13 +182,14 @@ EXTEND
 
       | UIDENT "PREDICT" ; id = LIDENT ->
         ASregexp loc (Name.mk id)
-      | UIDENT "PRIORITY" ; n = INT ->
-        ASpriority loc (int_of_string n)
+      | UIDENT "PRIORITY" ; n = signed_int ->
+        ASpriority loc n
 
       | "("; s_t = SELF; ")" -> s_t
       | "("; s_t = SELF; ")" ; "?" -> ASsyntactic loc s_t
       ] ]
   ;
+  signed_int: [ [ n = INT -> int_of_string n | "-" ; n = INT -> -(int_of_string n) ] ] ;
   pattern:
     [ [ i = LIDENT -> <:patt< $lid:i$ >>
       | "_" -> <:patt< _ >>

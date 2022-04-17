@@ -3910,7 +3910,7 @@ value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
            let node = Raw.entry_branch atn e.ae_name i in
            let pri = match r.ar_psymbols with [
              [{ap_symb=ASpriority _ n} :: _] -> n
-           | _ -> -1
+           | _ -> 0
            ] in
            NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
   let dfa = S.mk_dfa nfacfgs in
