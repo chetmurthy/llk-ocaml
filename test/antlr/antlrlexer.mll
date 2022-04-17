@@ -34,7 +34,7 @@ let comment = (block_comment | line_comment)
 let special = (
   ";" | ":" | "(" | ")" |
   "+" | "*" | "?" | "|" |
-  "="
+  "=" | "=>"
 )
 let string_literal =
   "'" ([^ '\'' '\\'] | "\\" ("\\" | ['b' 'n' 'r']))* "'"

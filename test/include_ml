@@ -130,6 +130,8 @@ let pp_cg (cg : CG.t) = Fmt.(pf stdout "<cg>") ;;
 let pp_atn (cg : ATN.Raw.t) = Fmt.(pf stdout "<atn>") ;;
 #install_printer pp_atn ;;
 
+let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e ;;
+
 (* ================================================================ *)
 
 (*
@@ -191,10 +193,10 @@ open Llko2official_test ;;
 
 #load "regexp_test.cmo";;
 open Regexp_test ;;
- *)
+
 #load "error_rtest.cmo";;
 open Error_rtest ;;
-(*
+
 
 #load "longident_rtest.cmo";;
 open Longident_rtest ;;
@@ -262,13 +264,13 @@ let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e;;
 #trace Acme.F.acmePropertyBlock ;;
 #trace Acme.F.designRule ;;
 #trace Acme.F.acmeRepresentationDeclaration ;;
- *)
+
 
 #directory "cminus" ;;
 #load "cminuslexer.cmo";;
 #load "cminus.cmo";;
 open Cminus ;;
-(*
+
 
  *)
 (*

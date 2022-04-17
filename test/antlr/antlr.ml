@@ -38,6 +38,7 @@ type expression = [
   | EXplus of loc and expression
   | EXconc of loc and list expression
   | EXdisj of loc and list expression
+  | EXsynpred of loc and expression and expression
   ] [@@deriving (show,eq,ord) ;]
 ;
 
@@ -50,6 +51,7 @@ value loc_of_expression = fun [
   | EXplus loc _ -> loc
   | EXconc loc _ -> loc
   | EXdisj loc _ -> loc
+  | EXsynpred loc _ _ -> loc
   ]
 ;
 
@@ -76,6 +78,7 @@ type rule = [
 value rename_nt = fun [
   "type" -> "type_"
 | "function" -> "function_"
+| "initializer" -> "initializer_"
 | x -> x
 ]
 ;
@@ -115,6 +118,7 @@ GRAMMAR ANTLR:
         id = ID -> EXid loc (rename_nt id)
       | s = STRING -> EXkeyw loc s
       | "(" ; e = expression ; ")" -> e
+      | "(" ; e = expression ; ")" ; "=>" ;  e2=expression -> EXsynpred loc e e2
     ] ]
   ;
 
@@ -174,6 +178,16 @@ module Conv = struct
          let e = ASrules loc { au_loc = loc ; 
                                au_rules = rl } in
          if [] = eps_l then e else ASopt loc True e
+
+      | EXsynpred loc pred e ->
+         let psl = (expression_to_rule kwmap e).ar_psymbols in
+         let psl = [{ap_loc=loc; ap_patt=None; ap_symb=ASsyntactic loc (expression kwmap pred)} :: psl] in
+         ASrules loc
+           { au_loc = loc
+           ; au_rules = [{ ar_loc = loc ;
+                           ar_psymbols = psl ;
+                           ar_action = None }] }
+
       ]
 
   and expression_to_rule kwmap e : a_rule =

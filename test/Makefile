@@ -17,7 +17,7 @@ TESTS = simple_otest regexp_otest external_otest infer_otest self_otest bug_fifo
  llko2official_test
 
 ERROR_TESTS = parse_error_test
-SUBDIRS = calc abnf acme abb antlr alef
+SUBDIRS = calc abnf acme abb antlr cminus c alef
 
 RML = bug_fifo_rtest.ml  original_rtest.ml  revised_rtest.ml \
 	papr_test_matrix.ml \

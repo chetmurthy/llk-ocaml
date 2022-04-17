@@ -1,0 +1,6 @@
+antlrlexer.cmo :
+antlrlexer.cmx :
+antlr.cmo : \
+    antlrlexer.cmo
+antlr.cmx : \
+    antlrlexer.cmx
