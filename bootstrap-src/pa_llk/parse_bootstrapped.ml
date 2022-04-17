@@ -1472,13 +1472,13 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "GREEDY") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFTA") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "NONA") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "NONGREEDY") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "RIGHTA") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0003 lastf (ofs + 1)
+              Some ("", "[") -> q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
+            | Some ("UIDENT", "LEFTA") -> q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "NONA") -> q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "NONGREEDY") -> q0003 lastf (ofs + 1)
+            | Some ("UIDENT", "RIGHTA") -> q0002 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0004 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
@@ -1497,7 +1497,6 @@ module LLKGram =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
@@ -1524,7 +1523,6 @@ module LLKGram =
           let open Llk_regexps in
           let open Token in
           let rec q0000 lastf ofs =
-            let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
               Some ("", "[") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
@@ -1575,14 +1573,14 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0004 lastf (ofs + 1)
+              Some ("", "[") -> q0005 lastf (ofs + 1)
             | Some ("", "]") -> q0001 lastf (ofs + 1)
             | Some ("UIDENT", "GREEDY") -> q0002 lastf (ofs + 1)
             | Some ("UIDENT", "LEFTA") -> q0003 lastf (ofs + 1)
             | Some ("UIDENT", "NONA") -> q0003 lastf (ofs + 1)
             | Some ("UIDENT", "NONGREEDY") -> q0002 lastf (ofs + 1)
             | Some ("UIDENT", "RIGHTA") -> q0003 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0005 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0004 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
@@ -1610,13 +1608,13 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", "[") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "GREEDY") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "LEFTA") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "NONA") -> q0001 lastf (ofs + 1)
-            | Some ("UIDENT", "NONGREEDY") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "RIGHTA") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0003 lastf (ofs + 1)
+              Some ("", "[") -> q0001 lastf (ofs + 1)
+            | Some ("UIDENT", "GREEDY") -> q0003 lastf (ofs + 1)
+            | Some ("UIDENT", "LEFTA") -> q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "NONA") -> q0002 lastf (ofs + 1)
+            | Some ("UIDENT", "NONGREEDY") -> q0003 lastf (ofs + 1)
+            | Some ("UIDENT", "RIGHTA") -> q0002 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0004 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
@@ -1970,18 +1968,19 @@ module LLKGram =
           and q0018 lastf ofs = let lastf = Some (ofs, 3) in lastf
           and q0019 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0027 lastf (ofs + 1)
+              Some ("", ")") -> q0025 lastf (ofs + 1)
             | Some ("", "->") -> q0022 lastf (ofs + 1)
-            | Some ("", ";") -> q0029 lastf (ofs + 1)
+            | Some ("", ";") -> q0023 lastf (ofs + 1)
             | Some ("", "=") -> q0026 lastf (ofs + 1)
-            | Some ("", "[") -> q0028 lastf (ofs + 1)
-            | Some ("", "]") -> q0031 lastf (ofs + 1)
-            | Some ("", "|") -> q0024 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0025 lastf (ofs + 1)
+            | Some ("", "[") -> q0024 lastf (ofs + 1)
+            | Some ("", "]") -> q0032 lastf (ofs + 1)
+            | Some ("", "|") -> q0028 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0027 lastf (ofs + 1)
             | Some ("UIDENT", "LEVEL") -> q0021 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0030 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0023 lastf (ofs + 1)
+            | Some ("UIDENT", "OPT_SEP") -> q0031 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0029 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0020 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0030 lastf (ofs + 1)
             | Some ("STRING", _) -> q0013 lastf (ofs + 1)
             | _ -> lastf
           and q0020 lastf ofs = let lastf = Some (ofs, 3) in lastf
@@ -1995,7 +1994,8 @@ module LLKGram =
           and q0028 lastf ofs = let lastf = Some (ofs, 3) in lastf
           and q0029 lastf ofs = let lastf = Some (ofs, 3) in lastf
           and q0030 lastf ofs = let lastf = Some (ofs, 3) in lastf
-          and q0031 lastf ofs = let lastf = Some (ofs, 3) in lastf in
+          and q0031 lastf ofs = let lastf = Some (ofs, 3) in lastf
+          and q0032 lastf ofs = let lastf = Some (ofs, 3) in lastf in
           q0000 None 0
         and psymbol__0001 __strm__ =
           match
@@ -2264,13 +2264,15 @@ module LLKGram =
           let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", "]") -> q0003 lastf (ofs + 1)
-            | Some ("", "|") -> q0001 lastf (ofs + 1)
+              Some ("", "->") -> q0003 lastf (ofs + 1)
+            | Some ("", "]") -> q0002 lastf (ofs + 1)
+            | Some ("", "|") -> q0004 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0001 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0002 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
+          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and rule__0002 __strm__ =
           match
@@ -2373,15 +2375,17 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", "->") -> q0001 lastf (ofs + 1)
+              Some ("", "->") -> q0005 lastf (ofs + 1)
             | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0002 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
+            | Some ("", "]") -> q0004 lastf (ofs + 1)
+            | Some ("", "|") -> q0002 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0001 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and rule__0004 __strm__ =
           match
@@ -2710,17 +2714,19 @@ module LLKGram =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
             | Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", ";") -> q0005 lastf (ofs + 1)
+            | Some ("", ";") -> q0003 lastf (ofs + 1)
             | Some ("", "]") -> q0004 lastf (ofs + 1)
-            | Some ("", "|") -> q0006 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0003 lastf (ofs + 1)
+            | Some ("", "|") -> q0007 lastf (ofs + 1)
+            | Some ("UIDENT", "OPT_SEP") -> q0005 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0003 lastf ofs = let lastf = Some (ofs, 0) in lastf
+          and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol __strm__ =
           match
@@ -3201,29 +3207,31 @@ module LLKGram =
           let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0008 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "?") -> q0006 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0011 lastf (ofs + 1)
+            | Some ("", ";") -> q0010 lastf (ofs + 1)
+            | Some ("", "?") -> q0007 lastf (ofs + 1)
+            | Some ("", "]") -> q0012 lastf (ofs + 1)
+            | Some ("", "|") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0007 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0009 __strm__ =
           match
@@ -3246,29 +3254,31 @@ module LLKGram =
           let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0008 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "[") -> q0006 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0011 lastf (ofs + 1)
+            | Some ("", ";") -> q0010 lastf (ofs + 1)
+            | Some ("", "[") -> q0007 lastf (ofs + 1)
+            | Some ("", "]") -> q0012 lastf (ofs + 1)
+            | Some ("", "|") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0007 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0010 __strm__ =
           match
@@ -3291,29 +3301,31 @@ module LLKGram =
           let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0008 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "[") -> q0006 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0011 lastf (ofs + 1)
+            | Some ("", ";") -> q0010 lastf (ofs + 1)
+            | Some ("", "[") -> q0007 lastf (ofs + 1)
+            | Some ("", "]") -> q0012 lastf (ofs + 1)
+            | Some ("", "|") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0007 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0011 __strm__ =
           match
@@ -3336,18 +3348,19 @@ module LLKGram =
           let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0005 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
+              Some ("", ")") -> q0009 lastf (ofs + 1)
+            | Some ("", "->") -> q0004 lastf (ofs + 1)
             | Some ("", ";") -> q0003 lastf (ofs + 1)
             | Some ("", "[") -> q0007 lastf (ofs + 1)
-            | Some ("", "]") -> q0012 lastf (ofs + 1)
-            | Some ("", "|") -> q0009 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
+            | Some ("", "]") -> q0013 lastf (ofs + 1)
+            | Some ("", "|") -> q0005 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0006 lastf (ofs + 1)
             | Some ("UIDENT", "LEVEL") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0011 lastf (ofs + 1)
+            | Some ("UIDENT", "OPT_SEP") -> q0010 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0012 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0011 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0008 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
@@ -3360,7 +3373,8 @@ module LLKGram =
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0013 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0012 __strm__ =
           match
@@ -3401,29 +3415,31 @@ module LLKGram =
           let open Token in
           let rec q0000 lastf ofs =
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0008 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", "/") -> q0006 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0011 lastf (ofs + 1)
+            | Some ("", "/") -> q0007 lastf (ofs + 1)
+            | Some ("", ";") -> q0010 lastf (ofs + 1)
+            | Some ("", "]") -> q0012 lastf (ofs + 1)
+            | Some ("", "|") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0007 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0014 __strm__ =
           match
@@ -3446,15 +3462,16 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0007 lastf (ofs + 1)
-            | Some ("", "->") -> q0009 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0010 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0010 lastf (ofs + 1)
+            | Some ("", ";") -> q0009 lastf (ofs + 1)
+            | Some ("", "]") -> q0011 lastf (ofs + 1)
+            | Some ("", "|") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0007 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
             | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
@@ -3466,7 +3483,8 @@ module LLKGram =
           and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0015 __strm__ =
           match
@@ -3590,15 +3608,16 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0007 lastf (ofs + 1)
-            | Some ("", "->") -> q0009 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0010 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0010 lastf (ofs + 1)
+            | Some ("", ";") -> q0009 lastf (ofs + 1)
+            | Some ("", "]") -> q0011 lastf (ofs + 1)
+            | Some ("", "|") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0007 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
             | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
@@ -3610,7 +3629,8 @@ module LLKGram =
           and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0018 __strm__ =
           match
@@ -3918,29 +3938,31 @@ module LLKGram =
           let rec q0000 lastf ofs =
             let lastf = Some (ofs, 0) in
             match must_peek_nth (ofs + 1) strm with
-              Some ("", ")") -> q0008 lastf (ofs + 1)
-            | Some ("", "->") -> q0010 lastf (ofs + 1)
-            | Some ("", ";") -> q0003 lastf (ofs + 1)
-            | Some ("", "]") -> q0011 lastf (ofs + 1)
-            | Some ("", "|") -> q0004 lastf (ofs + 1)
-            | Some ("UIDENT", "ACCUMULATE") -> q0005 lastf (ofs + 1)
-            | Some ("UIDENT", "LEVEL") -> q0006 lastf (ofs + 1)
+              Some ("", ")") -> q0005 lastf (ofs + 1)
+            | Some ("", "->") -> q0011 lastf (ofs + 1)
+            | Some ("", ";") -> q0010 lastf (ofs + 1)
+            | Some ("", "]") -> q0012 lastf (ofs + 1)
+            | Some ("", "|") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "ACCUMULATE") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "LEVEL") -> q0007 lastf (ofs + 1)
             | Some ("UIDENT", "OPT_SEP") -> q0002 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0009 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
             | Some ("UIDENT", "WITH") -> q0001 lastf (ofs + 1)
-            | Some ("STRING", _) -> q0007 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0003 lastf (ofs + 1)
+            | Some ("STRING", _) -> q0006 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0006 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0007 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0009 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0010 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0011 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0012 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0027 __strm__ =
           match
@@ -3982,19 +4004,21 @@ module LLKGram =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
             | Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", ";") -> q0006 lastf (ofs + 1)
-            | Some ("", "]") -> q0005 lastf (ofs + 1)
-            | Some ("", "|") -> q0007 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
+            | Some ("", ";") -> q0003 lastf (ofs + 1)
+            | Some ("", "]") -> q0004 lastf (ofs + 1)
+            | Some ("", "|") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "OPT_SEP") -> q0006 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0005 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0007 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0029 __strm__ =
           match
@@ -4012,19 +4036,21 @@ module LLKGram =
             match must_peek_nth (ofs + 1) strm with
               Some ("", ")") -> q0001 lastf (ofs + 1)
             | Some ("", "->") -> q0002 lastf (ofs + 1)
-            | Some ("", ";") -> q0006 lastf (ofs + 1)
-            | Some ("", "]") -> q0005 lastf (ofs + 1)
-            | Some ("", "|") -> q0007 lastf (ofs + 1)
-            | Some ("UIDENT", "OPT_SEP") -> q0003 lastf (ofs + 1)
-            | Some ("UIDENT", "SEP") -> q0004 lastf (ofs + 1)
+            | Some ("", ";") -> q0003 lastf (ofs + 1)
+            | Some ("", "]") -> q0004 lastf (ofs + 1)
+            | Some ("", "|") -> q0008 lastf (ofs + 1)
+            | Some ("UIDENT", "OPT_SEP") -> q0006 lastf (ofs + 1)
+            | Some ("UIDENT", "SEP") -> q0005 lastf (ofs + 1)
+            | Some ("EOI", _) -> q0007 lastf (ofs + 1)
             | _ -> lastf
           and q0001 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0002 lastf ofs = let lastf = Some (ofs, 1) in lastf
           and q0003 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0004 lastf ofs = let lastf = Some (ofs, 0) in lastf
-          and q0005 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0004 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0005 lastf ofs = let lastf = Some (ofs, 0) in lastf
           and q0006 lastf ofs = let lastf = Some (ofs, 1) in lastf
-          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf in
+          and q0007 lastf ofs = let lastf = Some (ofs, 1) in lastf
+          and q0008 lastf ofs = let lastf = Some (ofs, 1) in lastf in
           q0000 None 0
         and symbol__0030 __strm__ =
           match
@@ -4217,6 +4243,29 @@ module LLKGram =
           try F.bootstrapped_top __strm__ with
             Stream.Failure ->
               raise (Stream.Error "illegal begin of bootstrapped_top")
+        and entry __strm__ =
+          try F.entry __strm__ with
+            Stream.Failure -> raise (Stream.Error "illegal begin of entry")
+        and level __strm__ =
+          try F.level __strm__ with
+            Stream.Failure -> raise (Stream.Error "illegal begin of level")
+        and level_list __strm__ =
+          try F.level_list __strm__ with
+            Stream.Failure ->
+              raise (Stream.Error "illegal begin of level_list")
+        and psymbol __strm__ =
+          try F.psymbol __strm__ with
+            Stream.Failure -> raise (Stream.Error "illegal begin of psymbol")
+        and rule __strm__ =
+          try F.rule __strm__ with
+            Stream.Failure -> raise (Stream.Error "illegal begin of rule")
+        and rule_list __strm__ =
+          try F.rule_list __strm__ with
+            Stream.Failure ->
+              raise (Stream.Error "illegal begin of rule_list")
+        and symbol __strm__ =
+          try F.symbol __strm__ with
+            Stream.Failure -> raise (Stream.Error "illegal begin of symbol")
       end
     open Plexing
     let _ =
@@ -4286,6 +4335,13 @@ module LLKGram =
       ()
     let bootstrapped_top =
       Grammar.Entry.of_parser gram "bootstrapped_top" F.bootstrapped_top
+    let entry = Grammar.Entry.of_parser gram "entry" F.entry
+    let level = Grammar.Entry.of_parser gram "level" F.level
+    let level_list = Grammar.Entry.of_parser gram "level_list" F.level_list
+    let psymbol = Grammar.Entry.of_parser gram "psymbol" F.psymbol
+    let rule = Grammar.Entry.of_parser gram "rule" F.rule
+    let rule_list = Grammar.Entry.of_parser gram "rule_list" F.rule_list
+    let symbol = Grammar.Entry.of_parser gram "symbol" F.symbol
   end
 
 let pa loc s =
