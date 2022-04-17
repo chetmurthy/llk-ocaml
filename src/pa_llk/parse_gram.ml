@@ -184,6 +184,7 @@ EXTEND
         ASpriority loc n
 
       | "("; s_t = SELF; ")" -> s_t
+      | "{"; e = expr; "}" ; "?" -> ASsemantic loc e
       | "("; s_t = SELF; ")" ; "?" -> ASsyntactic loc s_t
       ] ]
   ;

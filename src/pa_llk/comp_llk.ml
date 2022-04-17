@@ -328,7 +328,7 @@ module Label = struct
       EPS
     | TOKEN of Token.t
     | NTERM of Name.t
-    | SYNPRED of a_symbol
+    | PRED of a_symbol
     ] [@@deriving (show,eq,ord) ;]
   ;
 
@@ -336,7 +336,7 @@ module Label = struct
       EPS -> "eps"
     | TOKEN tok -> Token.print tok
     | NTERM n -> Name.print n
-    | SYNPRED s -> Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)
+    | PRED s -> Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)
   ] ;
   value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
@@ -442,12 +442,12 @@ end ;
 module Step = struct
 type t = [
     TOKEN_STEP of Token.t
-  | SYNPRED_STEP of a_symbol
+  | PRED_STEP of a_symbol
   ] [@@deriving (show,eq,ord) ;]
 ;
 value print = fun [
     TOKEN_STEP t -> Token.print t
-  | SYNPRED_STEP s -> Fmt.(str "(%s)?" (Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)))
+  | PRED_STEP s -> Fmt.(str "(%s)?" (Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)))
 ]
 ;
 value pp pps t = Fmt.(pf pps "%s" (print t)) ;
@@ -879,6 +879,7 @@ value rec check_symbol cg env = fun [
   | ASrules _ rs -> check_rules cg env rs
   | ASself _ _ -> ()
   | AStok _ _ _ -> ()
+  | ASsemantic _ _ -> ()
   | ASsyntactic _ s -> check_symbol cg env s
   | ASvala _ s _ -> check_symbol cg env s
   | ASanti _ _ -> ()
@@ -1774,6 +1775,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | ASself _ _ as s -> s
   | AStok _ _ _ as s -> s
   | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 left_psyms revpats s)
+  | ASsemantic _ _ as s -> s
   | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 left_psyms revpats s) sl
 ]
 ;
@@ -2791,80 +2793,6 @@ value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_ent
 
 end ;
 
-module S9SeparateSyntactic = struct
-  (** in each entry, separate entries with some rules that start
-      with syntactic predicates and some that do not, into two entries,
-      one with syntactic predicates, and the other without.
-   *)
-
-open FreeLids ;
-
-value is_syntactic_predicate_rule = fun [
-  {ar_psymbols=[{ap_symb=ASsyntactic _ _} :: _]} -> True
- | _ -> False
-]
-;
-
-value split_rules e =
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rl in
-  (sp_rl, nonsp_rl)
-;
-
-value is_syntactic_predicate_entry e =
-  let (sp_rl, nonsp_rl) = split_rules e in
-  sp_rl <> []
-;
-
-value is_separated_syntactic_predicate_entry e =
-  let (sp_rl, nonsp_rl) = split_rules e in
-  sp_rl <> [] && List.length nonsp_rl = 1
-;
-
-value sep1_entry cg e = do {
-  let loc = e.ae_loc in
-  let lev = List.hd e.ae_levels  in
-  let rs = lev.al_rules in
-  let (sp_rl, nonsp_rl) = Ppxutil.filter_split is_syntactic_predicate_rule rs.au_rules in
-  assert ([] <> sp_rl) ;
-  let fresh_x = CG.fresh_name cg (Name.mk "__x__") in
-  let actuals = formals2actuals cg e.ae_formals in
-
-  let e1_name = CG.fresh_name cg e.ae_name in
-  let e0 = {(e) with ae_levels = [{(lev) with al_rules = {(rs) with au_rules = sp_rl @ [
-                 { ar_loc=loc
-                 ; ar_psymbols=[{ ap_loc=loc
-                                ; ap_patt = Some <:patt< $lid:Name.print fresh_x$ >>
-                                ; ap_symb = ASnterm loc e1_name actuals None}]
-                 ; ar_action = Some <:expr< $lid:Name.print fresh_x$ >> }
-               ]}}]} in
-
-  let e1 = { (e) with
-             ae_name = e1_name
-           ; ae_levels = [{(lev) with al_rules = {(rs) with au_rules = nonsp_rl}}]
-           } in
-  [e0; e1]
-}
-;
-
-value sep_entry cg e = do {
-  assert (1 = List.length e.ae_levels) ;
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  if not (List.exists is_syntactic_predicate_rule rl) then
-    [e]
-  else
-    sep1_entry cg e
-}
-;
-  
-value exec0 cg el =
-    List.concat_map (sep_entry cg) el
-;
-
-value exec cg = CG.withg cg {(CG.g cg) with gram_entries = exec0 cg (CG.gram_entries cg) } ;
-
-end ;
-
 module SortEntries = struct
 
 value exec0 el =
@@ -3044,6 +2972,7 @@ value compute1_nullable_symbol nullmap s =
       | ASvala _ _ _ -> assert False
 
       | ASsyntactic _ _
+      | ASsemantic _ _
       | ASpriority _ _ -> Some NULLABLE
 
       | ASkeyw _ _ -> Some NONNULL
@@ -3146,6 +3075,7 @@ value left_reaches_symbol = fun [
       | ASvala _ _ _ -> assert False
 
       | ASsyntactic _ _
+      | ASsemantic _ _
       | ASpriority _ _ -> []
 
       | ASkeyw _ _ -> []
@@ -3244,8 +3174,10 @@ value rec symbol it (snode, enode) = fun [
   | ASpriority _ _
     -> Raw.add_edge it (snode, Label.EPS, enode)
 
-  | ASsyntactic _ s
-    -> Raw.add_edge it (snode, Label.SYNPRED s, enode)
+  | ASsyntactic _ _ as s
+    -> Raw.add_edge it (snode, Label.PRED s, enode)
+  | ASsemantic _ _ as s
+    -> Raw.add_edge it (snode, Label.PRED s, enode)
 
   | ASopt _ _ s
   | ASoptv _ _ _ s -> do {
@@ -3461,7 +3393,7 @@ value has_steppable_edge (cg : CG.t) = fun [
 | (n,_) ->
   n
   |> Raw.edge_labels (CG.gram_atn cg)
-  |> List.exists (fun [ Label.TOKEN _ | SYNPRED _ -> True | _ -> False ])
+  |> List.exists (fun [ Label.TOKEN _ | PRED _ -> True | _ -> False ])
 ]
 ;
 
@@ -3481,7 +3413,7 @@ value closure0 loc (cg : CG.t) cfg =
              Label.EPS as lab ->
              let dsts = Raw.traverse (CG.gram_atn cg) n lab in
              dsts |> List.iter (fun dst -> clrec1 (dst,stk))
-           | TOKEN _ | SYNPRED _ -> ()
+           | TOKEN _ | PRED _ -> ()
            | NTERM nt as lab ->
               let (snode, _) = Raw.entry_nodes (CG.gram_atn cg) nt in
               let dsts = Raw.traverse (CG.gram_atn cg) n lab in
@@ -3566,9 +3498,9 @@ value step1 loc ((cg,memo) : cg_memo_t) (st : Node.t) = do {
     | (TOKEN tok) as lab ->
        let dsts = Raw.traverse it st lab in
        dsts |> List.map (fun dst -> (Step.TOKEN_STEP tok, dst))
-    | (SYNPRED s) as lab ->
+    | (PRED s) as lab ->
        let dsts = Raw.traverse it st lab in
-       dsts |> List.map (fun dst -> (Step.SYNPRED_STEP s, dst))
+       dsts |> List.map (fun dst -> (Step.PRED_STEP s, dst))
        ])
 }
 ;
@@ -4174,7 +4106,12 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
        (SpNtr loc patt (must exp), SpoNoth)
 
     | ASsyntactic loc s ->
-       let exp = <:expr< (fun strm -> if $compile_syntactic_predicate cg e s$ then
+       let exp = <:expr< (fun strm -> if $compile_predicate cg e s$ then
+                                        () else raise Stream.Failure) >> in
+       (SpNtr loc patt (must exp), SpoNoth)
+
+    | ASsemantic loc e ->
+       let exp = <:expr< (fun strm -> if $e$ then
                                         () else raise Stream.Failure) >> in
        (SpNtr loc patt (must exp), SpoNoth)
 
@@ -4184,14 +4121,16 @@ and compile1_psymbol cg loc e must_parse left_psymbols ps =
       }
     ]
 
-and compile_syntactic_predicate cg e s =
-  let loc = e.ae_loc in
-  let spred_expr = compile1_symbol cg loc e s in
-  <:expr<
-    try do { ignore ($spred_expr$ (clone_stream strm)) ; True }
-    with [ (Stream.Failure | Stream.Error _) -> False ]
-         >>
-
+and compile_predicate cg e s =
+  match s with [
+      ASsyntactic loc s ->
+      let spred_expr = compile1_symbol cg loc e s in
+      <:expr<
+        try do { ignore ($spred_expr$ (clone_stream strm)) ; True }
+               with [ (Stream.Failure | Stream.Error _) -> False ]
+                    >>
+    | ASsemantic loc e -> e
+    ]
 ;
 
 value compile1_psymbols cg loc e psl =
@@ -4421,20 +4360,20 @@ value dfa_states_past_start dfa =
 value check_dfa_implementable cg e dfa =
   let open EDFA in
   let states_past_start = dfa_states_past_start dfa in
-  let state_synpreds_list =
+  let state_preds_list =
     dfa.states
     |> List.filter_map (fun st ->
-           let synpreds = st.transitions |> List.filter_map (fun [ (Step.SYNPRED_STEP s, _) -> Some s | _ -> None ]) in
-           if synpreds = [] then None
-           else Some (st.num, synpreds)
+           let preds = st.transitions |> List.filter_map (fun [ (Step.PRED_STEP s, _) -> Some s | _ -> None ]) in
+           if preds = [] then None
+           else Some (st.num, preds)
          ) in
-  if [] <> Std.intersect (List.map fst state_synpreds_list) states_past_start then
+  if [] <> Std.intersect (List.map fst state_preds_list) states_past_start then
     let pp_symbol pps s = Fmt.(pf pps "%s" Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)) in
     Fmt.(raise_failwithf (CG.adjust_loc cg e.ae_loc)
            "check_dfa_implementable: DFA for entry %a has non-start-states with outgoing syntactic predicates (and we're not yet hoisting predicates leftward):\n%a"
            Name.pp e.ae_name
            (list ~{sep=const string "\n"} (pair ~{sep=const string ": "} int (list ~{sep=const string " "} pp_symbol)))
-           state_synpreds_list)
+           state_preds_list)
   else ()
 ;
 
@@ -4457,8 +4396,8 @@ value letrec_nest cg e dfa = do {
   let export_state st =
     match st.final with [
         [] ->
-        let (synpred_edges, token_edges) =
-          st.transitions |> Ppxutil.filter_split (fun [ (Step.SYNPRED_STEP _, _) -> True | _ -> False ]) in
+        let (pred_edges, token_edges) =
+          st.transitions |> Ppxutil.filter_split (fun [ (Step.PRED_STEP _, _) -> True | _ -> False ]) in
         let match_tree =
           let edges = token_edges |> List.map (fun [ (Step.TOKEN_STEP t, s) -> (t,s) ]) in
           let edges = List.stable_sort Stdlib.compare edges in
@@ -4470,14 +4409,14 @@ value letrec_nest cg e dfa = do {
             <:expr< match must_peek_nth (ofs+1) strm with [
                         $list:branches$
                       ] >> in do {
-          if [] <> synpred_edges then assert (not (List.mem st.num states_past_start)) else () ;
-          let synpred_edges = synpred_edges |> List.map (fun [ (Step.SYNPRED_STEP s, st) -> (s,st) ]) in
-          let synpred_edges = List.stable_sort Stdlib.compare synpred_edges in
+          if [] <> pred_edges then assert (not (List.mem st.num states_past_start)) else () ;
+          let pred_edges = pred_edges |> List.map (fun [ (Step.PRED_STEP s, st) -> (s,st) ]) in
+          let pred_edges = List.stable_sort Stdlib.compare pred_edges in
           let rhs = List.fold_right (fun (s, st) rhs ->
-                        <:expr< if $compile_syntactic_predicate cg e s$
+                        <:expr< if $compile_predicate cg e s$
                                 then $lid:(statename st)$ ofs
                                 else $rhs$ >>)
-                      synpred_edges match_tree in
+                      pred_edges match_tree in
           (<:patt< $lid:(statename st.num)$ >>, <:expr< fun ofs -> $rhs$ >>, <:vala< [] >>)
         }
         | [output] ->
@@ -4768,13 +4707,7 @@ value lambda_lift2 loc ?{bootstrap=False} s =
   |> CheckLexical.exec
   |> SortEntries.exec
 ;
-(*
-value separate_syntactic loc ?{bootstrap=False} s =
-  s
-  |> lambda_lift2 loc ~{bootstrap=bootstrap}
-  |> S9SeparateSyntactic.exec
-;
- *)
+
 value unit_entry_elim loc ?{bootstrap=False} s =
   s
   |> lambda_lift2 loc ~{bootstrap=bootstrap}

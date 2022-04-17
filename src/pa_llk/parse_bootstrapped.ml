@@ -161,6 +161,7 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
         ASpriority (loc, n)
 
       | "("; s_t = NEXT; ")" -> s_t
+      | "{"; e = expr; "}" ; "?" -> ASsemantic(loc, e)
       | "("; s_t = NEXT; ")" ; "?" -> ASsyntactic (loc, s_t)
       ] ]
   ;

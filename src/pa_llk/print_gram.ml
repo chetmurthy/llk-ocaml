@@ -25,7 +25,10 @@ value errmsg = { squote = True ; full = False } ;
 
 value flag_equilibrate_cases = Pcaml.flag_equilibrate_cases;
 
-value expr = Eprinter.apply_level pr_expr "assign";
+value expr ?{pctxt=errmsg} pc x =
+  if pctxt.full then Eprinter.apply_level pr_expr "assign" pc x
+  else pprintf pc "<expr>"
+;
 value patt = Eprinter.apply pr_patt;
 value longident = Eprinter.apply pr_longident;
 
@@ -72,7 +75,7 @@ value entry_formals ~{pctxt=pctxt} pc l =
 ;
 
 value entry_actuals ~{pctxt=pctxt} pc l =
-  let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
+  let expr = expr ~{pctxt=pctxt} in
   pprintf pc "[%p]" (plist expr 0) (pair_with "," l)
 ;
 
@@ -90,7 +93,7 @@ value pr_option pf pc = fun [
 ;
 
 value rec rule ~{pctxt} force_vertic pc { ar_psymbols=sl;  ar_action = a } =
-  let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
+  let expr = expr ~{pctxt=pctxt} in
   let patt = if pctxt.full then patt else (fun pc _ -> pprintf pc "<patt>") in
   match (sl, a) with [
       ([], None) -> pprintf pc "[ ]"
@@ -161,7 +164,7 @@ and pattern ~{pctxt} pc p =
       pprintf pc "@[<1>(%p)@]" patt p ]
 
 and symbol ~{pctxt} pc =
-  let expr = if pctxt.full then expr else (fun pc _ -> pprintf pc "<expr>") in
+  let expr = expr ~{pctxt=pctxt} in
   fun [
       ASlist _ g lml symb None ->
        pprintf pc "%sLIST%s@;%p"
@@ -203,6 +206,7 @@ and symbol ~{pctxt} pc =
     ]
 
 and simple_symbol ~{pctxt} pc sy =
+  let expr = expr ~{pctxt=pctxt} in
   match sy with
   [ ASpriority _ n ->
     pprintf pc "PRIORITY %d" n
@@ -238,6 +242,9 @@ and simple_symbol ~{pctxt} pc sy =
 
   | ASsyntactic _ sym ->
        pprintf pc "(%p)?" (symbol ~{pctxt=pctxt}) sym
+
+  | ASsemantic _ e ->
+       pprintf pc "{%p}?" expr e
 
   | ASanti _ sl ->
      pprintf pc "ANTI @[<2>%p@]" (string_list pctxt) sl
