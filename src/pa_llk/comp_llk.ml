@@ -307,7 +307,7 @@ module Node = struct
     | EXIT of Name.t
     | BRANCH of Name.t and int
     | IN_BRANCH of Name.t and int and int
-    | BHOLE of Name.t and int
+    | BARRIER of Name.t and int
     | THEN_OPT of t
     | THEN_LIST0 of t
   ] [@@deriving (show,eq,ord) ;] ;
@@ -316,7 +316,7 @@ module Node = struct
   | EXIT n -> Fmt.(str "EXIT %s" (Name.print n))
   | BRANCH n i -> Fmt.(str "BRANCH %s %d" (Name.print n) i)
   | IN_BRANCH n i j -> Fmt.(str "BRANCH %s %d:%d" (Name.print n) i j)
-  | BHOLE n i -> Fmt.(str "BHOLE %s %d" (Name.print n) i)
+  | BARRIER n i -> Fmt.(str "BARRIER %s %d" (Name.print n) i)
   | THEN_OPT n -> Fmt.(str "%s THEN_OPT" (print n))
   | THEN_LIST0 n -> Fmt.(str "%s THEN_LIST0" (print n))
   ] ;
@@ -3317,7 +3317,7 @@ value external_entry cg it (ename, rex) =
   (toks@nulls)
   |> List.iteri (fun i -> fun [
     Some tok ->
-    let n' = Raw._add_node it (Node.BHOLE ename i) in do {
+    let n' = Raw._add_node it (Node.BARRIER ename i) in do {
       Raw.add_edge it (snode, Label.TOKEN tok, n') ;
       Raw.mark_bhole it n'
     }
@@ -3330,7 +3330,7 @@ value grammar it cg = do {
   (CG.g cg).gram_exports
   |> List.iter (fun ename -> 
          let (snode, enode) = Raw.entry_nodes it ename in do {
-                  let enode' = Raw._add_node it (Node.BHOLE ename (-1)) in
+                  let enode' = Raw._add_node it (Node.BARRIER ename (-1)) in
                   Raw.mark_bhole it enode' ;
                   Raw.add_edge it (enode, Label.TOKEN (CLS "EOI" None), enode')
                 }
