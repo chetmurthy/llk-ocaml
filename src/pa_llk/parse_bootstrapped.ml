@@ -157,9 +157,6 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
         lev = OPT [ UIDENT/"LEVEL"; s = STRING -> s ] ->
         ASnterm (loc, Name.mk id, args, lev)
 
-      | UIDENT/"PREDICT" ; id = LIDENT ->
-        ASregexp (loc, Name.mk id)
-
       | UIDENT/"PRIORITY" ; n = signed_int ->
         ASpriority (loc, n)
 

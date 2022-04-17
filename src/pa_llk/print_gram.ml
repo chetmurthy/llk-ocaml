@@ -204,9 +204,7 @@ and symbol ~{pctxt} pc =
 
 and simple_symbol ~{pctxt} pc sy =
   match sy with
-  [ ASregexp _ id ->
-    pprintf pc "PREDICT %s" (Name.print id)
-  | ASpriority _ n ->
+  [ ASpriority _ n ->
     pprintf pc "PRIORITY %d" n
   | ASnterm _ id args None ->
     let args_opt = match args with [ [] -> None | l -> Some l ] in

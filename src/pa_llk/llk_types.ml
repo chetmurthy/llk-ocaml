@@ -75,7 +75,6 @@ and a_symbol =
       option (a_symbol * bool)
   | ASnext of loc and list expr
   | ASnterm of loc and Name.t and list expr and option string
-  | ASregexp of loc and Name.t
   | ASopt of loc and bool and a_symbol
   | ASoptv of loc and bool and expr and a_symbol
   | ASleft_assoc of loc and bool and a_symbol and a_symbol and expr
@@ -114,7 +113,6 @@ value loc_of_a_symbol = fun [
   | ASlist loc _ _ _ _ -> loc
   | ASnext loc _ -> loc
   | ASnterm loc _ _ _ -> loc
-  | ASregexp loc _ -> loc
   | ASopt loc _ _ -> loc
   | ASoptv loc _ _ _ -> loc
   | ASleft_assoc loc _ _ _ _ -> loc

@@ -726,23 +726,7 @@ value process_regexps cg =
   }
 ;
 
-value convert_regexp_references cg =
-  let dt = Llk_migrate.make_dt () in
-  let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
-  let migrate_a_psymbol dt = fun [
-        {ap_symb=ASnterm loc nt [] None} as ps
-           when CG.exists_regexp_ast cg nt ->
-                {(ps) with ap_symb = ASregexp loc nt}
-      | {ap_symb=ASnterm loc nt _ _}
-           when not (CG.exists_entry cg nt || CG.exists_external_ast cg nt) ->
-                raise_failwithf (CG.adjust_loc cg loc) "S1ProcessRegexps: no nonterminal %s found in grammar" (Name.print nt)
-      | ps -> fallback_migrate_a_psymbol dt ps
-      ] in
-  let dt = { (dt) with Llk_migrate.migrate_a_psymbol = migrate_a_psymbol } in
-  CG.withg cg {(CG.g cg) with gram_entries = List.map (dt.migrate_a_entry dt) (CG.gram_entries cg)}
-;
-
-value exec cg = cg |> process_regexps |> convert_regexp_references ;
+value exec cg = cg |> process_regexps ;
 
 end ;
 
@@ -758,39 +742,27 @@ value check cg =
                 raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: no nonterminal %s defined in grammar" (Name.print nt)
       | ASnterm loc nt _ (Some _) when CG.exists_external_ast cg nt ->
                 raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: external nonterminal %s has forbidden level marking" (Name.print nt)
-      | ASregexp loc nt ->
-         raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: regexp %s used in grammar in non-psymbol position" (Name.print nt)
       | s -> fallback_migrate_a_symbol dt s
-      ] in
-  let fallback_migrate_a_psymbol = dt.migrate_a_psymbol in
-  let migrate_a_psymbol dt = fun [
-        {ap_symb=ASregexp loc nt} when not (CG.exists_regexp_ast cg nt) ->
-            raise_failwithf (CG.adjust_loc cg loc) "CheckSyntax: no regexp %s defined in grammar" (Name.print nt)
-      | {ap_symb=ASregexp _ _ } as ps -> ps
-      | s -> fallback_migrate_a_psymbol dt s
       ] in
   let dt = { (dt) with
              Llk_migrate.migrate_a_symbol = migrate_a_symbol
-           ; Llk_migrate.migrate_a_psymbol = migrate_a_psymbol
            } in
   List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg)
 ;
 
 value mentions cg =
   let entries = ref [] in
-  let regexps = ref [] in
   let dt = Llk_migrate.make_dt () in
   let fallback_migrate_a_symbol = dt.migrate_a_symbol in
   let migrate_a_symbol dt = fun [
         ASnterm _ nt _ _ as s -> do { Std.push entries nt ; s }
-      | ASregexp _ nt as s -> do { Std.push regexps nt ; s }
       | s -> fallback_migrate_a_symbol dt s
       ] in
   let dt = { (dt) with
              Llk_migrate.migrate_a_symbol = migrate_a_symbol
            } in do {
     List.iter (fun e -> ignore (dt.migrate_a_entry dt e)) (CG.gram_entries cg) ;
-    (entries.val, regexps.val)
+    entries.val
   }
 ;
 
@@ -843,11 +815,11 @@ value check_names cg = do {
   if [] <> missing then
     Fmt.(failwithf "Undefined exported entries: %a" (list ~{sep=sp} Name.pp) missing)
   else () ;
-  let (mentioned_entries, mentioned_regexps) = mentions cg in
+  let mentioned_entries = mentions cg in
   let regexp_mentioned_regexps = regexp_mentions cg in
   let unused = Std.(subtract
                       defined
-                      (union exported (union mentioned_entries (union mentioned_regexps regexp_mentioned_regexps)))) in
+                      (union exported (union mentioned_entries regexp_mentioned_regexps))) in
   if [] <> unused then
     Fmt.(failwithf "Unused entries: %a" (list ~{sep=sp} Name.pp) unused)
   else () 
@@ -900,7 +872,6 @@ value rec check_symbol cg env = fun [
 
   | ASnext _ _ -> ()
   | ASnterm _ _ _ _ -> ()
-  | ASregexp _ _ -> ()
   | ASpriority _ _ -> ()
   | ASopt _ _ s -> check_symbol cg env s
   | ASoptv _ _ _ s -> check_symbol cg env s
@@ -1771,7 +1742,6 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
 
   | ASnext _ _ as s -> s
   | ASnterm _ _ _ _ as s -> s
-  | ASregexp _ _ as s -> s
   | ASpriority _ _ as s -> s
   | ASopt loc g s -> ASopt loc g (lift_symbol cg acc e0 [] revpats s)
   | ASoptv loc g e s -> ASoptv loc g e (lift_symbol cg acc e0 [] revpats s)
@@ -3037,165 +3007,13 @@ value eliminate_unused1 mentioned_entries cg =
 ;
 
 value rec eliminate_unused cg =
-  let (mentioned_entries, _) = CheckSyntax.mentions cg in
+  let mentioned_entries = CheckSyntax.mentions cg in
   let mentioned_entries = mentioned_entries @ (CG.g cg).gram_exports in
   let (changed, cg) = eliminate_unused1 mentioned_entries cg in
   if changed then eliminate_unused cg else cg
 ;
 
 value exec cg = cg |> eliminate |> eliminate_unused ;
-
-end ;
-
-(** Infer a regular expression from a rule.
-
-    the invariant we maintain is that each inference routine returns a pair
-    of regexp * bool, where the bool is true when the regexp is "complete".
-
-    So an incomplete regexp might still be useful, and to ensure that, we only
-    use an incomplete regexp when it is nonempty.
-
- *)
-module Infer = struct
-open Token ;
-
-value rec infer_symbol cg stk ename = fun [
-   ASflag _ _ s | ASopt _ _ s | ASoptv _ _ _ s ->
-   (match infer_symbol cg stk ename s with [
-        (re, False) ->
-            if PSyn.empty re then (PSyn.epsilon, False)
-            else (PSyn.(disjunction [re; epsilon]), False)
-      | (re, True) -> (PSyn.(disjunction [re; epsilon]), True)
-      ])
-
-  | ASkeyw _ kw -> (PSyn.token (SPCL kw), True)
-  | ASlist _ _ LML_1 s _ ->
-     let (re, _) = infer_symbol cg stk ename s in
-     (re, False)
-
-  | ASlist _ _ _ _ _ -> (PSyn.epsilon, False)
-  | ASnext _ _ -> assert False
-  | ASnterm _ nt _ (Some _) -> assert False
-  | ASnterm _ nt _ None when not (CG.exists_entry cg nt) -> assert False
-  | ASnterm _ nt _ None ->
-     let e = CG.gram_entry cg nt in
-     infer_entry cg stk e
-
-  | ASregexp loc rexname ->
-     (match CG.gram_regexp cg rexname with [
-          exception Not_found -> do {
-            CG.add_failuref cg (CG.adjust_loc cg loc) ename "infer_symbol: undefined regexp %s" (Name.print rexname) ;
-            failwith "caught"
-          }
-        | x -> (x, True)
-     ])
-
-  | ASsyntactic _ _ -> (PSyn.epsilon, False)
-
-  | ASleft_assoc _ _ s _ _ ->
-     let (re, _) = infer_symbol cg stk ename s in
-     (re, False)
-
-  | ASrules _ _ -> assert False
-  | ASself _ _ -> assert False
-  | AStok _ cls None -> (PSyn.token (CLS cls None), True)
-  | AStok _ cls (Some tok) -> (PSyn.token (CLS cls (Some tok)), True)
-
-  | ASvala _ s sl ->
-     let anti_re =
-       sl
-       |> List.concat_map (fun s -> PSyn.[token (ANTI s); token (ANTI ("_"^s))])
-       |> PSyn.disjunction in
-     (match infer_symbol cg stk ename s with [
-          (re, False) ->
-          if PSyn.empty re then (PSyn.epsilon, False)
-          else (PSyn.(disjunction [re; anti_re]), False)
-        | (re, True) -> (PSyn.(disjunction [re; anti_re]), True)
-     ])
-
-  | ASanti _ sl ->
-     let anti_re =
-       sl
-       |> List.concat_map (fun s -> PSyn.[token (ANTI s); token (ANTI ("_"^s))])
-       |> PSyn.disjunction in
-     (anti_re, True)
-
-  | ASpriority _ _ -> assert False
-]
-
-and infer_entry cg stk e =
-  if List.mem e.ae_name stk then (PSyn.epsilon, False) else
-  let stk = [ e.ae_name :: stk ] in
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let rex_comp_l = List.map (infer_rule cg stk e.ae_name) rl in
-  if List.for_all snd rex_comp_l then
-    (rex_comp_l |> List.map fst |> PSyn.disjunction, True)
-  else if List.for_all (fun (re, _) -> not (PSyn.empty re)) rex_comp_l then
-    (rex_comp_l |> List.map fst |> PSyn.disjunction, False)
-  else (PSyn.epsilon, False)
-
-and infer_rule cg stk ename r = infer_psymbols cg stk ename r.ar_psymbols
-
-and infer_psymbols cg stk ename = fun [
-      [ {ap_symb = (ASregexp _ _ as s)} :: _ ] ->
-      infer_symbol cg stk ename s
-
-    | [ {ap_symb = (ASpriority _ _)} :: t ] -> infer_psymbols cg stk ename t
-
-    | [ h :: t ] ->
-       (match infer_psymbol cg stk ename h with [
-            (h_re, False) -> (h_re, False)
-          | (h_re, True) ->
-             (match infer_psymbols cg stk ename t with [
-                  (t_re, False) -> (PSyn.(h_re @@ t_re), False)
-                | (t_re, True) -> (PSyn.(h_re @@ t_re), True)
-             ])
-       ])
-    | [] -> (PSyn.epsilon, True)
-]
-
-and infer_psymbol cg stk ename ps = infer_symbol cg stk ename ps.ap_symb
-;
-
-value regexp_of_rule cg ename r =
-  match infer_rule cg [] ename r with [
-      (rex, False) when PSyn.empty rex -> do {
-        CG.add_failure cg (CG.adjust_loc cg r.ar_loc) ename "Infer.top_infer_rule: empty regexp" ;
-        failwith "caught"
-      }
-
-    | (rex, False) -> rex
-    | (rex, True) -> rex
-    ]
-;
-
-value length_regexp_of_rule cg ename r length =
-  let open Brzozowski2.GenericRegexp in
-  let fullre = regexp_of_rule cg ename r in
-  let rec lenrec length rex =
-    if length = 0 then (PSyn.epsilon, 0)
-    else
-      match skeleton rex with [
-          EEpsilon -> (PSyn.epsilon, length)
-        | EToken tok -> (PSyn.token tok, length - 1)
-        | ECat re1 re2 ->
-           let (re1', length) = lenrec length re1 in
-           let (re2', length) = lenrec length re2 in
-           (PSyn.(re1' @@ re2'), length)
-
-        | EDisj [] -> assert False
-        | EDisj l ->
-           let re_length_l = List.map (lenrec length) l in
-           let length = List.fold_left (fun length (_, length') -> max length length')
-                      (snd (List.hd re_length_l)) (List.tl re_length_l) in
-           (PSyn.disjunction (List.map fst re_length_l), length)
-
-        | EStar _ -> assert False
-        | EConj _ -> assert False
-        | ENeg _ -> assert False
-        ] in
-  fst (lenrec length fullre)
-;
 
 end ;
 
@@ -3226,7 +3044,6 @@ value compute1_nullable_symbol nullmap s =
       | ASvala _ _ _ -> assert False
 
       | ASsyntactic _ _
-      | ASregexp _ _
       | ASpriority _ _ -> Some NULLABLE
 
       | ASkeyw _ _ -> Some NONNULL
@@ -3329,7 +3146,6 @@ value left_reaches_symbol = fun [
       | ASvala _ _ _ -> assert False
 
       | ASsyntactic _ _
-      | ASregexp _ _
       | ASpriority _ _ -> []
 
       | ASkeyw _ _ -> []
@@ -3425,7 +3241,6 @@ value rec symbol it (snode, enode) = fun [
     ASkeyw _ tok -> Raw.add_edge it (snode, Label.TOKEN (SPCL tok), enode)
   | ASnterm _ nt _ None -> Raw.add_edge it (snode, Label.NTERM nt, enode)
 
-  | ASregexp _ _
   | ASpriority _ _
     -> Raw.add_edge it (snode, Label.EPS, enode)
 
@@ -3891,17 +3706,8 @@ value rec compute_firstk_depth loc ((cg, _) as cg_memo) dfa ename ~{depth} (ambi
 }
 ;
 
-value is_regexp_prediction_entry e =
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  rl
-  |> List.exists (fun [ {ar_psymbols=[{ap_symb=ASregexp _ _} :: _]}  -> True | _ -> False ])
-;
-
 value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
   let loc = e.ae_loc in
-  if is_regexp_prediction_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firstk(%s): entry uses regexp prediction: cannot compute firstk" S.prefix (Name.print e.ae_name)
-  else () ;
   let open SCFG in
   let atn = CG.gram_atn cg in
   let nfacfgs =
@@ -3948,9 +3754,6 @@ value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
 
 value compute_firsts ((cg, _) as cg_memo) e = do {
   let loc = e.ae_loc in
-  if is_regexp_prediction_entry e then
-    raise_failwithf (CG.adjust_loc cg e.ae_loc) "%s.compute_firsts(%s): entry uses regexp prediction: cannot compute firsts" S.prefix (Name.print e.ae_name)
-  else () ;
   let open SCFG in
   let atn = CG.gram_atn cg in
   let nfacfgs =
@@ -4143,89 +3946,6 @@ value exec cg = do {
     (CG.gram_entries cg)
     |> List.iter (store_first cg_memo) ;
     cg
-}
-;
-
-end ;
-
-module EntryRegexps = struct
-
-
-(** infer_regexp [stk] [r]
-
-    infers the regexp for rule [r], and if this requires recursing into
-    an entry already on [stk], will raise Failure
- *)
-value rec infer_regexp loc cg e r = infer_psymbols loc cg e r.ar_psymbols
-
-and infer_psymbols loc cg e psl =
-  match psl with [
-      [ ({ap_symb=ASregexp _ rexname} as h) :: _ ] ->
-      (match CG.gram_regexp cg rexname with [
-           exception Not_found -> do {
-             CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: undefined regexp %s" (Name.print rexname) ;
-             failwith "caught"
-           }
-         | x -> x
-      ])
-
-     | [ {ap_symb=ASpriority _ _} :: t ] -> infer_psymbols loc cg e t
-
-     | [ {ap_symb=ASsyntactic _ _} :: t ] -> infer_psymbols loc cg e t
-
-     | [ {ap_symb=ASnterm _ nt _ _} :: _ ] when CG.exists_external_ast cg nt ->
-        CG.gram_external cg nt
-
-     | [ {ap_symb=ASnterm _ nt _ _} :: _ ]
-          when CG.exists_entry cg nt &&
-                 MHM.in_dom (snd cg).atn_first nt ->
-        let l = CG.atn_first cg nt in
-        let l = l |> List.map (fun [ Step.TOKEN_STEP t -> t | _ -> failwith "infer_psymbols: unsupported: found a syntactic predicate" ]) in
-        l |> List.map PSyn.token |> PSyn.disjunction
-
-     | [ {ap_symb=ASkeyw _ tok} :: _ ] -> PSyn.token (SPCL tok)
-
-     | [ {ap_symb=AStok _ cls tokopt} :: _ ] -> PSyn.token (CLS cls tokopt)
-
-    | ps -> do {
-        CG.add_failuref cg (CG.adjust_loc cg loc) e.ae_name "infer_regexp: cannot infer regexp for rule %s"
-          Pr.(rule_psymbols ~{pctxt=errmsg} Pprintf.empty_pc psl) ;
-        failwith "caught"
-      }
-    ]
-;
-
-value infer_branch_regexp1 cg e i r =
-  let loc = e.ae_loc in
-  let rex = infer_regexp loc cg e r in
-  (i, rex)
-;
-
-value infer_branch_regexps cg e =
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-    List.mapi (infer_branch_regexp1 cg e) rl
-;
-
-value store_entry_branch_regexps cg e =
-  let l = infer_branch_regexps cg e in
-  CG.set_entry_branch_regexps cg e.ae_name l
-;
-
-
-value exec cg = do {
-    let errors = ref False in
-    (CG.gram_entries cg)
-    |> List.iter (fun e ->
-           try
-             store_entry_branch_regexps cg e
-           with [ (Failure _) -> errors.val := True ]
-         ) ;
-    if errors.val then do {
-      Dump.report_compilation_errors cg "Regexp computation FAILED" ;
-      failwith "Regexp computation FAILED"
-    }
-    else
-      cg
 }
 ;
 
@@ -4472,8 +4192,7 @@ and compile_syntactic_predicate cg e s =
 
 value compile1_psymbols cg loc e psl =
   let rec crec must lefts = fun [
-        [({ap_symb=ASregexp _ _} as ps) :: t] -> crec must (lefts@[ps]) t
-      | [({ap_symb=ASpriority _ _} as ps) :: t] -> crec must (lefts@[ps]) t
+        [({ap_symb=ASpriority _ _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [] -> []
       | [h ::t] -> [compile1_psymbol cg loc e must lefts h :: crec True (lefts@[h]) t]
       ] in crec False e.ae_preceding_psymbols psl
@@ -4790,37 +4509,10 @@ value compile1b_branch cg ename branchnum rl = do {
 }
 ;
 
-value compute_full_regexp cg e =
-  let l = EntryRegexps.infer_branch_regexps cg e in
-  l
-  |> List.map (fun (bn, rex) -> PSyn.(rex @@ token (OUTPUT bn)))
-  |> PSyn.disjunction
-;
-
-value compute_predictor0 cg e =
-  let loc = e.ae_loc in
-  let (exported_dfa_opt, retxt) =
-    let fullre = compute_full_regexp cg e in
-    let retxt = String.escaped (PSyn.print fullre) in
-    if PSyn.(equal zero fullre) then
-      (None,retxt)
-    else
-      let module C = Compile(struct value rex = fullre ; value extra = (CG.alphabet cg); end) in
-      let exported_dfa = C.BEval.OutputDfa.(export (dfa fullre)) in
-      (Some (convert_exported_dfa exported_dfa), retxt) in
-
-  let (predictor, extra_branches) = match exported_dfa_opt with [
-        None -> (<:expr< fun __strm__ -> raise Stream.Failure >>, [])
-      | Some dfa -> letrec_nest cg e dfa
-      ] in
-  (predictor, retxt)
-;
-
 value compute_predictor cg e =
   match CG.atn_dfa cg e.ae_name with [
       Some dfa -> (letrec_nest cg e dfa, "<text not available>")
-    | None -> let (e, retxt) = compute_predictor0 cg e in ((e, []), retxt)
-    | exception Not_found -> let (e, retxt) = compute_predictor0 cg e in ((e, []), retxt)
+    | None -> Fmt.(raise_failwithf (CG.adjust_loc cg e.ae_loc) "compute_predictor: no DFA for prediction of entry %a" Name.pp e.ae_name) 
     ]
 ;
 
@@ -4828,6 +4520,10 @@ value compile1b_entry cg e =
   let loc = e.ae_loc in
   let ename = e.ae_name in
   let rl = (List.hd e.ae_levels).al_rules.au_rules in
+  if rl = [] then
+    let rhs = <:expr< fun __strm__ -> raise Stream.Failure >> in
+    [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)]
+  else
   let ((predictor, extra_branches), retxt) = compute_predictor cg e in
   let predictor_name = (Name.print ename)^"_regexp" in
    let branches = rl |> List.mapi (fun i r -> (i, [r])) in
@@ -4852,91 +4548,7 @@ value compile1b_entry cg e =
   ]
   ;
 
-value compile1_entry cg e = compile1b_entry cg e ;
-
-value compile_sp_entry cg e = do {
-  let loc = e.ae_loc in
-  let ename = e.ae_name in
-  assert (S9SeparateSyntactic.is_separated_syntactic_predicate_entry e) ;
-  let (sp_rl, nonsp_rl) = S9SeparateSyntactic.split_rules e in
-  let fallback = match List.hd nonsp_rl with [
-        {ar_psymbols = psl ; ar_action = Some _} as r ->
-        <:expr< $compile1_rule cg e r$ __strm__ >>
-
-      | _ -> assert False
-      ] in
-  let rhs = List.fold_right (fun r fallback ->
-      match r with [
-          {ar_psymbols=[{ap_loc=loc; ap_symb=ASsyntactic _ s} :: t]} ->
-          let r' = {(r) with ar_psymbols = t} in
-          let body = compile1_rule cg e r' in
-          let spred_expr = compile1_symbol cg loc e s in
-          <:expr<
-            if try do { ignore ($spred_expr$ (clone_stream __strm__)) ; True }
-                      with [ (Stream.Failure | Stream.Error _) -> False ] then
-              $body$ __strm__
-            else
-              $fallback$
-              >>
-        | _ -> assert False
-        ]
-    ) sp_rl fallback in
-  let rhs = <:expr< fun __strm__ -> $rhs$ >> in
-  let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-  [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)]
-}
-;
-
-value rule2priority = fun [
-    {ar_psymbols=[{ap_symb=ASpriority _ n} :: _]} -> Some n
-  | _ -> None
-  ]
-;
-
-value is_prioritized_entry e =
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let prios = rl |> List.map rule2priority in
-  List.length rl > 1 && Std.distinct prios
-;
-
-value compile_prio_entry cg e = do {
-  let loc = e.ae_loc in
-  let ename = e.ae_name in
-  assert (is_prioritized_entry e) ;
-  let rl = (List.hd e.ae_levels).al_rules.au_rules in
-  let rl =
-    let (prio_rl, non_rl) = Ppxutil.filter_split (fun r -> None <> rule2priority r) rl in
-    (List.stable_sort Stdlib.compare prio_rl)@non_rl in
-
-  let fallback = <:expr< raise Stream.Failure >> in
-  let rhs = List.fold_right (fun r fallback ->
-      let r = match r with [
-            {ar_psymbols=[{ap_loc=loc; ap_symb=ASpriority _ _} :: t]} ->
-            {(r) with ar_psymbols = t}
-          | _ -> r
-          ] in
-      let body = compile1_rule cg e r in
-      <:expr<
-        try $body$ __strm__
-        with [ Stream.Failure -> $fallback$ ]
-             >>
-    ) rl fallback in
-  let rhs = <:expr< fun __strm__ -> $rhs$ >> in
-  let rhs = List.fold_right (fun p rhs -> <:expr< fun $p$ -> $rhs$ >>) e.ae_formals rhs in
-  [(<:patt< $lid:Name.print ename$ >>, rhs, <:vala< [] >>)]
-}
-;
-
-value compile_entry cg e =
-(*
-  if S9SeparateSyntactic.is_syntactic_predicate_entry e then
-    compile_sp_entry cg e
-  else if is_prioritized_entry e then
-    compile_prio_entry cg e
-  else
- *)
-    compile1_entry cg e
-;
+value compile_entry cg e = compile1b_entry cg e ;
 
 value compile_entries cg el = do {
   assert ([] = CG.errors cg) ;
