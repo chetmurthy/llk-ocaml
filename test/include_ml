@@ -11,23 +11,19 @@
 open OUnit2 ;;
 open OUnitTest ;;
 
-
 (*
 #require "camlp5.pa_op";;
 Pcaml.inter_phrases := Some ";;\n";;
- *)
-
-#require "camlp5.pa_r";;
-Pcaml.inter_phrases := Some ";\n";;
-
-(*
 #require "camlp5.pr_o";;
 module Pr = Pr_o ;;
  *)
 
+#require "camlp5.pa_r";;
+Pcaml.inter_phrases := Some ";\n";;
 #require "camlp5.pr_r";;
 Pcaml.inter_phrases := Some ";\n";;
 module Pr = Pr_r ;;
+
 
 #require "camlp5.quotations" ;;
 
@@ -195,10 +191,10 @@ open Llko2official_test ;;
 
 #load "regexp_test.cmo";;
 open Regexp_test ;;
-
+ *)
 #load "error_rtest.cmo";;
 open Error_rtest ;;
-
+(*
 
 #load "longident_rtest.cmo";;
 open Longident_rtest ;;
@@ -219,8 +215,24 @@ open Longident.F ;;
 #load "simple_otest.cmo";;
 open Simple_otest ;;
 
+#load "regexp_otest.cmo";;
+open Regexp_otest ;;
+
 #load "infer_otest.cmo";;
 open Infer_otest ;;
+
+#load "self_otest.cmo";;
+open Self_otest ;;
+#trace LLKGram.F.entry ;;
+#trace LLKGram.F.level_list ;;
+#trace LLKGram.F.level ;;
+#trace LLKGram.F.rule_list ;;
+#trace LLKGram.F.rule ;;
+#trace LLKGram.F.level__0001 ;;
+#trace LLKGram.F.level__0002 ;;
+#trace LLKGram.F.assoc ;;
+#trace LLKGram.F.assoc__0001 ;;
+
 
 #load "external_test.cmo";;
 open External_test ;;
@@ -230,12 +242,34 @@ open External_test ;;
 #load "antlrlexer.cmo";;
 #load "antlr.cmo";;
 open Antlr ;;
- *)
-(*
+
+
 #directory "acme" ;;
 #load "acmelexer.cmo";;
 #load "acme.cmo";;
 open Acme ;;
+let pa e s = s |> Stream.of_string |> Grammar.Entry.parse e;;
+#trace Acme.F.acmeCompUnit_eoi ;;
+#trace Acme.F.acmeImportDeclaration ;;
+#trace Acme.F.acmeSystemDeclaration ;;
+#trace Acme.F.acmeFamilyDeclaration ;;
+#trace Acme.F.acmeDesignDeclaration ;;
+#trace Acme.F.acmePortTypeDeclaration ;;
+#trace Acme.F.acmePortBody ;;
+#trace Acme.F.acmePortBody__0002 ;;
+#trace Acme.F.acmePortBody__0001 ;;
+#trace Acme.F.acmePropertyDeclaration ;;
+#trace Acme.F.acmePropertyBlock ;;
+#trace Acme.F.designRule ;;
+#trace Acme.F.acmeRepresentationDeclaration ;;
+ *)
+
+#directory "cminus" ;;
+#load "cminuslexer.cmo";;
+#load "cminus.cmo";;
+open Cminus ;;
+(*
+
  *)
 (*
 ;;; Local Variables: ***
@@ -307,7 +341,7 @@ Pp_MLast.Ploc.pp_loc_verbose := false ;;
 #trace ATN.compute_firstk ;;
 #trace ATN.branch_first ;;
  *)
-
+(*
 open ATN0 ;;
 open ATN0.Node ;;
 open ATN0.Label ;;
@@ -333,7 +367,7 @@ open Node ;;
 let pp_cfg x = Fmt.(pf stdout "%a" CFG.pp x) ;;
 #install_printer pp_cfg ;;
 
-let nfacfg_pp_verbose = ref false ;;
+let nfacfg_pp_verbose = ref true ;;
 let pp_nfacfg x =
   if !nfacfg_pp_verbose then Fmt.(pf stdout "%a" NFACFG.pp x)
   else Fmt.(pf stdout "{branchnum=%d; priority=%d; ...}" x.NFACFG.branchnum x.NFACFG.priority) ;;
@@ -347,7 +381,7 @@ let pp_nfacfg x =
  *)
 
 let cg = "xx.ml" |> RT.read_file |> Top.atn Ploc.dummy ~bootstrap:true ;;
-let e = CG.gram_entry cg (Name.mk "ctyp__0037") ;;
+let e = CG.gram_entry cg (Name.mk "declaration") ;;
 
 let (l, dfa) =
 let memo = ATN.GraphDFA.Memo.mk() in
@@ -356,4 +390,4 @@ compute_firstk ~depth:6 (cg,memo) e ;;
 (*
 "xx.ml" |> RT.read_file |> Top.codegen Ploc.dummy ~bootstrap:true ;;
  *)
-
+ *)

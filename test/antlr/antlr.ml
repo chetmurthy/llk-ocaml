@@ -2,6 +2,7 @@
 (* abnf.ml,v *)
 
 open Pa_ppx_base ;
+open Ppxutil ;
 open Pp_MLast ;
 open Ord_MLast ;
 open Pa_ppx_testutils ;
@@ -30,6 +31,7 @@ value equal_loc _ _ = True ;
 
 type expression = [
     EXid of loc and string
+  | EXeps of loc
   | EXkeyw of loc and string
   | EXquestion of loc and expression
   | EXstar of loc and expression
@@ -41,6 +43,7 @@ type expression = [
 
 value loc_of_expression = fun [
     EXid loc _ -> loc
+  | EXeps loc -> loc
   | EXkeyw loc _ -> loc
   | EXquestion loc _ -> loc
   | EXstar loc _ -> loc
@@ -58,7 +61,7 @@ value mkdisj loc = fun [
 ;
 
 value mkconc loc = fun [
-  [] -> assert False
+  [] -> EXeps loc
 | [x] -> x
 | l -> EXconc loc l
 ]
@@ -69,6 +72,14 @@ type rule = [
   | RULEkeyword of loc and string and string
   ] [@@deriving (show,eq,ord) ;]
 ;
+
+value rename_nt = fun [
+  "type" -> "type_"
+| "function" -> "function_"
+| x -> x
+]
+;
+
 [@@@llk
 {foo|
 GRAMMAR ANTLR:
@@ -82,8 +93,8 @@ GRAMMAR ANTLR:
   ] ] ;
 
   rule: [ [
-      id = ID ; ":" ; rhs = expression ; ";" -> RULEprod loc id rhs
-    | id = ID ; "=" ; s = STRING ; ";" -> RULEkeyword loc id s
+      id = ID ; ":" ; rhs = expression ; ";" -> RULEprod loc (rename_nt id) rhs
+    | id = ID ; "=" ; s = STRING ; ";" -> RULEkeyword loc (rename_nt id) s
     ] ]
   ;
 
@@ -93,7 +104,7 @@ GRAMMAR ANTLR:
         l = LIST1 NEXT SEP "|" -> mkdisj loc l
       ]
     | "conc" [
-        l = LIST1 NEXT -> mkconc loc l
+        l = LIST0 NEXT -> mkconc loc l
       ]
     | "star" LEFTA [
         e = SELF ; "*" -> EXstar loc e
@@ -101,7 +112,7 @@ GRAMMAR ANTLR:
       | e = SELF ; "?" -> EXquestion loc e
       ]
     | "simple" [
-        id = ID -> EXid loc id
+        id = ID -> EXid loc (rename_nt id)
       | s = STRING -> EXkeyw loc s
       | "(" ; e = expression ; ")" -> e
     ] ]
@@ -135,6 +146,10 @@ module Conv = struct
            | exception Not_found ->
               ASnterm loc (Name.mk nt) [] None
         ])
+
+      | EXeps loc ->
+        raise_failwithf loc "epsilon encountered outside of a disjunction"
+
       | EXkeyw loc s -> ASkeyw loc (conv_string s)
 
       | EXquestion loc e ->
@@ -154,9 +169,11 @@ module Conv = struct
                                      ar_action = None }] }
 
       | EXdisj loc l ->
+         let (eps_l, l) = l |> Ppxutil.filter_split (fun [ EXeps _ -> True | _ -> False ]) in
          let rl = List.map (expression_to_rule kwmap) l in
-         ASrules loc { au_loc = loc ; 
-                       au_rules = rl }
+         let e = ASrules loc { au_loc = loc ; 
+                               au_rules = rl } in
+         if [] = eps_l then e else ASopt loc True e
       ]
 
   and expression_to_rule kwmap e : a_rule =

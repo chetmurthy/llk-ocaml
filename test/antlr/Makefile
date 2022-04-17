@@ -23,6 +23,7 @@ ANTLREG = $(HOME)/Hack/Github/antlr/grammars-v4
 test:: all
 	./antlr examples/abbParser.g4
 	./antlr examples/acme.g4
+	./antlr examples/CMinus.g
 	./antlr examples/alef.g4
 
 .SUFFIXES: .mll .ml .cmo .cmx
