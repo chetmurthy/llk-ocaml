@@ -1,6 +1,6 @@
-antlrlexer.cmo :
-antlrlexer.cmx :
-antlr.cmo : \
-    antlrlexer.cmo
-antlr.cmx : \
-    antlrlexer.cmx
+cminuslexer.cmo :
+cminuslexer.cmx :
+cminus.cmo : \
+    cminuslexer.cmo
+cminus.cmx : \
+    cminuslexer.cmx
