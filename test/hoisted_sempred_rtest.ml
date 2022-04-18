@@ -8,7 +8,7 @@ value enableEnum = ref False ;
 {foo|
 GRAMMAR Hoisted:
 EXPORT:
- stat
+ stat dynamically
  ;
 
 stat: [ [
@@ -21,6 +21,9 @@ identifier: [ [ LIDENT | enumAsID ] ] ;
 enumAsKeyword: [ [ {enableEnum.val}? ; "enum" ] ] ;
 
 enumAsID: [ [ {not enableEnum.val}? ; "enum" ] ] ;
+
+dynamically: [ [ set_reference ; s = stat -> s ] ] ;
+set_reference: [ [ "set" -> enableEnum.val := True | "unset" -> enableEnum.val := False ] ] ;
 
 END ;
 |foo} ;
@@ -56,6 +59,14 @@ value tests = "simple" >::: [
     ; "2" >:: (fun _ -> do {
                  enableEnum.val := True ;
                  assert_equal 2 (pa Hoisted.stat "enum")
+              })
+    ; "3" >:: (fun _ -> do {
+                 enableEnum.val := True ;
+                 assert_equal 2 (pa Hoisted.dynamically "set enum")
+              })
+    ; "4" >:: (fun _ -> do {
+                 enableEnum.val := True ;
+                 assert_equal 1 (pa Hoisted.dynamically "unset enum")
               })
     ]
 ]
