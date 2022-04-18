@@ -197,6 +197,9 @@ open Regexp_test ;;
 #load "error_rtest.cmo";;
 open Error_rtest ;;
 
+#load "hoisted_sempred_rtest.cmo";;
+open Hoisted_sempred_rtest ;;
+
 
 #load "longident_rtest.cmo";;
 open Longident_rtest ;;
@@ -343,7 +346,7 @@ Pp_MLast.Ploc.pp_loc_verbose := false ;;
 #trace ATN.compute_firstk ;;
 #trace ATN.branch_first ;;
  *)
-
+(*
 open ATN0 ;;
 open ATN0.Node ;;
 open ATN0.Label ;;
@@ -391,4 +394,5 @@ compute_firstk ~depth:6 (cg,memo) e ;;
 
 (*
 "xx.ml" |> RT.read_file |> Top.codegen Ploc.dummy ~bootstrap:true ;;
+ *)
  *)
