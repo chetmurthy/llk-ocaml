@@ -160,6 +160,8 @@ external longident_lident : PREDICTION UIDENT | LIDENT | $uid | $_uid | $lid | $
       | UIDENT/"PRIORITY" ; n = signed_int ->
         ASpriority (loc, n)
 
+      | "!!" -> ASmutation_barrier loc
+
       | "("; s_t = NEXT; ")" -> s_t
       | "{"; e = expr; "}" ; "?" -> ASsemantic(loc, e)
       | "("; s_t = NEXT; ")" ; "?" -> ASsyntactic (loc, s_t)

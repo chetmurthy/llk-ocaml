@@ -84,6 +84,7 @@ and a_symbol =
   | ASvala of loc and a_symbol and list string
   | ASsyntactic of loc and a_symbol
   | ASsemantic of loc and expr
+  | ASmutation_barrier of loc
   | ASanti of loc and list string
   | ASpriority of loc and int
   ]
@@ -124,6 +125,7 @@ value loc_of_a_symbol = fun [
   | ASanti loc _ -> loc
   | ASsyntactic loc _ -> loc
   | ASsemantic loc _ -> loc
+  | ASmutation_barrier loc -> loc
   | ASpriority loc _ -> loc
   ]
 ;

@@ -183,6 +183,7 @@ EXTEND
       | UIDENT "PRIORITY" ; n = signed_int ->
         ASpriority loc n
 
+      | "!!" -> ASmutation_barrier loc
       | "("; s_t = SELF; ")" -> s_t
       | "{"; e = expr; "}" ; "?" -> ASsemantic loc e
       | "("; s_t = SELF; ")" ; "?" -> ASsyntactic loc s_t

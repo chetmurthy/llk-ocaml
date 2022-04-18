@@ -22,7 +22,7 @@ enumAsKeyword: [ [ {enableEnum.val}? ; s = "enum" -> s ] ] ;
 
 enumAsID: [ [ {not enableEnum.val}? ; s = "enum" -> s ] ] ;
 
-set_reference: [ [ "set" -> enableEnum.val := True | "unset" -> enableEnum.val := False ] ] ;
+set_reference: [ [ "set" ; !! -> enableEnum.val := True | "unset" ; !! -> enableEnum.val := False ] ] ;
 
 dynamically_stat: [ [ set_reference ; s = stat -> s ] ] ;
 dynamically_id: [ [ set_reference ; s = identifier -> s ] ] ;

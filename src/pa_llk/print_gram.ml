@@ -246,6 +246,9 @@ and simple_symbol ~{pctxt} pc sy =
   | ASsemantic _ e ->
        pprintf pc "{%p}?" expr e
 
+  | ASmutation_barrier _ ->
+       pprintf pc "!!"
+
   | ASanti _ sl ->
      pprintf pc "ANTI @[<2>%p@]" (string_list pctxt) sl
 

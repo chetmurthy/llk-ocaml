@@ -329,6 +329,7 @@ module Label = struct
     | TOKEN of Token.t
     | NTERM of Name.t
     | PRED of a_symbol
+    | MUTATION_BARRIER
     ] [@@deriving (show,eq,ord) ;]
   ;
 
@@ -337,6 +338,7 @@ module Label = struct
     | TOKEN tok -> Token.print tok
     | NTERM n -> Name.print n
     | PRED s -> Pr.(symbol ~{pctxt=errmsg} Pprintf.empty_pc s)
+    | MUTATION_BARRIER -> "!!"
   ] ;
   value pp_hum pps x = Fmt.(pf pps "%s" (print x)) ;
 end ;
@@ -881,6 +883,7 @@ value rec check_symbol cg env = fun [
   | AStok _ _ _ -> ()
   | ASsemantic _ _ -> ()
   | ASsyntactic _ s -> check_symbol cg env s
+  | ASmutation_barrier _ -> ()
   | ASvala _ s _ -> check_symbol cg env s
   | ASanti _ _ -> ()
 ]
@@ -1776,6 +1779,7 @@ and lift_symbol cg acc e0 left_psyms revpats = fun [
   | AStok _ _ _ as s -> s
   | ASsyntactic loc s -> ASsyntactic loc (lift_symbol cg acc e0 left_psyms revpats s)
   | ASsemantic _ _ as s -> s
+  | ASmutation_barrier _ as s -> s
   | ASvala loc s sl -> ASvala loc (lift_symbol cg acc e0 left_psyms revpats s) sl
 ]
 ;
@@ -2973,6 +2977,7 @@ value compute1_nullable_symbol nullmap s =
 
       | ASsyntactic _ _
       | ASsemantic _ _
+      | ASmutation_barrier _
       | ASpriority _ _ -> Some NULLABLE
 
       | ASkeyw _ _ -> Some NONNULL
@@ -3076,6 +3081,7 @@ value left_reaches_symbol = fun [
 
       | ASsyntactic _ _
       | ASsemantic _ _
+      | ASmutation_barrier _
       | ASpriority _ _ -> []
 
       | ASkeyw _ _ -> []
@@ -3178,6 +3184,9 @@ value rec symbol it (snode, enode) = fun [
     -> Raw.add_edge it (snode, Label.PRED s, enode)
   | ASsemantic _ _ as s
     -> Raw.add_edge it (snode, Label.PRED s, enode)
+
+  | ASmutation_barrier _ ->
+     Raw.add_edge it (snode, Label.MUTATION_BARRIER, enode)
 
   | ASopt _ _ s
   | ASoptv _ _ _ s -> do {
@@ -3282,8 +3291,10 @@ end ;
  *)
 
 module CFG = struct
-type t = (Node.t * list Node.t) [@@deriving (show,eq,ord) ;] ;
-value pp_hum pps (h,t) = Fmt.(pf pps "[%a]" (list ~{sep=const string " "} Node.pp_hum) [h::t]) ;
+type t = {state: Node.t; stack: list Node.t; mutated: bool} [@@deriving (show,eq,ord) ;] ;
+value pp_hum pps t = Fmt.(pf pps "%s[%a]"
+                            (if t.mutated then "<mut>" else "")
+                            (list ~{sep=const string " "} Node.pp_hum) [t.state::t.stack]) ;
 value print x = Fmt.(str "%a" pp_hum x) ;
 end ;
 module NFACFG = struct
@@ -3374,7 +3385,8 @@ module SCFG = StateCFG ;
 value max_recursion_depth = ref 2 ;
 
 value exceeds_recursion_depth cfg =
-  let l = [fst cfg :: snd cfg] in
+  let open CFG in
+  let l = [cfg.state :: cfg.stack] in
   let l = List.stable_sort Node.compare l in
   let rec countrec n l =
     n > max_recursion_depth.val ||
@@ -3389,8 +3401,8 @@ value exceeds_recursion_depth cfg =
 ;
 
 value has_steppable_edge (cg : CG.t) = fun [
-  (Node.EXIT _, [_ :: _]) -> False
-| (n,_) ->
+  {CFG.state=Node.EXIT _; stack=[_ :: _]} -> False
+| {state=n} ->
   n
   |> Raw.edge_labels (CG.gram_atn cg)
   |> List.exists (fun [ Label.TOKEN _ | PRED _ -> True | _ -> False ])
@@ -3399,27 +3411,34 @@ value has_steppable_edge (cg : CG.t) = fun [
 
 value watch_clrec1 (x : CFG.t) = () ;
 value closure0 loc (cg : CG.t) cfg =
+  let open CFG in
   let acc = ref [cfg] in
   let bad = ref [] in
   let rec clrec0 = fun [
-        (Node.EXIT _, [h::t]) -> clrec1 (h,t)
-      | (Node.EXIT nt, []) ->
+        {state=Node.EXIT _; stack=[h::t]} as c ->
+        clrec1 {(c) with state=h; stack=t}
+      | {state=Node.EXIT nt; stack=[]} as c ->
          let l = Raw.nonterm_edges (CG.gram_atn cg) nt in
          l |> List.iter (fun (_, _, dst) ->
-                  clrec1 (dst, []))
-      | (n, stk) ->
+                  clrec1 {(c) with state=dst; stack=[]})
+      | {state=n;stack=stk} as c ->
          let labs = Raw.edge_labels (CG.gram_atn cg) n in
          labs |> List.iter (fun [
              Label.EPS as lab ->
              let dsts = Raw.traverse (CG.gram_atn cg) n lab in
-             dsts |> List.iter (fun dst -> clrec1 (dst,stk))
+             dsts |> List.iter (fun dst -> clrec1 {(c) with state=dst})
+
+           | MUTATION_BARRIER as lab ->
+             let dsts = Raw.traverse (CG.gram_atn cg) n lab in
+             dsts |> List.iter (fun dst -> clrec1 {(c) with state=dst; mutated=True})
+
            | TOKEN _ | PRED _ -> ()
            | NTERM nt as lab ->
               let (snode, _) = Raw.entry_nodes (CG.gram_atn cg) nt in
               let dsts = Raw.traverse (CG.gram_atn cg) n lab in
               dsts |> List.iter (fun [
-                  Node.EXIT _ -> clrec1 (snode, stk)
-                | dst -> clrec1 (snode, [dst :: stk])
+                  Node.EXIT _ -> clrec1 {(c) with state=snode}
+                | dst -> clrec1 {(c) with state=snode; stack=[dst :: stk]}
                 ])
            ])
       ]
@@ -3441,9 +3460,9 @@ value closure0 loc (cg : CG.t) cfg =
     else ()
   in do {
     clrec0 cfg ;
-    acc.val |> List.filter (fun ((st, _) as cfg) ->
+    acc.val |> List.filter (fun cfg ->
     has_steppable_edge cg cfg
-    || Raw.is_bhole (CG.gram_atn cg) st)
+    || Raw.is_bhole (CG.gram_atn cg) cfg.state)
   }
 ;
 
@@ -3486,10 +3505,12 @@ value closure loc (cg,memo) cfgs =
     be performed prior to [step1]
  *)
 
-value step1 loc ((cg,memo) : cg_memo_t) (st : Node.t) = do {
+value step1 loc ((cg,memo) : cg_memo_t) cfg = do {
+  let st = cfg.CFG.state in
   let it = CG.gram_atn cg in
   if Raw.is_bhole it st then
-    raise_failwithf loc "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
+    raise_failwithf (CG.adjust_loc cg loc)
+      "ATN.step1: cannot explore tokens forward from bhole node: %s" (Node.print st)
   else () ;
   let labs = Raw.edge_labels it st in
   labs
@@ -3499,15 +3520,20 @@ value step1 loc ((cg,memo) : cg_memo_t) (st : Node.t) = do {
        let dsts = Raw.traverse it st lab in
        dsts |> List.map (fun dst -> (Step.TOKEN_STEP tok, dst))
     | (PRED s) as lab ->
-       let dsts = Raw.traverse it st lab in
-       dsts |> List.map (fun dst -> (Step.PRED_STEP s, dst))
-       ])
+       if cfg.CFG.mutated then
+         raise_failwithf (CG.adjust_loc cg loc)
+           "ATN.step1: cannot explore predicates past a mutation barrier:\n %a"
+           CFG.pp cfg
+       else
+         let dsts = Raw.traverse it st lab in
+         dsts |> List.map (fun dst -> (Step.PRED_STEP s, dst))
+    ])
 }
 ;
 
-value step1_cfg loc cg (st, stk) =
-  let token_state'_list = step1 loc cg st in
-  token_state'_list |> List.map (fun (tok, n) -> (tok,(n,stk)))
+value step1_cfg loc cg cfg =
+  let token_state'_list = step1 loc cg cfg in
+  token_state'_list |> List.map (fun (tok, n) -> (tok,{(cfg) with state=n}))
 ;
 
 value nfacfg_closure loc cg t =
@@ -3653,7 +3679,7 @@ value _compute_firstk ~{depth} ((cg, _) as cg_memo) e = do {
              [{ap_symb=ASpriority _ n} :: _] -> n
            | _ -> 0
            ] in
-           NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
+           NFACFG.{branchnum=i; priority=pri; cfgs=[{CFG.state=node; stack=[]; mutated=False}]}) in
   let dfa = S.mk_dfa nfacfgs in
   let scfg = SCFG.mk (S.initial dfa) nfacfgs in
   let scfg = scfg_closure loc cg_memo scfg in
@@ -3699,7 +3725,7 @@ value compute_firsts ((cg, _) as cg_memo) e = do {
              [{ap_symb=ASpriority _ n} :: _] -> n
            | _ -> -1
            ] in
-           NFACFG.{branchnum=i; priority=pri; cfgs=[(node,[])]}) in
+           NFACFG.{branchnum=i; priority=pri; cfgs=[{CFG.state=node; stack=[]; mutated=False}]}) in
   let dfa = S.mk_dfa nfacfgs in
   let scfg = SCFG.mk (S.initial dfa) nfacfgs in
   let scfg = scfg_closure loc cg_memo scfg in
@@ -4136,6 +4162,7 @@ and compile_predicate cg e s =
 value compile1_psymbols cg loc e psl =
   let rec crec must lefts = fun [
         [({ap_symb=ASpriority _ _} as ps) :: t] -> crec must (lefts@[ps]) t
+      | [({ap_symb=ASmutation_barrier _} as ps) :: t] -> crec must (lefts@[ps]) t
       | [] -> []
       | [h ::t] -> [compile1_psymbol cg loc e must lefts h :: crec True (lefts@[h]) t]
       ] in crec False e.ae_preceding_psymbols psl
